@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "project-spec": {
+      "command": "node",
+      "args": ["/home/roman/.vscode/extensions/venti80.project-spec-0.0.8/mcp/server.js"],
+      "description": "Project Spec MCP server — read, query, write and validate .spec/ files"
+    }
+  }
+}
