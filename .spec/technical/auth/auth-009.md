@@ -3,15 +3,30 @@ id: AUTH-009
 type: auth-spec
 title: "Authorization matrix"
 status: draft
-linkedIds: ADR-001,ADR-002,FR-003,FR-007,FR-020,FR-025,FR-041,FR-058,FR-061,FR-063,FR-065,FR-067,NFR-001
+linkedIds: ADR-001,ADR-002,ADR-014,AUTH-010,FR-003,FR-007,FR-020,FR-025,FR-041,FR-058,FR-061,FR-063,FR-065,FR-067,NFR-001
 created: 2026-06-18
 ---
 
 ## Overview
 
-Authorization in the system is role-based with three additional constraint layers: (1) scope guards — the citizen must be eligible for the jurisdiction of the target resource; (2) COI guards — citizens with an undisclosed or active conflict of interest are excluded from affected decisions; (3) term guards — time-limited roles are only active within their declared `term_start..term_end`. The matrix below lists every write operation, the minimum required role, and any additional guards.
+Authorization in the system is role-based with four constraint layers: (1) scope guards — the citizen must be eligible for the jurisdiction of the target resource; (2) COI guards — citizens with an undisclosed or active conflict of interest are excluded from affected decisions; (3) term guards — time-limited roles are only active within their declared `term_start..term_end`; (4) MFA tier guards — each action requires a minimum session assurance tier (T1/T2/T3) as defined in AUTH-010 and ADR-014.
+
+**The canonical per-permission definitions (action, scope, conditions, MFA tier) live in AUTH-010.** This matrix is the operation-level view, mapping operations to the minimum required role and any additional guards beyond what AUTH-010 specifies.
 
 Roles are cumulative: every role includes all capabilities of AUTH-001 (citizen). A COI flag on any role immediately removes that role's capabilities in the conflicted domain.
+
+### Role assignment processes
+
+| Role | How granted | Process |
+|------|------------|---------|
+| citizen | Auto on identity verification | DP-002 |
+| expert | Auto when `competency.status=active` | DP-031 |
+| auditor | Random selection + acceptance | DP-040 → DP-062 |
+| reviewer | Random selection + acceptance | DP-040 → DP-062 |
+| oversight | Random selection + acceptance | DP-040 → DP-062 |
+| review_body | Weighted random + acceptance | DP-065 → DP-062 |
+| operator | Multi-approval appointment | DP-063 |
+| protocol_council | Citizen election | DP-064 |
 
 ---
 

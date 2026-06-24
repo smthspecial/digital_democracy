@@ -4,7 +4,7 @@ type: auth-spec
 title: "citizen"
 status: draft
 layer: citizen
-linkedIds: FR-001,FR-003,FR-004,FR-015,FR-017,FR-020,FR-028,FR-030,FR-038,FR-056
+linkedIds: FR-001,FR-003,FR-004,FR-015,FR-017,FR-020,FR-028,FR-030,FR-038,FR-056,AUTH-010,ADR-014
 created: 2026-06-18
 ---
 
@@ -12,28 +12,39 @@ created: 2026-06-18
 
 Base role held by every active, verified civic identity. The citizen role is the foundation of political authority in the system. All other roles are additive extensions; every holder of a higher role is also a citizen.
 
+This is the only role granted automatically — every registered and verified person is a citizen. No appointment, election, or assignment is required.
+
 ## Acquisition
 
-Automatic upon successful identity verification (SRV-001, DP-002). Requires exactly one active `citizen` record with `status=active` and at least one `identity_verification` record with `status=verified`.
+Automatic upon successful identity verification (SRV-001, DP-002). Requires exactly one active `citizen` record with `status=active` and at least one `identity_verification` record with `status=verified`. No other action is needed; the citizen role and its full permission set are active from that moment.
 
-## Capabilities
+## Fine-grained permissions
 
-| Capability | Condition | FR |
-|-----------|-----------|-----|
-| Submit a problem | Active identity | FR-015 |
-| Endorse a problem | Active identity, member of affected jurisdiction | FR-016 |
-| Create a proposal | Active identity | FR-017, FR-018 |
-| Add proposal constraints / budget | Active identity, proposal author | FR-029, FR-037 |
-| Post deliberation argument | Active identity | FR-028 |
-| Declare preference | Active identity | FR-030 |
-| Submit budget allocation vote | Active identity | FR-038 |
-| Cast ballot | Active identity, eligibility token issued for session | FR-003 |
-| Verify own ballot inclusion | Holder of verification_code | FR-004 |
-| Create / revoke delegation | Active identity | FR-056, FR-057 |
-| File scope challenge | Active identity | FR-010 |
-| Submit competency challenge (with evidence) | Active identity | FR-024 |
-| View all public governance data | Active identity | FR-009, FR-036, FR-047 |
-| Access civic education materials | Active identity | FR-049 |
+Full permission definitions (action, scope, conditions, MFA tier) are specified in AUTH-010. Summary:
+
+| Permission ID | Action | Scope | MFA tier |
+|--------------|--------|-------|----------|
+| `problem:create` | Submit a problem | any | T2 |
+| `problem:endorse` | Endorse a problem | jurisdiction:member | T2 |
+| `proposal:create` | Create a proposal | any | T2 |
+| `proposal:constraint:add` | Add constraint to own proposal | proposal:author | T2 |
+| `proposal:budget:add` | Add budget to own proposal | proposal:author | T2 |
+| `scope_challenge:file` | File a scope challenge | jurisdiction:affected | T2 |
+| `argument:post` | Post a deliberation argument | any | T2 |
+| `preference:declare` | Declare preference | any | T2 |
+| `ballot:cast` | Cast a ballot | session:issued | T3 |
+| `ballot:verify` | Verify ballot inclusion | any | T1 |
+| `delegation:create` | Create a delegation | any | T2 |
+| `delegation:revoke` | Revoke own delegation | own | T2 |
+| `budget:vote` | Submit budget allocation | any | T2 |
+| `competency:apply` | Apply for domain competency | any | T2 |
+| `competency_challenge:submit` | Submit a competency challenge | any | T2 |
+| `coi:declare` | Declare conflict of interest | own | T2 |
+| `assignment:accept` | Accept a civic assignment | assigned | T2 |
+| `assignment:abandon` | Abandon a civic assignment | assigned | T2 |
+| `audit_log:read` | Read the public audit log | any | T1 |
+| `governance_data:read` | View all public governance data | any | T1 |
+| `education:access` | Access civic education materials | any | T1 |
 
 ## Restrictions
 
