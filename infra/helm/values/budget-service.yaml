@@ -1,0 +1,7 @@
+name: budget-service
+lang: ts
+image:
+  repository: ghcr.io/digital-democracy/budget-service
+port: 8080
+route:
+  prefix: /budget

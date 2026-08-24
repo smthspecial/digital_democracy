@@ -1,0 +1,42 @@
+openapi: 3.1.0
+info:
+  title: ai-synthesis-service
+  version: 0.0.0
+  description: >
+    Owns AI-assisted deliberation synthesis; advisory and non-authoritative
+    only (SRV-016, .spec/technical/services/srv-016.md). Business endpoints
+    are added as the corresponding data processes (see .spec/technical/data-processes/) are
+    implemented; only the health contract is defined so far.
+servers:
+  - url: /ai-synthesis
+paths:
+  /healthz:
+    get:
+      operationId: getHealthz
+      summary: Liveness probe
+      responses:
+        "200":
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    const: ok
+  /readyz:
+    get:
+      operationId: getReadyz
+      summary: Readiness probe
+      responses:
+        "200":
+          description: Service is ready to accept traffic
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    const: ready

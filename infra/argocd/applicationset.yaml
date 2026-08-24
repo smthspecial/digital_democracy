@@ -1,0 +1,36 @@
+# One ArgoCD Application per infra/helm/values/*.yaml file, all deployed
+# from the generic chart in infra/helm/service (see its README.md).
+# Adding a service is: add one values file, nothing else to register here.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: digital-democracy-services
+  namespace: argocd
+spec:
+  generators:
+    - git:
+        repoURL: https://github.com/digital-democracy/digital-democracy.git
+        revision: master
+        files:
+          - path: "infra/helm/values/*.yaml"
+  template:
+    metadata:
+      name: "{{ path.basenameNormalized }}"
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/digital-democracy/digital-democracy.git
+        targetRevision: master
+        path: infra/helm/service
+        helm:
+          valueFiles:
+            - "../values/{{ path.basename }}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "{{ path.basenameNormalized }}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

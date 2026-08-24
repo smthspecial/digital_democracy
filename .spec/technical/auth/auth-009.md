@@ -3,7 +3,7 @@ id: AUTH-009
 type: auth-spec
 title: "Authorization matrix"
 status: draft
-linkedIds: ADR-001,ADR-002,ADR-014,AUTH-010,FR-003,FR-007,FR-020,FR-025,FR-041,FR-058,FR-061,FR-063,FR-065,FR-067,NFR-001
+linkedIds: ADR-001,ADR-002,ADR-014,AUTH-010,FR-003,FR-007,FR-020,FR-025,FR-041,FR-058,FR-061,FR-063,FR-065,FR-067,NFR-001,AUTH-011,AUTH-012,ADR-018
 created: 2026-06-18
 ---
 
@@ -27,6 +27,7 @@ Roles are cumulative: every role includes all capabilities of AUTH-001 (citizen)
 | review_body | Weighted random + acceptance | DP-065 → DP-062 |
 | operator | Multi-approval appointment | DP-063 |
 | protocol_council | Citizen election | DP-064 |
+| platform-operator | Multi-approval appointment, or dual-control break-glass | DP-063 pattern (standing) / DP-068 (break-glass) |
 
 ---
 
@@ -147,6 +148,18 @@ Roles are cumulative: every role includes all capabilities of AUTH-001 (citizen)
 
 ---
 
+## Platform and infrastructure operations
+
+| Operation | Process | Min role | Additional guards |
+|-----------|---------|----------|-------------------|
+| Deploy to Kubernetes | — | AUTH-011 | Standing access or active break-glass grant; production-affecting changes require dual-control co-approval |
+| Rotate secrets | — | AUTH-011 | Standing access or active break-glass grant |
+| Restore from database backup | — | AUTH-011 | Always requires dual control from a second independent platform-operator |
+| Grant break-glass access | DP-068 | AUTH-011 | Dual real-time co-approval; auto-expires in 4 hours or less; triggers mandatory post-incident audit review |
+| Service-to-service call | — | AUTH-012 (machine identity, no human role) | Enforced by mutual TLS and mesh authorization policy, not by a human role check |
+
+---
+
 ## System / cross-cutting guards
 
 | Guard | Applies to | Description |
@@ -159,3 +172,5 @@ Roles are cumulative: every role includes all capabilities of AUTH-001 (citizen)
 | Multi-approval guard | Identity suspension/revocation, critical system changes, protocol changes | No single actor can complete; approval types must come from independent role holders |
 | Audit log guard | All governance-relevant writes | Every write that touches a governance table emits an event to `audit.append`; operations that fail to produce an audit event are surfaced as integrity alerts |
 | Ballot secrecy guard | Voting | `ballot` has no `citizen_id`; the eligibility_token bridge is one-time and non-reversible (ADR-002) |
+| Workload identity guard | All internal service-to-service calls | Every internal call must carry a valid mTLS workload certificate matching an edge declared in arch-005 (AUTH-012, ADR-018); calls without one are rejected at the mesh |
+| Dual-control guard | Platform-operator production writes and backup restores | A second independent platform-operator must co-approve in real time, in addition to the audit log entry (AUTH-011) |

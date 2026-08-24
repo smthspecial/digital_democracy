@@ -3,7 +3,7 @@ id: AUTH-010
 type: auth-spec
 title: "Fine-grained permission schema"
 status: draft
-linkedIds: AUTH-001,AUTH-002,AUTH-003,AUTH-004,AUTH-005,AUTH-006,AUTH-007,AUTH-008,AUTH-009,ADR-014
+linkedIds: AUTH-001,AUTH-002,AUTH-003,AUTH-004,AUTH-005,AUTH-006,AUTH-007,AUTH-008,AUTH-009,ADR-014,AUTH-011,AUTH-012
 created: 2026-06-19
 ---
 
@@ -51,6 +51,9 @@ Permission {
 | `evidence.required` | Request must include a non-null `evidence_ref` |
 | `proposal.status:{list}` | `proposal.status` is one of the listed values |
 | `totals:100` | Submitted allocations sum to 100% |
+| `dual_control` | A second independent platform-operator has co-approved this action in real time |
+| `break_glass_active` | Action is performed under a time-boxed emergency grant from DP-068 |
+| `workload.identity` | Request carries a valid mTLS workload certificate matching a declared arch-005 edge |
 
 ---
 
@@ -170,6 +173,24 @@ Additive over AUTH-001. Scoped to the assigned dispute or review case.
 | `protocol_change:propose` | Propose a protocol change | any | role.term, coi.none | T3 |
 | `approval:submit:council` | Submit council approval in multi-approval flow | any | role.term, coi.none | T3 |
 | `delayed_execution:initiate` | Initiate delayed execution after all approvals | any | role.term, all approvals obtained, delay elapsed | T3 |
+
+---
+
+## AUTH-011 — Platform-operator permissions
+
+| Permission ID | Action | Scope | Conditions | MFA tier |
+|--------------|--------|-------|------------|----------|
+| `k8s:deploy` | Deploy to Kubernetes | any | dual_control (production only) | T3 |
+| `secrets:rotate` | Rotate a secret | any | role.term | T3 |
+| `cluster:access:read` | Read-only cluster and observability access | any | role.term | T2 |
+| `backup:restore` | Restore from database backup | any | dual_control | T3 |
+| `break_glass:grant` | Grant break-glass access to another platform-operator | any | dual_control, role.term | T3 |
+
+---
+
+## AUTH-012 — Service identity (machine-to-machine)
+
+Authorization for service-to-service calls is not expressed as permission rows in this table. It is enforced by mutual TLS plus the mesh's `AuthorizationPolicy` against the declared producer/consumer edges in arch-005, evaluated as the `workload.identity` condition. A service call is authorized only when its client certificate identity matches a declared edge; there is no role to hold and no MFA tier applies. See ADR-018 and AUTH-012.
 
 ---
 

@@ -1,0 +1,9 @@
+name: identity-service
+lang: ts
+image:
+  repository: ghcr.io/digital-democracy/identity-service
+port: 8080
+route:
+  prefix: /identity
+allowedEgress:
+  - auth-service

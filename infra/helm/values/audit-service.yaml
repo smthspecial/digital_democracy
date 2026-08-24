@@ -1,0 +1,22 @@
+# Highest write fan-in of any service -- every service emits to
+# audit.append (arch-005 integrity bus). Sized accordingly.
+name: audit-service
+lang: go
+image:
+  repository: ghcr.io/digital-democracy/audit-service
+port: 8080
+route:
+  prefix: /audit
+replicaCount: 4
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+autoscaling:
+  enabled: true
+  minReplicas: 4
+  maxReplicas: 40
+  targetCPUUtilizationPercentage: 65

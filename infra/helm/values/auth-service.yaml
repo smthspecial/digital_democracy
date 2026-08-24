@@ -1,0 +1,24 @@
+# Sits on the hot path of every authenticated request from every other
+# service (ADR-014, ADR-019) -- sized like voting-service.
+name: auth-service
+lang: go
+image:
+  repository: ghcr.io/digital-democracy/auth-service
+port: 8080
+route:
+  prefix: /auth
+replicaCount: 5
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+autoscaling:
+  enabled: true
+  minReplicas: 5
+  maxReplicas: 60
+  targetCPUUtilizationPercentage: 60
+allowedEgress:
+  - identity-service

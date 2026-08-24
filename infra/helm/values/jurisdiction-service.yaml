@@ -1,0 +1,7 @@
+name: jurisdiction-service
+lang: ts
+image:
+  repository: ghcr.io/digital-democracy/jurisdiction-service
+port: 8080
+route:
+  prefix: /jurisdiction

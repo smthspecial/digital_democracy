@@ -1,0 +1,9 @@
+name: competency-service
+lang: ts
+image:
+  repository: ghcr.io/digital-democracy/competency-service
+port: 8080
+route:
+  prefix: /competency
+allowedEgress:
+  - governance-role-service

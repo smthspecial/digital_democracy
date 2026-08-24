@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "Digital Democracy",
+    "slug": "digital-democracy",
+    "version": "0.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "org.digitaldemocracy.app"
+    },
+    "android": {
+      "package": "org.digitaldemocracy.app"
+    }
+  }
+}

@@ -1,0 +1,30 @@
+# Node / pnpm
+node_modules/
+dist/
+.next/
+.turbo/
+*.tsbuildinfo
+.env
+.env.local
+
+# Expo
+.expo/
+apps/mobile/.expo/
+
+# Go
+services/go/*/bin/
+go.work.sum
+
+# Infra
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+
+# Editors / OS
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+
+# Project Spec extension (generated search index)
+.spec/.vector-index/

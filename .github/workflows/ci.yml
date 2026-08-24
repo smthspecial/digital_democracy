@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ts:
+    name: TypeScript (lint, typecheck, test, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo run lint typecheck test build
+
+  go:
+    name: Go (vet, test, build)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [voting-service, audit-service, auth-service, delegation-service]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: services/go/${{ matrix.service }}/go.sum
+      - working-directory: services/go/${{ matrix.service }}
+        run: |
+          go vet ./...
+          go test ./...
+          go build ./...
+
+  docker:
+    name: Docker build (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    needs: [ts, go]
+    strategy:
+      matrix:
+        include:
+          - service: identity-service
+            lang: ts
+          - service: jurisdiction-service
+            lang: ts
+          - service: problem-service
+            lang: ts
+          - service: proposal-service
+            lang: ts
+          - service: competency-service
+            lang: ts
+          - service: deliberation-service
+            lang: ts
+          - service: budget-service
+            lang: ts
+          - service: civic-duty-service
+            lang: ts
+          - service: governance-role-service
+            lang: ts
+          - service: project-service
+            lang: ts
+          - service: reputation-service
+            lang: ts
+          - service: notification-service
+            lang: ts
+          - service: ai-synthesis-service
+            lang: ts
+          - service: voting-service
+            lang: go
+          - service: delegation-service
+            lang: go
+          - service: audit-service
+            lang: go
+          - service: auth-service
+            lang: go
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/build-push-action@v6
+        with:
+          context: . # repo root -- Dockerfiles COPY shared packages/ (TS) or go.mod-only context (Go)
+          file: services/${{ matrix.lang }}/${{ matrix.service }}/Dockerfile
+          push: false
+          tags: digital-democracy/${{ matrix.service }}:ci

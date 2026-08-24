@@ -1,0 +1,16 @@
+name: proposal-service
+lang: ts
+image:
+  repository: ghcr.io/digital-democracy/proposal-service
+port: 8080
+route:
+  prefix: /proposals
+replicaCount: 3
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 70
+allowedEgress:
+  - jurisdiction-service
+  - voting-service

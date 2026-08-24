@@ -1,0 +1,11 @@
+apiVersion: v2
+name: service
+description: >
+  Generic chart for one Digital Democracy backend service (ADR-015: one
+  Deployment + one Service per service, database-per-service). Every
+  service is deployed with this same chart, parameterized entirely by its
+  values file under infra/helm/values/<service>.yaml -- there is
+  deliberately no per-service chart directory (see infra/helm/service/README.md).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

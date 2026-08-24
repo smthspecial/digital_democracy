@@ -1,0 +1,21 @@
+name: delegation-service
+lang: go
+image:
+  repository: ghcr.io/digital-democracy/delegation-service
+port: 8080
+route:
+  prefix: /delegation
+resources:
+  requests:
+    cpu: 150m
+    memory: 192Mi
+  limits:
+    cpu: 750m
+    memory: 768Mi
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 30
+  targetCPUUtilizationPercentage: 65
+allowedEgress:
+  - voting-service

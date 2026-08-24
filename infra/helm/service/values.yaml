@@ -1,0 +1,40 @@
+# Defaults shared by every service. A service's values file under
+# infra/helm/values/<name>.yaml overrides only what differs.
+
+name: ""
+lang: "" # ts | go -- used only for labeling/image path convention
+image:
+  repository: ""
+  tag: "dev"
+  pullPolicy: IfNotPresent
+
+port: 8080 # every service listens on 8080 inside its container (README.md)
+route:
+  prefix: "" # e.g. /voting -- used by the HTTPRoute template
+
+replicaCount: 2
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+# Additional per-service edges this service is allowed to call, per the
+# arch-005 producer/consumer table -- rendered into the NetworkPolicy so
+# the mesh's default-deny posture (ADR-018) has an explicit allow-list.
+allowedEgress: []
+# - service-name
+
+serviceAccount:
+  create: true
+
+gatewayName: dd-gateway # the shared Gateway API Gateway resource this service's HTTPRoute attaches to

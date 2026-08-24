@@ -1,0 +1,13 @@
+name: notification-service
+lang: ts
+image:
+  repository: ghcr.io/digital-democracy/notification-service
+port: 8080
+route:
+  prefix: /notifications
+replicaCount: 3
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 25
+  targetCPUUtilizationPercentage: 70

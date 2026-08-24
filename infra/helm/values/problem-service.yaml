@@ -1,0 +1,9 @@
+name: problem-service
+lang: ts
+image:
+  repository: ghcr.io/digital-democracy/problem-service
+port: 8080
+route:
+  prefix: /problems
+allowedEgress:
+  - proposal-service

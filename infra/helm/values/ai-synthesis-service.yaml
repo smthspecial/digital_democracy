@@ -1,0 +1,14 @@
+name: ai-synthesis-service
+lang: ts
+image:
+  repository: ghcr.io/digital-democracy/ai-synthesis-service
+port: 8080
+route:
+  prefix: /ai-synthesis
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi

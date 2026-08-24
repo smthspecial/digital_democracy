@@ -1,0 +1,7 @@
+name: governance-role-service
+lang: ts
+image:
+  repository: ghcr.io/digital-democracy/governance-role-service
+port: 8080
+route:
+  prefix: /governance-roles

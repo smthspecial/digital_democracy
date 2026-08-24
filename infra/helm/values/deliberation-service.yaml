@@ -1,0 +1,9 @@
+name: deliberation-service
+lang: ts
+image:
+  repository: ghcr.io/digital-democracy/deliberation-service
+port: 8080
+route:
+  prefix: /deliberation
+allowedEgress:
+  - ai-synthesis-service

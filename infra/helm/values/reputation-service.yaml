@@ -1,0 +1,7 @@
+name: reputation-service
+lang: ts
+image:
+  repository: ghcr.io/digital-democracy/reputation-service
+port: 8080
+route:
+  prefix: /reputation

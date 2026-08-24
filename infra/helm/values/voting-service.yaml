@@ -1,0 +1,26 @@
+# Election-day peak load target (NFR-009, ARCH-007): 100k sustained
+# concurrent, burst to 300k -- sized well above the other services.
+name: voting-service
+lang: go
+image:
+  repository: ghcr.io/digital-democracy/voting-service
+port: 8080
+route:
+  prefix: /voting
+replicaCount: 5
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+autoscaling:
+  enabled: true
+  minReplicas: 5
+  maxReplicas: 60
+  targetCPUUtilizationPercentage: 60
+allowedEgress:
+  - jurisdiction-service
+  - delegation-service
+  - reputation-service

@@ -1,0 +1,42 @@
+openapi: 3.1.0
+info:
+  title: identity-service
+  version: 0.0.0
+  description: >
+    Owns civic identity records and verification (SRV-001,
+    .spec/technical/services/srv-001.md). Business endpoints are added as
+    the corresponding data processes (DP-001, DP-002, ...) are
+    implemented; only the health contract is defined so far.
+servers:
+  - url: /identity
+paths:
+  /healthz:
+    get:
+      operationId: getHealthz
+      summary: Liveness probe
+      responses:
+        "200":
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    const: ok
+  /readyz:
+    get:
+      operationId: getReadyz
+      summary: Readiness probe
+      responses:
+        "200":
+          description: Service is ready to accept traffic
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    const: ready
