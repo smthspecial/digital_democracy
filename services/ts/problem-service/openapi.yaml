@@ -4,12 +4,140 @@ info:
   version: 0.0.0
   description: >
     Owns problem registry submissions and endorsement-threshold tracking
-    (SRV-003, .spec/technical/services/srv-003.md). Business endpoints are
-    added as the corresponding data processes (see .spec/technical/data-processes/) are
-    implemented; only the health contract is defined so far.
+    (SRV-003, .spec/technical/services/srv-003.md).
 servers:
   - url: /problems
 paths:
+  /problems:
+    post:
+      operationId: submitProblem
+      summary: Submit a problem (DP-003)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitProblemRequest"
+      responses:
+        "201":
+          description: Problem created, status "open"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "400":
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    get:
+      operationId: listProblems
+      summary: List all problems (public)
+      responses:
+        "200":
+          description: All problems
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Problem"
+  /problems/{id}:
+    get:
+      operationId: getProblem
+      summary: Read a single problem (public)
+      parameters:
+        - $ref: "#/components/parameters/ProblemId"
+      responses:
+        "200":
+          description: The problem
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Problem not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /problems/{id}/support:
+    post:
+      operationId: endorseProblem
+      summary: Endorse a problem (DP-004)
+      parameters:
+        - $ref: "#/components/parameters/ProblemId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [citizen_id]
+              properties:
+                citizen_id:
+                  type: string
+      responses:
+        "200":
+          description: Endorsement recorded; running support count returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  support_count:
+                    type: integer
+        "404":
+          description: Problem not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Citizen has already endorsed this problem
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /problems/{id}/status:
+    post:
+      operationId: transitionProblemStatus
+      summary: Move a problem forward in its status lifecycle
+      description: >
+        Only the forward path open -> proposing -> closed is legal; any
+        skip, repeat, or backward transition is rejected with 409.
+      parameters:
+        - $ref: "#/components/parameters/ProblemId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  $ref: "#/components/schemas/ProblemStatus"
+      responses:
+        "200":
+          description: Transition applied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Problem not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Illegal transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /healthz:
     get:
       operationId: getHealthz
@@ -40,3 +168,55 @@ paths:
                   status:
                     type: string
                     const: ready
+components:
+  parameters:
+    ProblemId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+  schemas:
+    ProblemStatus:
+      type: string
+      enum: [open, proposing, closed]
+    SubmitProblemRequest:
+      type: object
+      required:
+        [citizen_id, title, description, affected_area, candidate_scope]
+      properties:
+        citizen_id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        affected_area:
+          type: string
+        candidate_scope:
+          type: string
+    Problem:
+      type: object
+      properties:
+        id:
+          type: string
+        citizen_id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        affected_area:
+          type: string
+        candidate_scope:
+          type: string
+        status:
+          $ref: "#/components/schemas/ProblemStatus"
+        created_at:
+          type: string
+          format: date-time
+    Error:
+      type: object
+      properties:
+        error:
+          type: string

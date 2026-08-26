@@ -8,11 +8,19 @@ import (
 
 // newRouter wires the liveness/readiness contract every service
 // implements identically (see infra/helm/service/templates/deployment.yaml's
-// probes). Business routes are registered here as they're implemented.
-func newRouter(logger *slog.Logger) http.Handler {
+// probes), plus this service's delegation business routes (SRV-010).
+func newRouter(logger *slog.Logger, svc *Service) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", handleHealthz)
 	mux.HandleFunc("GET /readyz", handleReadyz)
+
+	h := newHandler(svc)
+	mux.HandleFunc("POST /delegation/delegations", h.createDelegation)
+	mux.HandleFunc("GET /delegation/delegations", h.listDelegations)
+	mux.HandleFunc("DELETE /delegation/delegations/{id}", h.revokeDelegation)
+	mux.HandleFunc("POST /delegation/resolve", h.resolveChain)
+	mux.HandleFunc("POST /delegation/internal/expire", h.expireDelegations)
+
 	return withLogging(logger, mux)
 }
 

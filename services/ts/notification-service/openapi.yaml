@@ -4,12 +4,113 @@ info:
   version: 0.0.0
   description: >
     Owns multi-channel (email, push, in-app) notification dispatch. (SRV-015,
-    .spec/technical/services/srv-015.md). Business endpoints are added as
-    the corresponding data processes (see .spec/technical/data-processes/) are
-    implemented; only the health contract is defined so far.
+    .spec/technical/services/srv-015.md). Implements DP-039 (notification
+    dispatch, in-memory).
 servers:
   - url: /notifications
 paths:
+  /dispatch:
+    post:
+      operationId: dispatchNotification
+      summary: Dispatch a notification to a citizen over one channel (DP-039)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DispatchRequest"
+      responses:
+        "202":
+          description: >
+            Dispatch was accepted; the response's `status` reflects the
+            resulting outcome (`delivered`, `skipped`, `retrying`, or
+            `failed`) -- delivery is best-effort and a downstream provider
+            failure is never returned as an HTTP error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Notification"
+        "400":
+          description: >
+            Invalid request, or the payload contains a banned private-data
+            key (checked recursively).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /{id}/retry:
+    post:
+      operationId: retryNotification
+      summary: Manually re-attempt a notification still in status='retrying'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: >
+            The notification record after the retry attempt (unchanged if it
+            was already in a terminal status such as `failed`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Notification"
+        "404":
+          description: No notification with that id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /preferences/{citizenId}:
+    put:
+      operationId: updateNotificationPreferences
+      summary: Set a citizen's per-channel delivery preference
+      parameters:
+        - name: citizenId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PreferencesUpdateRequest"
+      responses:
+        "200":
+          description: The citizen's resulting full preference map.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PreferencesResponse"
+        "400":
+          description: Invalid channel name or non-boolean enabled value.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /citizens/{id}:
+    get:
+      operationId: listCitizenNotifications
+      summary: A citizen's notification records (in-app inbox use case)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The citizen's notifications, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Notification"
   /healthz:
     get:
       operationId: getHealthz
@@ -40,3 +141,74 @@ paths:
                   status:
                     type: string
                     const: ready
+components:
+  schemas:
+    Channel:
+      type: string
+      enum: [email, push, in_app]
+    NotificationStatus:
+      type: string
+      enum: [delivered, skipped, retrying, failed]
+    DispatchRequest:
+      type: object
+      required: [citizen_id, event_type, channel, payload]
+      additionalProperties: false
+      properties:
+        citizen_id:
+          type: string
+        event_type:
+          type: string
+        channel:
+          $ref: "#/components/schemas/Channel"
+        payload:
+          type: object
+          description: >
+            Must never contain (recursively) ballot_choice, legal_identity,
+            government_id, legal_identity_hash, or raw_legal_identifier.
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+        citizen_id:
+          type: string
+        event_type:
+          type: string
+        channel:
+          $ref: "#/components/schemas/Channel"
+        payload:
+          type: object
+        status:
+          $ref: "#/components/schemas/NotificationStatus"
+        attempts:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    PreferencesUpdateRequest:
+      description: >
+        Either a single-channel update ({channel, enabled}) or a partial
+        channel-\>enabled map (e.g. {"email": false, "push": true}).
+      type: object
+    PreferencesResponse:
+      type: object
+      properties:
+        citizen_id:
+          type: string
+        preferences:
+          type: object
+          properties:
+            email:
+              type: boolean
+            push:
+              type: boolean
+            in_app:
+              type: boolean
+    Error:
+      type: object
+      properties:
+        error:
+          type: string

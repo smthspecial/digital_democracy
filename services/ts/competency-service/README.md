@@ -11,6 +11,12 @@ pnpm --filter @dd/competency-service dev    # local dev server (tsx watch)
 pnpm --filter @dd/competency-service test   # vitest
 ```
 
-Only the health contract (`/healthz`, `/readyz`) is implemented so far --
-business endpoints are added alongside their data processes
-as they're built (see .spec/technical/data-processes/ for this service's processes).
+In addition to the health contract (`/healthz`, `/readyz`), the in-memory
+five-stage competency pipeline (DP-011/DP-031), conflict-of-interest
+declarations with auto-exclusion (DP-010/DP-033), advisory expert
+assessments (DP-021), competency challenges (DP-012/DP-032), and the
+expiry sweep (DP-044) are implemented under the `/competency` prefix --
+see `openapi.yaml` for the full contract. Persistence is in-memory only
+(no database yet); cross-service effects (auto-exclusion enforcement,
+expiry notifications) are modeled as injectable seams with no-op
+defaults (`src/integrations.ts`).

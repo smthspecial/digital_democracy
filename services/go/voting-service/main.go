@@ -1,7 +1,6 @@
 // Command voting-service is SRV-008 (.spec/technical/services/srv-008.md):
-// ballot cryptography, eligibility tokens, and vote tallying. Only the
-// health contract is wired up so far -- business handlers are added
-// alongside their data processes (DP-016, DP-025, DP-026, ...).
+// ballot cryptography, eligibility tokens, and vote tallying (DP-016,
+// DP-025, DP-026, DP-027, DP-041, DP-046, DP-047).
 package main
 
 import (

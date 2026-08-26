@@ -4,12 +4,208 @@ info:
   version: 0.0.0
   description: >
     Owns approved-project implementation tracking and milestone reporting
-    (SRV-013, .spec/technical/services/srv-013.md). Business endpoints are
-    added as the corresponding data processes (see .spec/technical/data-processes/) are
-    implemented; only the health contract is defined so far.
+    (SRV-013, .spec/technical/services/srv-013.md): timelines, budget
+    spend, contractors, milestones, and post-completion outcome
+    evaluation (DP-018, DP-022, DP-053).
 servers:
   - url: /projects
 paths:
+  /:
+    post:
+      operationId: createProject
+      summary: Create a project for an approved proposal (DP-018 instantiation)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProjectRequest"
+      responses:
+        "201":
+          description: Project created, with its milestones and outcome evaluation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectWithChildren"
+        "400":
+          $ref: "#/components/responses/Error"
+    get:
+      operationId: listProjects
+      summary: List all projects (public)
+      responses:
+        "200":
+          description: All projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Project"
+  /{id}:
+    get:
+      operationId: getProject
+      summary: Get a project by id (public)
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: The project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "404":
+          $ref: "#/components/responses/Error"
+  /{id}/milestones:
+    get:
+      operationId: listProjectMilestones
+      summary: List a project's milestones, ordered (public)
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: The project's milestones
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProjectMilestone"
+        "404":
+          $ref: "#/components/responses/Error"
+  /{id}/milestones/{milestoneId}/complete:
+    post:
+      operationId: completeProjectMilestone
+      summary: >
+        Report milestone completion (DP-018). Completing the last
+        incomplete milestone also sets the project's status to completed.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: milestoneId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Updated milestone and project
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  project:
+                    $ref: "#/components/schemas/Project"
+                  milestone:
+                    $ref: "#/components/schemas/ProjectMilestone"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          description: Milestone was already completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+  /{id}/budget-spent:
+    post:
+      operationId: recordProjectBudgetSpent
+      summary: >
+        Record a ledger outflow reconciled against this project (external
+        write from budget-service's reconciliation).
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, description]
+              properties:
+                amount:
+                  type: number
+                  exclusiveMinimum: 0
+                description:
+                  type: string
+      responses:
+        "200":
+          description: Project with updated budget_spent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /outcome-evaluations/sweep:
+    post:
+      operationId: sweepOutcomeEvaluations
+      summary: >
+        Daily cron entry point (DP-053). Requests an outcome-evaluation
+        assignment for each completed project past the configured
+        evaluation delay that hasn't already had one requested.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                now:
+                  type: string
+                  description: ISO timestamp to evaluate the sweep as of (defaults to now)
+                evaluation_delay_days:
+                  type: integer
+                  minimum: 0
+                  description: Defaults to 180
+      responses:
+        "200":
+          description: Ids of projects an assignment was requested for on this run
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  requested_project_ids:
+                    type: array
+                    items:
+                      type: string
+  /outcome-evaluations/{id}/submit:
+    post:
+      operationId: submitOutcomeEvaluation
+      summary: Record the measured outcome for a project (DP-022)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [measured_outcome]
+              properties:
+                measured_outcome:
+                  type: string
+      responses:
+        "200":
+          description: The updated outcome evaluation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OutcomeEvaluation"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          description: This evaluation already has a measured outcome
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
   /healthz:
     get:
       operationId: getHealthz

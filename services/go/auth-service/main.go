@@ -23,9 +23,16 @@ func main() {
 		port = "5004"
 	}
 
+	enc, err := newEncryptor()
+	if err != nil {
+		logger.Error("failed to initialize encryption key", "error", err)
+		os.Exit(1)
+	}
+	svc := NewService(newStore(), enc, noopAuditEmitter{})
+
 	srv := &http.Server{
 		Addr:         ":" + port,
-		Handler:      newRouter(logger),
+		Handler:      newRouter(logger, svc),
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}

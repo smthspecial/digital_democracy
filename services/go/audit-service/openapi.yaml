@@ -5,9 +5,9 @@ info:
   description: >
     Owns the append-only, hash-chained public audit log -- the highest
     write fan-in of any service (SRV-012, .spec/technical/services/srv-012.md).
-    Business endpoints are added as the corresponding data processes
-    (see .spec/technical/data-processes/) are implemented; only the health contract
-    is defined so far.
+    Implements the audit log (DP-036), constitutional rights and review
+    (DP-034), and the protocol change execution gate (DP-043), all backed
+    by an in-memory store.
 servers:
   - url: /audit
 paths:
@@ -41,3 +41,254 @@ paths:
                   status:
                     type: string
                     const: ready
+  /audit/log:
+    post:
+      operationId: appendAuditLog
+      summary: Append an entry to the hash-chained audit log (DP-036)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action_type, actor_ref]
+              properties:
+                action_type:
+                  $ref: "#/components/schemas/ActionType"
+                actor_ref:
+                  type: string
+                payload:
+                  description: Hashed, never stored verbatim (ballot content is never logged).
+                idempotency_key:
+                  type: string
+      responses:
+        "201":
+          description: Entry appended (or the existing entry, if idempotency_key was already seen)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditLogEntry"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    get:
+      operationId: listAuditLog
+      summary: List audit log entries
+      parameters:
+        - name: action_type
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/ActionType"
+      responses:
+        "200":
+          description: Matching entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entries:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AuditLogEntry"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /audit/log/verify:
+    get:
+      operationId: verifyAuditLog
+      summary: Walk the whole chain and confirm hash/signature linkage
+      responses:
+        "200":
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                  broken_at:
+                    type: string
+                    nullable: true
+                    description: id of the first entry whose recomputed hash/signature no longer matches, or null
+  /audit/rights:
+    post:
+      operationId: createConstitutionalRight
+      summary: Define a constitutional right
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                protected:
+                  type: boolean
+      responses:
+        "201":
+          description: Right created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConstitutionalRight"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    get:
+      operationId: listConstitutionalRights
+      summary: List constitutional rights
+      responses:
+        "200":
+          description: All rights
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rights:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ConstitutionalRight"
+  /audit/proposals/{id}/constitutional-review:
+    post:
+      operationId: reviewProposal
+      summary: Run constitutional review of a proposal against every protected right (DP-034)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                change_summary:
+                  type: string
+      responses:
+        "200":
+          description: Review outcome
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  blocked:
+                    type: boolean
+                  reviews:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ConstitutionalReview"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /audit/protocol-changes/gate:
+    post:
+      operationId: gateProtocolExecution
+      summary: Gate a protocol change's delayed execution on approvals, delay, and visibility (DP-043)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                required_approval_types:
+                  type: array
+                  items:
+                    type: string
+                obtained_approval_types:
+                  type: array
+                  items:
+                    type: string
+                delay_elapsed:
+                  type: boolean
+                publicly_visible:
+                  type: boolean
+      responses:
+        "200":
+          description: Gate decision
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  released:
+                    type: boolean
+                  reason:
+                    type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+components:
+  responses:
+    BadRequest:
+      description: Malformed request or domain validation failure
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+  schemas:
+    ActionType:
+      type: string
+      enum:
+        - proposal_created
+        - vote_certified
+        - system_update
+        - rule_change
+        - admin_action
+        - identity_event
+    AuditLogEntry:
+      type: object
+      properties:
+        id:
+          type: string
+        action_type:
+          $ref: "#/components/schemas/ActionType"
+        actor_ref:
+          type: string
+        payload_hash:
+          type: string
+        prev_hash:
+          type: string
+        signature:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    ConstitutionalRight:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        protected:
+          type: boolean
+    ConstitutionalReview:
+      type: object
+      properties:
+        id:
+          type: string
+        proposal_id:
+          type: string
+        right_id:
+          type: string
+        result:
+          type: string
+          enum: [cleared, blocked]
+        reviewer_ref:
+          type: string
+        created_at:
+          type: string
+          format: date-time

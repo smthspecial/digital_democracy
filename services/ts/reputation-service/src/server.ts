@@ -1,10 +1,45 @@
-import Fastify from "fastify";
+import Fastify, { type FastifyInstance } from "fastify";
 import { registerHealthRoutes } from "./routes/health.js";
+import { registerReputationRoutes } from "./routes/reputation.js";
+import { DomainError } from "./errors.js";
+import { createStore, type ReputationStore } from "./store.js";
+import {
+  noopAuditEmitter,
+  noopNotificationEmitter,
+  type AuditEmitter,
+  type NotificationEmitter,
+} from "./services/reputation.js";
 
-export function buildServer() {
+export interface Deps {
+  store: ReputationStore;
+  notifications: NotificationEmitter;
+  audit: AuditEmitter;
+}
+
+export function buildServer(deps: Partial<Deps> = {}): FastifyInstance {
   const app = Fastify({ logger: true });
+
+  const resolvedDeps: Deps = {
+    store: deps.store ?? createStore(),
+    notifications: deps.notifications ?? noopNotificationEmitter,
+    audit: deps.audit ?? noopAuditEmitter,
+  };
+
   registerHealthRoutes(app);
-  // Business routes (SRV-014) are added here as they
-  // are implemented -- see .spec/technical/services/srv-014.md.
+  registerReputationRoutes(app, resolvedDeps);
+
+  app.setErrorHandler((error, request, reply) => {
+    if (error instanceof DomainError) {
+      reply.code(error.statusCode).send({ error: error.message });
+      return;
+    }
+    if (error.validation) {
+      reply.code(400).send({ error: error.message });
+      return;
+    }
+    request.log.error(error);
+    reply.code(500).send({ error: "internal server error" });
+  });
+
   return app;
 }

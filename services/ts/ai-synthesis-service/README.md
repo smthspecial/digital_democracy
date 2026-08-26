@@ -10,6 +10,21 @@ pnpm --filter @dd/ai-synthesis-service dev    # local dev server (tsx watch)
 pnpm --filter @dd/ai-synthesis-service test   # vitest
 ```
 
-Only the health contract (`/healthz`, `/readyz`) is implemented so far --
-business endpoints are added alongside their data processes
-as they're built (see .spec/technical/data-processes/ for this service's processes).
+Implements DP-037 (AI policy synthesis) in-memory:
+
+- `POST /ai-synthesis/synthesize` -- runs the rule-based synthesis algorithm
+  over an explicit `{ proposal_id, arguments, preferences }` body (there is
+  no live read from `deliberation-service` yet, so the caller supplies the
+  data directly) and stores/returns the labeled `SynthesisOutput`. Returns
+  `{ disabled: true }` without storing anything while the service is
+  disabled.
+- `POST /ai-synthesis/toggle` -- protocol-layer enable/disable switch.
+- `POST /ai-synthesis/outputs/:id/flag` -- any citizen may flag an output as
+  biased/misleading; reasons accumulate, `flagged` becomes `true`.
+- `GET /ai-synthesis/outputs/:id`, `GET /ai-synthesis/proposals/:proposalId/outputs` -- reads.
+
+Every returned output carries the mandatory, non-removable label
+`"AI-generated analysis — advisory only, subject to human review."` and a
+hardcoded model-provenance block (there is no real model in this phase).
+The service has no write access to any governance table -- outputs live
+only in this service's own in-memory advisory store.

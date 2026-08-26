@@ -11,6 +11,27 @@ pnpm --filter @dd/governance-role-service dev    # local dev server (tsx watch)
 pnpm --filter @dd/governance-role-service test   # vitest
 ```
 
-Only the health contract (`/healthz`, `/readyz`) is implemented so far --
-business endpoints are added alongside their data processes
-as they're built (see .spec/technical/data-processes/ for this service's processes).
+Implements, in-memory (no database yet):
+
+- `POST /governance-roles/roles` / `GET /governance-roles/roles` -- create and
+  list time-limited governance roles (TBL-032).
+- `POST /governance-roles/approvals` -- submit an approval decision on a
+  critical action (DP-023). Rejects a role that isn't currently active, a
+  citizen with a conflict of interest, and a second approval from the same
+  citizen on the same `action_ref`.
+- `GET /governance-roles/actions/:actionRef/status` -- which of the three
+  required approval types (`citizen_supermajority`, `audit_confirmation`,
+  `body_endorsement`) are satisfied, and whether the action is fully
+  approved (DP-035).
+- `POST /governance-roles/actions/:actionRef/execute` -- protocol-change
+  delayed execution (DP-043): requires full approval, `delay_elapsed` and
+  `publicly_visible` both true, and gate confirmation; idempotent on repeat
+  calls for the same `action_ref`.
+- `POST /governance-roles/rotation/sweep` -- daily rotation check (DP-050):
+  flags roles whose term ends within 7 days, exactly once per role.
+
+Integrations that don't exist yet as live services in this codebase
+(audit-service's protocol-change gate, competency-service's COI signal, the
+actual protocol-change apply step, and notification/civic-duty-service
+dispatch from DP-050) are modeled as small injectable interfaces with
+no-op/permissive default implementations -- see `src/collaborators.ts`.

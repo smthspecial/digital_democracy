@@ -11,10 +11,11 @@ import (
 
 func TestHealthz(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	svc, _ := newTestService(t)
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	rec := httptest.NewRecorder()
 
-	newRouter(logger).ServeHTTP(rec, req)
+	newRouter(logger, svc).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", rec.Code)
@@ -31,10 +32,11 @@ func TestHealthz(t *testing.T) {
 
 func TestReadyz(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	svc, _ := newTestService(t)
 	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 	rec := httptest.NewRecorder()
 
-	newRouter(logger).ServeHTTP(rec, req)
+	newRouter(logger, svc).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", rec.Code)

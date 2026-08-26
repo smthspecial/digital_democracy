@@ -13,6 +13,10 @@ func newRouter(logger *slog.Logger) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", handleHealthz)
 	mux.HandleFunc("GET /readyz", handleReadyz)
+
+	env := &handlerEnv{svc: NewService(nil, nil)}
+	env.register(mux)
+
 	return withLogging(logger, mux)
 }
 

@@ -1,12 +1,13 @@
 openapi: 3.1.0
 info:
   title: voting-service
-  version: 0.0.0
+  version: 0.1.0
   description: >
     Ballot cryptography, eligibility tokens, and tallying (SRV-008,
-    .spec/technical/services/srv-008.md). Business endpoints are added as
-    the corresponding data processes (DP-016, DP-025, DP-026, ...) are
-    implemented; only the health contract is defined so far.
+    .spec/technical/services/srv-008.md). In-memory implementation of the
+    full voting lifecycle: session scheduling, option management, eligibility
+    token issuance (DP-025), ballot casting (DP-016), inclusion verification
+    (DP-017), and close/tally/certification (DP-026, DP-027).
 servers:
   - url: /voting
 paths:
@@ -40,3 +41,364 @@ paths:
                   status:
                     type: string
                     const: ready
+  /sessions:
+    post:
+      operationId: createSession
+      summary: Create a vote session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSessionRequest"
+      responses:
+        "201":
+          description: Session created (status=scheduled)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoteSession"
+        "400":
+          $ref: "#/components/responses/Error"
+  /sessions/{id}:
+    get:
+      operationId: getSession
+      summary: Read a vote session
+      parameters:
+        - $ref: "#/components/parameters/SessionID"
+      responses:
+        "200":
+          description: The session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoteSession"
+        "404":
+          $ref: "#/components/responses/Error"
+  /sessions/{id}/options:
+    post:
+      operationId: addOption
+      summary: Add an option to a session (only while status=scheduled)
+      parameters:
+        - $ref: "#/components/parameters/SessionID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddOptionRequest"
+      responses:
+        "201":
+          description: Option added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoteOption"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          description: Session is not scheduled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+  /sessions/{id}/open:
+    post:
+      operationId: openSession
+      summary: >
+        DP-046 open trigger + DP-025 batch eligibility token issuance.
+        Token secrets are returned only here, the one time they exist in
+        plaintext (a real deployment delivers them out-of-band).
+      parameters:
+        - $ref: "#/components/parameters/SessionID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OpenSessionRequest"
+      responses:
+        "200":
+          description: Session opened; newly issued tokens returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenSessionResponse"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          description: Session is not eligible to open yet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+  /sessions/{id}/close:
+    post:
+      operationId: closeSession
+      summary: >
+        DP-047 close trigger chained synchronously into DP-026 tally
+        computation and DP-027 certification.
+      parameters:
+        - $ref: "#/components/parameters/SessionID"
+      responses:
+        "200":
+          description: Session closed (and certified if quorum was met)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CloseSessionResponse"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          description: Session is not eligible to close yet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+  /ballots:
+    post:
+      operationId: castBallot
+      summary: DP-016 cast ballot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CastBallotRequest"
+      responses:
+        "201":
+          description: Ballot cast (never echoes encrypted_choice or nonce)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BallotResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          description: Session or eligibility token not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+        "409":
+          description: Session not open, or token already used
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+  /ballots/verify:
+    get:
+      operationId: verifyBallotInclusion
+      summary: DP-017 read-only ballot inclusion check
+      parameters:
+        - name: session_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Whether a matching ballot exists in the session
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  found:
+                    type: boolean
+        "404":
+          $ref: "#/components/responses/Error"
+components:
+  parameters:
+    SessionID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorBody"
+  schemas:
+    ErrorBody:
+      type: object
+      properties:
+        error:
+          type: string
+    VoteMethod:
+      type: string
+      enum: [ranked_choice, approval, preference_score, comparative]
+    ThresholdRule:
+      type: string
+      enum: [simple_majority, majority_plus_quorum, supermajority]
+    SessionStatus:
+      type: string
+      enum: [scheduled, open, closed, certified]
+    VoteSession:
+      type: object
+      properties:
+        id:
+          type: string
+        proposal_id:
+          type: string
+        jurisdiction_id:
+          type: string
+        method:
+          $ref: "#/components/schemas/VoteMethod"
+        threshold_rule:
+          $ref: "#/components/schemas/ThresholdRule"
+        min_participation:
+          type: number
+        cooling_off_until:
+          type: string
+          format: date-time
+        opens_at:
+          type: string
+          format: date-time
+        closes_at:
+          type: string
+          format: date-time
+        status:
+          $ref: "#/components/schemas/SessionStatus"
+        created_at:
+          type: string
+          format: date-time
+    CreateSessionRequest:
+      type: object
+      required:
+        [proposal_id, jurisdiction_id, method, threshold_rule, min_participation, cooling_off_until, opens_at, closes_at]
+      properties:
+        proposal_id:
+          type: string
+        jurisdiction_id:
+          type: string
+        method:
+          $ref: "#/components/schemas/VoteMethod"
+        threshold_rule:
+          $ref: "#/components/schemas/ThresholdRule"
+        min_participation:
+          type: number
+          description: Must satisfy 0 < x <= 1
+        cooling_off_until:
+          type: string
+          format: date-time
+        opens_at:
+          type: string
+          format: date-time
+        closes_at:
+          type: string
+          format: date-time
+    VoteOption:
+      type: object
+      properties:
+        id:
+          type: string
+        vote_session_id:
+          type: string
+        proposal_id:
+          type: string
+        label:
+          type: string
+        description:
+          type: string
+    AddOptionRequest:
+      type: object
+      required: [label]
+      properties:
+        proposal_id:
+          type: string
+        label:
+          type: string
+        description:
+          type: string
+    OpenSessionRequest:
+      type: object
+      properties:
+        eligible_citizen_ids:
+          type: array
+          items:
+            type: string
+    IssuedToken:
+      type: object
+      properties:
+        citizen_id:
+          type: string
+        token_secret:
+          type: string
+    OpenSessionResponse:
+      type: object
+      properties:
+        session:
+          $ref: "#/components/schemas/VoteSession"
+        issued_tokens:
+          type: array
+          items:
+            $ref: "#/components/schemas/IssuedToken"
+    TallyResult:
+      type: object
+      properties:
+        session_id:
+          type: string
+        method:
+          $ref: "#/components/schemas/VoteMethod"
+        counts:
+          type: object
+          additionalProperties:
+            type: number
+        winner_option_id:
+          type: string
+          nullable: true
+        total_ballots:
+          type: integer
+        participation_rate:
+          type: number
+        quorum_met:
+          type: boolean
+        certified_at:
+          type: string
+          format: date-time
+          nullable: true
+    CloseSessionResponse:
+      type: object
+      properties:
+        session:
+          $ref: "#/components/schemas/VoteSession"
+        tally:
+          $ref: "#/components/schemas/TallyResult"
+    CastBallotRequest:
+      type: object
+      required: [session_id, token_secret, choice]
+      properties:
+        session_id:
+          type: string
+        token_secret:
+          type: string
+        choice:
+          type: string
+          description: >
+            Format depends on the session's method: approval is a
+            comma-separated list of approved option IDs;
+            preference_score is "optID:score,..." with integer scores
+            0-100; ranked_choice and comparative are a comma-separated
+            ordered list of option IDs, most preferred first.
+    BallotResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        verification_code:
+          type: string
+        cast_at:
+          type: string
+          format: date-time

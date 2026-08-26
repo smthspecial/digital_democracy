@@ -8,11 +8,27 @@ import (
 
 // newRouter wires the liveness/readiness contract every service
 // implements identically (see infra/helm/service/templates/deployment.yaml's
-// probes). Business routes are registered here as they're implemented.
+// probes), plus this service's own business routes, backed by a fresh
+// in-memory Service/Store.
 func newRouter(logger *slog.Logger) http.Handler {
+	return newRouterWithService(logger, NewService(NewStore()))
+}
+
+// newRouterWithService lets tests wire a specific Service instance.
+func newRouterWithService(logger *slog.Logger, svc *Service) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", handleHealthz)
 	mux.HandleFunc("GET /readyz", handleReadyz)
+
+	h := &handlers{svc: svc}
+	mux.HandleFunc("POST /audit/log", h.appendLog)
+	mux.HandleFunc("GET /audit/log", h.listLog)
+	mux.HandleFunc("GET /audit/log/verify", h.verifyLog)
+	mux.HandleFunc("POST /audit/rights", h.createRight)
+	mux.HandleFunc("GET /audit/rights", h.listRights)
+	mux.HandleFunc("POST /audit/proposals/{id}/constitutional-review", h.reviewProposal)
+	mux.HandleFunc("POST /audit/protocol-changes/gate", h.gateProtocolExecution)
+
 	return withLogging(logger, mux)
 }
 

@@ -1,8 +1,8 @@
 // Command delegation-service is SRV-010 (.spec/technical/services/srv-010.md):
 // Owns liquid-democracy delegation creation, revocation, and chain
-// resolution feeding the voting pipeline. Only the
-// health contract is wired up so far -- business handlers are added
-// alongside their data processes as specified in .spec/technical/data-processes/.
+// resolution feeding the voting pipeline. Delegation CRUD, circular-graph
+// rejection, chain resolution, and expiry enforcement (DP-014/015/041/045)
+// are implemented against an in-memory store; see README.md.
 package main
 
 import (
@@ -24,9 +24,11 @@ func main() {
 		port = "5002"
 	}
 
+	svc := NewService(NewStore(), nil, nil)
+
 	srv := &http.Server{
 		Addr:         ":" + port,
-		Handler:      newRouter(logger),
+		Handler:      newRouter(logger, svc),
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}

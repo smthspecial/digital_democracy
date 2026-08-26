@@ -1,13 +1,11 @@
 openapi: 3.1.0
 info:
   title: delegation-service
-  version: 0.0.0
+  version: 0.1.0
   description: >
     Owns liquid-democracy delegation creation, revocation, and chain
     resolution feeding the voting pipeline (SRV-010,
-    .spec/technical/services/srv-010.md). Business endpoints are added as
-    the corresponding data processes (see .spec/technical/data-processes/) are
-    implemented; only the health contract is defined so far.
+    .spec/technical/services/srv-010.md).
 servers:
   - url: /delegation
 paths:
@@ -41,3 +39,188 @@ paths:
                   status:
                     type: string
                     const: ready
+  /delegations:
+    post:
+      operationId: createDelegation
+      summary: Create a delegation (DP-014)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [delegator_id, delegate_id, domain_id, expires_at]
+              properties:
+                delegator_id:
+                  type: string
+                delegate_id:
+                  type: string
+                domain_id:
+                  type: string
+                expires_at:
+                  type: string
+                  format: date-time
+      responses:
+        "201":
+          description: Delegation created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Delegation"
+        "400":
+          description: >
+            Validation failure: self-delegation, expires_at not strictly in
+            the future, delegate lacks active competency in the domain, or
+            the edge would create a circular delegation chain
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    get:
+      operationId: listDelegations
+      summary: List delegations (FR-056, publicly visible)
+      parameters:
+        - name: delegator_id
+          in: query
+          schema:
+            type: string
+        - name: delegate_id
+          in: query
+          schema:
+            type: string
+        - name: domain_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Matching delegations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  delegations:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Delegation"
+  /delegations/{id}:
+    delete:
+      operationId: revokeDelegation
+      summary: Revoke a delegation (DP-015)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [requesting_citizen_id]
+              properties:
+                requesting_citizen_id:
+                  type: string
+                  description: Must equal the delegation's delegator_id.
+      responses:
+        "200":
+          description: Delegation revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Delegation"
+        "403":
+          description: Requesting citizen is not the delegator
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Unknown delegation id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Delegation is already revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /resolve:
+    post:
+      operationId: resolveChain
+      summary: Resolve a delegation chain (DP-041, called by voting-service at ballot cast)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [delegate_id, domain_id]
+              properties:
+                delegate_id:
+                  type: string
+                domain_id:
+                  type: string
+      responses:
+        "200":
+          description: >
+            Every citizen ID (direct or transitive) whose active delegation
+            in this domain currently terminates at delegate_id
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  delegator_ids:
+                    type: array
+                    items:
+                      type: string
+  /internal/expire:
+    post:
+      operationId: expireDelegations
+      summary: Expiry enforcement cron (DP-045)
+      responses:
+        "200":
+          description: >
+            Revokes every delegation whose expires_at has passed and isn't
+            already revoked. Idempotent -- a repeat call revokes 0.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  revoked_count:
+                    type: integer
+components:
+  schemas:
+    Delegation:
+      type: object
+      properties:
+        id:
+          type: string
+        delegator_id:
+          type: string
+        delegate_id:
+          type: string
+        domain_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        revoked_at:
+          type: string
+          format: date-time
+          nullable: true
+    Error:
+      type: object
+      properties:
+        error:
+          type: string

@@ -12,5 +12,26 @@ go run .     # local dev server
 go test ./... # unit tests
 ```
 
-Only the health contract (`/healthz`, `/readyz`) is implemented so far --
-business handlers are added alongside their data processes as they're built (see .spec/technical/data-processes/ for this service's processes).
+## Implemented
+
+In-memory only (no database yet) -- see `store.go`. All endpoints are under `/audit`:
+
+- `POST /audit/log` / `GET /audit/log` (`?action_type=` filter) -- append and list the
+  hash-chained audit log (DP-036). Appends dedupe by `idempotency_key`; out-of-order
+  arrivals are buffered and auto-flushed once their predecessor lands (`store.go`'s
+  `linkEntry`).
+- `GET /audit/log/verify` -- walks the whole chain and reports the first entry (if any)
+  whose recomputed hash/signature no longer matches what's stored.
+- `POST /audit/rights` / `GET /audit/rights` -- constitutional rights substrate for
+  reviews to check against.
+- `POST /audit/proposals/{id}/constitutional-review` -- DP-034: reviews a proposal
+  against every protected right, writing one `constitutional_review` row (and one
+  audit log entry) per right. Uses a placeholder `RightImpactAssessor` (case-insensitive
+  keyword match); real constitutional review is an elevated human process (AUTH-007).
+- `POST /audit/protocol-changes/gate` -- DP-043: releases a protocol change's execution
+  signal once all required approvals, the delay, and public visibility are satisfied.
+
+Hash-chain cryptography (`chain.go`): `payload_hash` = sha256 of the JSON payload;
+each row's hash is derived (not stored) from its own fields chained to the previous
+row's hash; `signature` = HMAC-SHA256 of the row hash under a process-local signing key
+generated at startup (a real deployment would use an asymmetric key or KMS).
