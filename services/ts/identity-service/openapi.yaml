@@ -1,12 +1,12 @@
 openapi: 3.1.0
 info:
   title: identity-service
-  version: 0.0.0
+  version: 0.1.0
   description: >
     Owns civic identity records and verification (SRV-001,
-    .spec/technical/services/srv-001.md). Business endpoints are added as
-    the corresponding data processes (DP-001, DP-002, ...) are
-    implemented; only the health contract is defined so far.
+    .spec/technical/services/srv-001.md). Implements DP-001 (register) and
+    DP-002 (submit verification evidence); remaining data processes
+    (DP-024, DP-042, DP-056) are async/cron and not yet exposed as HTTP.
 servers:
   - url: /identity
 paths:
@@ -40,3 +40,109 @@ paths:
                   status:
                     type: string
                     const: ready
+  /citizens:
+    post:
+      operationId: registerCitizen
+      summary: Register a new civic identity (DP-001)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [legalIdentifier]
+              properties:
+                legalIdentifier:
+                  type: string
+                  description: Raw legal identifier (national ID, passport number, ...); hashed, never stored.
+      responses:
+        "201":
+          description: Citizen record created with status=pending
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicCitizen"
+        "400":
+          description: Invalid request body
+        "409":
+          description: A pending or active identity already exists for this legal identity (FR-001)
+  /citizens/{id}:
+    get:
+      operationId: getCitizen
+      summary: Fetch the public record for a civic identity
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The public citizen record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicCitizen"
+        "404":
+          description: No citizen with this id
+  /verifications:
+    post:
+      operationId: submitVerification
+      summary: Submit identity verification evidence (DP-002)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [citizenId, method, evidenceRef]
+              properties:
+                citizenId:
+                  type: string
+                  format: uuid
+                method:
+                  type: string
+                  enum: [national_id, passport, gov_credential]
+                evidenceRef:
+                  type: string
+                  description: Encrypted reference to verification evidence; never the raw document.
+      responses:
+        "201":
+          description: Verification recorded; citizen activated if approved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [pending, verified, rejected]
+                  citizenStatus:
+                    type: string
+                    enum: [pending, active, inactive, revoked]
+        "400":
+          description: Invalid request body
+        "404":
+          description: No citizen with this id
+        "409":
+          description: Citizen is not awaiting verification
+components:
+  schemas:
+    PublicCitizen:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        publicHandle:
+          type: string
+        status:
+          type: string
+          enum: [pending, active, inactive, revoked]
+        createdAt:
+          type: string
+          format: date-time

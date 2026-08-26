@@ -19,6 +19,7 @@ WORKDIR /app
 RUN corepack enable
 ENV NODE_ENV=production
 COPY --from=build /app/services/ts/identity-service/dist ./dist
+COPY --from=build /app/services/ts/identity-service/migrations ./migrations
 COPY --from=build /app/services/ts/identity-service/package.json ./package.json
 COPY --from=build /app/node_modules ./node_modules
 EXPOSE 8080

@@ -1,8 +1,8 @@
 import { describe, expect, it, afterAll } from "vitest";
-import { buildServer } from "./server.js";
+import { buildTestServer } from "./test-utils.js";
 
 describe("health routes", () => {
-  const app = buildServer();
+  const { app } = buildTestServer();
 
   afterAll(async () => {
     await app.close();
