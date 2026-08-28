@@ -1,7 +1,20 @@
 import { buildServer } from "./server.js";
 import { config } from "./config.js";
+import {
+  createHttpAuditEmitter,
+  createHttpConstitutionalReviewer,
+} from "./integrations.js";
 
-const app = buildServer();
+const app = buildServer(
+  config.auditServiceUrl
+    ? {
+        auditEmitter: createHttpAuditEmitter(config.auditServiceUrl),
+        constitutionalReviewer: createHttpConstitutionalReviewer(
+          config.auditServiceUrl,
+        ),
+      }
+    : {},
+);
 
 app
   .listen({ port: config.port, host: "0.0.0.0" })

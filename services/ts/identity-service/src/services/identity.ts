@@ -1,7 +1,13 @@
 import { randomUUID } from "node:crypto";
 import type { Citizen, IdentityVerification, VerificationMethod } from "../domain/types.js";
 import type { Store } from "../store.js";
-import type { ApprovalGate, AuditEmitter, DuplicateSignal, IdentityHasher } from "../collaborators.js";
+import type {
+  ApprovalGate,
+  AuditEmitter,
+  DuplicateSignal,
+  IdentityHasher,
+  SessionRevoker,
+} from "../collaborators.js";
 import { conflict, forbidden, notFound } from "../errors.js";
 
 export interface IdentityServiceDeps {
@@ -10,6 +16,7 @@ export interface IdentityServiceDeps {
   approvalGate: ApprovalGate;
   audit: AuditEmitter;
   duplicateSignal: DuplicateSignal;
+  sessionRevoker: SessionRevoker;
 }
 
 export interface RegisterCitizenInput {
@@ -98,6 +105,9 @@ export function suspendCitizen(deps: IdentityServiceDeps, citizenId: string): Ci
   const citizen = deps.store.updateCitizenStatus(citizenId, "suspended");
   if (!citizen) throw notFound("Citizen not found");
   deps.audit.append({ entity: "citizen", entityId: citizenId, action: "suspended", occurredAt: new Date() });
+  // A suspended citizen must not keep using an already-issued session until
+  // it naturally expires (DP-042 cascade into auth-service).
+  deps.sessionRevoker.revokeAllSessions(citizenId);
   return citizen;
 }
 
@@ -108,9 +118,12 @@ export function revokeCitizen(deps: IdentityServiceDeps, citizenId: string): Cit
   }
   const citizen = deps.store.updateCitizenStatus(citizenId, "revoked");
   if (!citizen) throw notFound("Citizen not found");
-  // DP-042's cascade (delegations, assignments, tokens, governance roles)
-  // is owned by other services; this boundary only flips status and audits.
+  // DP-042's remaining cascade (delegations, assignments, tokens, governance
+  // roles) is owned by other services; this boundary flips status, audits,
+  // and terminates the citizen's live sessions so revocation takes effect
+  // immediately rather than only once auth-service's own session TTL lapses.
   deps.audit.append({ entity: "citizen", entityId: citizenId, action: "revoked", occurredAt: new Date() });
+  deps.sessionRevoker.revokeAllSessions(citizenId);
   return citizen;
 }
 

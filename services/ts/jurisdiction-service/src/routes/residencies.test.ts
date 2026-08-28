@@ -12,7 +12,7 @@ describe("residency routes", () => {
     const res = await app.inject({
       method: "POST",
       url: "/jurisdiction/jurisdictions",
-      payload: { parent_id: null, name: "City", scope_level: "city", boundary_ref: "ref" },
+      payload: { parent_id: null, name: "City", scope_level: "municipality", boundary_ref: "ref" },
     });
     return res.json();
   }

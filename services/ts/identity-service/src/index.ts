@@ -1,7 +1,12 @@
 import { buildServer } from "./server.js";
 import { config } from "./config.js";
+import { createHttpSessionRevoker } from "./collaborators.js";
 
-const app = buildServer();
+const app = buildServer(
+  config.authServiceUrl
+    ? { sessionRevoker: createHttpSessionRevoker(config.authServiceUrl) }
+    : {},
+);
 
 app
   .listen({ port: config.port, host: "0.0.0.0" })

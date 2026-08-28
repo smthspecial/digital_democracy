@@ -9,11 +9,21 @@ import type { GovernanceRole } from "../domain/types.js";
 
 const NOW = new Date("2026-03-01T00:00:00Z");
 
-function activeRole(store: Store, citizenId: string): GovernanceRole {
+function activeRole(
+  store: Store,
+  citizenId: string,
+  layer: "citizen" | "audit" | "protocol" | "implementation" = "citizen",
+): GovernanceRole {
+  const roleTypeByLayer = {
+    citizen: "reviewer",
+    audit: "auditor",
+    protocol: "review_body",
+    implementation: "operator",
+  } as const;
   return createRole(store, defaultAuditEmitter, {
     citizenId,
-    roleType: "reviewer",
-    layer: "citizen",
+    roleType: roleTypeByLayer[layer],
+    layer,
     randomized: false,
     termStart: new Date("2026-01-01T00:00:00Z"),
     termEnd: new Date("2026-12-01T00:00:00Z"),
@@ -141,6 +151,66 @@ describe("submitApproval", () => {
     ).toThrow(/already submitted/);
   });
 
+  it("rejects an audit_confirmation submitted by a role outside the audit layer", () => {
+    const store = createStore();
+    const role = activeRole(store, "citizen-1", "citizen");
+
+    expect(() =>
+      submitApproval(
+        store,
+        defaultCOIChecker,
+        defaultAuditEmitter,
+        {
+          actionRef: "action-1",
+          approverRoleId: role.id,
+          approvalType: "audit_confirmation",
+          decision: "approved",
+        },
+        NOW,
+      ),
+    ).toThrow(/audit layer/);
+  });
+
+  it("rejects a body_endorsement submitted by a role outside the protocol layer", () => {
+    const store = createStore();
+    const role = activeRole(store, "citizen-1", "audit");
+
+    expect(() =>
+      submitApproval(
+        store,
+        defaultCOIChecker,
+        defaultAuditEmitter,
+        {
+          actionRef: "action-1",
+          approverRoleId: role.id,
+          approvalType: "body_endorsement",
+          decision: "approved",
+        },
+        NOW,
+      ),
+    ).toThrow(/protocol layer/);
+  });
+
+  it("allows an audit_confirmation submitted by a role in the audit layer", () => {
+    const store = createStore();
+    const role = activeRole(store, "citizen-1", "audit");
+
+    expect(() =>
+      submitApproval(
+        store,
+        defaultCOIChecker,
+        defaultAuditEmitter,
+        {
+          actionRef: "action-1",
+          approverRoleId: role.id,
+          approvalType: "audit_confirmation",
+          decision: "approved",
+        },
+        NOW,
+      ),
+    ).not.toThrow();
+  });
+
   it("allows the same citizen to approve two different action_refs", () => {
     const store = createStore();
     const role = activeRole(store, "citizen-1");
@@ -199,9 +269,9 @@ describe("getActionStatus", () => {
 
   it("reports full approval once all three types are satisfied by independent role holders", () => {
     const store = createStore();
-    const roleA = activeRole(store, "citizen-1");
-    const roleB = activeRole(store, "citizen-2");
-    const roleC = activeRole(store, "citizen-3");
+    const roleA = activeRole(store, "citizen-1", "citizen");
+    const roleB = activeRole(store, "citizen-2", "audit");
+    const roleC = activeRole(store, "citizen-3", "protocol");
 
     submitApproval(
       store,

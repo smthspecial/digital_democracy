@@ -6,17 +6,18 @@ import (
 	"time"
 )
 
-// api holds the handler dependencies. There is no live identity-service (or
-// other upstream) integration in this phase, so several requests below accept
-// fields a real deployment would instead look up itself (see Login/EnrollFactor
-// doc comments in service.go) — the caller is trusted rather than verified.
+// api holds the handler dependencies. citizen_status is deliberately not a
+// loginRequest field: it is resolved server-side via identity, not trusted
+// from the request body (see IdentityChecker in service.go). credential_valid
+// has no identity-service equivalent (no credential store exists in this
+// codebase yet) and remains caller-supplied, same as before.
 type api struct {
-	svc *Service
+	svc      *Service
+	identity IdentityChecker
 }
 
 type loginRequest struct {
 	CitizenID         string `json:"citizen_id"`
-	CitizenStatus     string `json:"citizen_status"`
 	CredentialValid   bool   `json:"credential_valid"`
 	DeviceFingerprint string `json:"device_fingerprint"`
 	IPSubnet          string `json:"ip_subnet"`
@@ -34,7 +35,11 @@ func (a *api) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
-	sess, requiresStepUp, factorTypes, err := a.svc.Login(req.CitizenID, req.CitizenStatus, req.CredentialValid, req.DeviceFingerprint, req.IPSubnet, time.Now())
+	// Any lookup failure (unreachable identity-service, unknown citizen) is
+	// treated as an unrecognized status, not surfaced separately: Login's
+	// existing generic-denial branch already handles it with no detail leak.
+	status, _ := a.identity.CitizenStatus(req.CitizenID)
+	sess, requiresStepUp, factorTypes, err := a.svc.Login(req.CitizenID, status, req.CredentialValid, req.DeviceFingerprint, req.IPSubnet, time.Now())
 	if err != nil {
 		writeError(w, err)
 		return

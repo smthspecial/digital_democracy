@@ -11,8 +11,10 @@ import { createStore, type Store } from "./store.js";
 import {
   noopExclusionEnforcer,
   noopNotificationEmitter,
+  noopReputationEmitter,
   type ExclusionEnforcer,
   type NotificationEmitter,
+  type ReputationEmitter,
 } from "./integrations.js";
 import { DomainError } from "./errors.js";
 
@@ -20,21 +22,23 @@ export interface Deps {
   store: Store;
   exclusionEnforcer: ExclusionEnforcer;
   notificationEmitter: NotificationEmitter;
+  reputationEmitter: ReputationEmitter;
 }
 
 export function buildServer(deps: Partial<Deps> = {}): FastifyInstance {
   const store = deps.store ?? createStore();
   const exclusionEnforcer = deps.exclusionEnforcer ?? noopExclusionEnforcer;
   const notificationEmitter = deps.notificationEmitter ?? noopNotificationEmitter;
+  const reputationEmitter = deps.reputationEmitter ?? noopReputationEmitter;
 
   const app = Fastify({ logger: true });
   registerHealthRoutes(app);
   registerDomainRoutes(app, store);
   registerApplicationRoutes(app, store);
   registerCitizenRoutes(app, store);
-  registerConflictRoutes(app, store, exclusionEnforcer);
+  registerConflictRoutes(app, store, exclusionEnforcer, reputationEmitter);
   registerAssessmentRoutes(app, store);
-  registerChallengeRoutes(app, store);
+  registerChallengeRoutes(app, store, reputationEmitter);
   registerExpiryRoutes(app, store, notificationEmitter);
 
   app.setErrorHandler((error, request, reply) => {

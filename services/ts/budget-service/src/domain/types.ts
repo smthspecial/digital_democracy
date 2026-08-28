@@ -25,6 +25,10 @@ export type LedgerEntryType = "inflow" | "outflow";
 export interface LedgerEntry {
   id: string;
   categoryId: string | null;
+  // TBL-028's project_id: links an outflow to the project-service project
+  // it funded, so a project's real spend is traceable in the public
+  // ledger, not just tracked separately by project-service's own record.
+  projectId: string | null;
   type: LedgerEntryType;
   amount: number;
   description: string;

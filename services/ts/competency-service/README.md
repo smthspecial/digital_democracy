@@ -20,3 +20,13 @@ see `openapi.yaml` for the full contract. Persistence is in-memory only
 (no database yet); cross-service effects (auto-exclusion enforcement,
 expiry notifications) are modeled as injectable seams with no-op
 defaults (`src/integrations.ts`).
+
+Two events credit reputation-service (DP-038, FR-027): declaring a
+conflict of interest emits a positive `disclosure` delta, and an upheld
+challenge emits a negative delta (mapped from the challenge's `reason` --
+`conflict`→`undisclosed_conflict`, `false_claim`→`misinformation`,
+`misconduct`→`manipulation`, `credentials`→`fraud`) against the
+competency holder, not the challenger. `ReputationEmitter` has a real
+HTTP-calling implementation (`createHttpReputationEmitter`), wired in by
+`index.ts` when `REPUTATION_SERVICE_URL` is set, falling back to a no-op
+otherwise.

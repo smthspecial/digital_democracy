@@ -34,6 +34,26 @@ type noopAuditEmitter struct{}
 
 func (noopAuditEmitter) Emit(AuthEvent) {}
 
+// IdentityChecker models SRV-017's "Reads from: identity-service — checks
+// citizen.status before issuing any session". handleLogin (handlers.go)
+// resolves status through this on every request instead of trusting a
+// caller-supplied value, so a client can no longer simply assert an active
+// status for a suspended or revoked citizen. See remote.go for the real
+// HTTP-calling implementation used when IDENTITY_SERVICE_URL is configured.
+type IdentityChecker interface {
+	CitizenStatus(citizenID string) (string, error)
+}
+
+// noopIdentityChecker is the fail-closed default when no real
+// identity-service is configured: an empty status is not one Login
+// recognizes, so it falls through to the same generic-denial branch used
+// for suspended/revoked/unrecognized statuses (no detail leak) -- standing
+// up auth-service with zero configuration must not mean every citizen is
+// treated as active.
+type noopIdentityChecker struct{}
+
+func (noopIdentityChecker) CitizenStatus(string) (string, error) { return "", nil }
+
 type Service struct {
 	store *store
 	enc   *encryptor
@@ -53,9 +73,12 @@ func (s *Service) recordEvent(e AuthEvent) AuthEvent {
 	return e
 }
 
-// Login implements DP-059's login flow. There is no live identity-service
-// integration in this phase, so citizenStatus and credentialValid are trusted
-// as explicit caller-supplied input (see handlers.go) rather than looked up.
+// Login implements DP-059's login flow. citizenStatus is resolved by the
+// caller (handleLogin, via IdentityChecker) rather than trusted from the
+// request body -- this parameter takes the already-resolved status so the
+// state-machine logic below stays testable independently of that lookup.
+// credentialValid has no identity-service equivalent to look up (no
+// credential store exists in this codebase yet) and remains caller-supplied.
 func (s *Service) Login(citizenID, citizenStatus string, credentialValid bool, deviceFingerprint, ipSubnet string, now time.Time) (*Session, bool, []string, error) {
 	fail := func(err error) (*Session, bool, []string, error) {
 		s.recordEvent(AuthEvent{

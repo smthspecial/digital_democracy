@@ -15,13 +15,14 @@ var (
 	ErrTokenNotFound          = errors.New("eligibility token not found")
 	ErrTokenUsed              = errors.New("eligibility token already used")
 	ErrTallyNotAvailable      = errors.New("tally is not available until the session closes")
+	ErrBallotNotFound         = errors.New("ballot not found")
 )
 
 func statusForError(err error) int {
 	switch {
 	case errors.Is(err, ErrValidation):
 		return http.StatusBadRequest
-	case errors.Is(err, ErrSessionNotFound), errors.Is(err, ErrTokenNotFound), errors.Is(err, ErrTallyNotAvailable):
+	case errors.Is(err, ErrSessionNotFound), errors.Is(err, ErrTokenNotFound), errors.Is(err, ErrTallyNotAvailable), errors.Is(err, ErrBallotNotFound):
 		return http.StatusNotFound
 	case errors.Is(err, ErrSessionNotScheduled),
 		errors.Is(err, ErrSessionNotOpen),

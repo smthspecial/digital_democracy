@@ -1,4 +1,15 @@
-export const SCOPE_LEVELS = ["neighborhood", "city", "region", "national"] as const;
+// FR-014/TBL-003's six impact-scope levels, smallest to largest. Order
+// matters only as documentation here today -- no escalation logic reads it
+// (see EPIC-002's "escalate only when a problem exceeds local scope",
+// which isn't implemented against this ordering yet).
+export const SCOPE_LEVELS = [
+  "property",
+  "street",
+  "municipality",
+  "regional",
+  "national",
+  "constitutional",
+] as const;
 export type ScopeLevel = (typeof SCOPE_LEVELS)[number];
 
 export type JurisdictionStatus = "active" | "under_review";

@@ -42,15 +42,21 @@ export interface ProjectMilestone {
   completedAt: Date | null;
 }
 
-// TBL-031's 'objective' and 'evaluation' columns are out of scope: DP-022
-// only ever writes promised/measured outcome text, leaving the
-// successful/partial/unsuccessful categorization to the human audit
-// process reading both fields once they're public, not to this service.
+// TBL-031's 'evaluation' categorization (successful/partial/unsuccessful)
+// is a human judgment call by the submitting auditor/oversight role
+// (DP-022's actor), not something this service derives from comparing the
+// promised/measured outcome text -- it is accepted as explicit input on
+// submission, the same way identity-service accepts a verification's
+// outcome rather than deriving it (see identity-service's DP-002).
+export type EvaluationResult = "successful" | "partial" | "unsuccessful";
+
 export interface OutcomeEvaluation {
   id: string;
   projectId: string;
+  objective: string;
   promisedOutcome: string;
   measuredOutcome: string | null;
+  evaluation: EvaluationResult | null;
   createdAt: Date;
   evaluatedAt: Date | null;
 }

@@ -11,15 +11,45 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 )
 
-func newTestAPI(t *testing.T) (http.Handler, *Service) {
+// fakeIdentityChecker defaults to CitizenActive for any citizen not
+// explicitly configured via setStatus, so tests that don't care about
+// identity status don't need to set it up -- only tests exercising a
+// non-active status configure it per citizen id.
+type fakeIdentityChecker struct {
+	mu       sync.Mutex
+	statuses map[string]string
+}
+
+func newFakeIdentityChecker() *fakeIdentityChecker {
+	return &fakeIdentityChecker{statuses: map[string]string{}}
+}
+
+func (f *fakeIdentityChecker) setStatus(citizenID, status string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.statuses[citizenID] = status
+}
+
+func (f *fakeIdentityChecker) CitizenStatus(citizenID string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if status, ok := f.statuses[citizenID]; ok {
+		return status, nil
+	}
+	return CitizenActive, nil
+}
+
+func newTestAPI(t *testing.T) (http.Handler, *Service, *fakeIdentityChecker) {
 	t.Helper()
 	svc, _ := newTestService(t)
+	identity := newFakeIdentityChecker()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return newRouter(logger, svc), svc
+	return newRouterWithDeps(logger, svc, identity), svc, identity
 }
 
 func doJSON(t *testing.T, h http.Handler, method, path string, body any) *httptest.ResponseRecorder {
@@ -49,20 +79,23 @@ func decodeBody(t *testing.T, rec *httptest.ResponseRecorder, dst any) {
 }
 
 func TestHandleLoginVariants(t *testing.T) {
-	h, svc := newTestAPI(t)
+	h, svc, identity := newTestAPI(t)
 	svc.store.CreateFactor(MFAFactor{CitizenID: "has-factors", FactorType: FactorTOTP, Status: FactorActive})
+	identity.setStatus("c2", CitizenPending)
+	identity.setStatus("c3", CitizenSuspended)
+	identity.setStatus("c4", CitizenRevoked)
 
 	cases := []struct {
 		name       string
 		body       loginRequest
 		wantStatus int
 	}{
-		{"active no factors", loginRequest{CitizenID: "c1", CitizenStatus: CitizenActive, CredentialValid: true, DeviceFingerprint: "fp", IPSubnet: "10.0.0.0/24"}, http.StatusOK},
-		{"active with factors", loginRequest{CitizenID: "has-factors", CitizenStatus: CitizenActive, CredentialValid: true, DeviceFingerprint: "fp", IPSubnet: "10.0.0.0/24"}, http.StatusOK},
-		{"pending", loginRequest{CitizenID: "c2", CitizenStatus: CitizenPending, CredentialValid: true, DeviceFingerprint: "fp", IPSubnet: "10.0.0.0/24"}, http.StatusForbidden},
-		{"suspended", loginRequest{CitizenID: "c3", CitizenStatus: CitizenSuspended, CredentialValid: true, DeviceFingerprint: "fp", IPSubnet: "10.0.0.0/24"}, http.StatusUnauthorized},
-		{"revoked", loginRequest{CitizenID: "c4", CitizenStatus: CitizenRevoked, CredentialValid: true, DeviceFingerprint: "fp", IPSubnet: "10.0.0.0/24"}, http.StatusUnauthorized},
-		{"bad credential", loginRequest{CitizenID: "c5", CitizenStatus: CitizenActive, CredentialValid: false, DeviceFingerprint: "fp", IPSubnet: "10.0.0.0/24"}, http.StatusUnauthorized},
+		{"active no factors", loginRequest{CitizenID: "c1", CredentialValid: true, DeviceFingerprint: "fp", IPSubnet: "10.0.0.0/24"}, http.StatusOK},
+		{"active with factors", loginRequest{CitizenID: "has-factors", CredentialValid: true, DeviceFingerprint: "fp", IPSubnet: "10.0.0.0/24"}, http.StatusOK},
+		{"pending", loginRequest{CitizenID: "c2", CredentialValid: true, DeviceFingerprint: "fp", IPSubnet: "10.0.0.0/24"}, http.StatusForbidden},
+		{"suspended", loginRequest{CitizenID: "c3", CredentialValid: true, DeviceFingerprint: "fp", IPSubnet: "10.0.0.0/24"}, http.StatusUnauthorized},
+		{"revoked", loginRequest{CitizenID: "c4", CredentialValid: true, DeviceFingerprint: "fp", IPSubnet: "10.0.0.0/24"}, http.StatusUnauthorized},
+		{"bad credential", loginRequest{CitizenID: "c5", CredentialValid: false, DeviceFingerprint: "fp", IPSubnet: "10.0.0.0/24"}, http.StatusUnauthorized},
 	}
 
 	for _, tc := range cases {
@@ -88,8 +121,8 @@ func TestHandleLoginVariants(t *testing.T) {
 		})
 	}
 
-	suspRec := doJSON(t, h, http.MethodPost, "/auth/login", loginRequest{CitizenID: "c3", CitizenStatus: CitizenSuspended, CredentialValid: true, DeviceFingerprint: "fp", IPSubnet: "10.0.0.0/24"})
-	revRec := doJSON(t, h, http.MethodPost, "/auth/login", loginRequest{CitizenID: "c4", CitizenStatus: CitizenRevoked, CredentialValid: true, DeviceFingerprint: "fp", IPSubnet: "10.0.0.0/24"})
+	suspRec := doJSON(t, h, http.MethodPost, "/auth/login", loginRequest{CitizenID: "c3", CredentialValid: true, DeviceFingerprint: "fp", IPSubnet: "10.0.0.0/24"})
+	revRec := doJSON(t, h, http.MethodPost, "/auth/login", loginRequest{CitizenID: "c4", CredentialValid: true, DeviceFingerprint: "fp", IPSubnet: "10.0.0.0/24"})
 	var suspBody, revBody map[string]string
 	decodeBody(t, suspRec, &suspBody)
 	decodeBody(t, revRec, &revBody)
@@ -98,8 +131,44 @@ func TestHandleLoginVariants(t *testing.T) {
 	}
 }
 
+// TestHandleLoginIgnoresClientSuppliedStatus is the regression test for the
+// fix this closes: a client spoofing citizen_status directly in the raw
+// request body must not be able to log in as a suspended citizen just by
+// claiming "active" -- status must always come from IdentityChecker.
+func TestHandleLoginIgnoresClientSuppliedStatus(t *testing.T) {
+	h, _, identity := newTestAPI(t)
+	identity.setStatus("suspended-citizen", CitizenSuspended)
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader([]byte(
+		`{"citizen_id":"suspended-citizen","citizen_status":"active","credential_valid":true,"device_fingerprint":"fp","ip_subnet":"10.0.0.0/24"}`,
+	)))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401 (a spoofed citizen_status must not grant a session), body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestHandleLoginNoIdentityConfiguredFailsClosed proves the fail-closed
+// default: with no real IdentityChecker wired in, login must be denied
+// rather than treating every citizen as active.
+func TestHandleLoginNoIdentityConfiguredFailsClosed(t *testing.T) {
+	svc, _ := newTestService(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := newRouter(logger, svc) // no identity dep supplied -> noopIdentityChecker
+
+	rec := doJSON(t, h, http.MethodPost, "/auth/login", loginRequest{
+		CitizenID: "citizen-1", CredentialValid: true, DeviceFingerprint: "fp", IPSubnet: "10.0.0.0/24",
+	})
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401 (unconfigured identity check must fail closed), body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestHandleMalformedJSON(t *testing.T) {
-	h, _ := newTestAPI(t)
+	h, _, _ := newTestAPI(t)
 	req := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader([]byte("{not-json")))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -109,9 +178,9 @@ func TestHandleMalformedJSON(t *testing.T) {
 }
 
 func TestHandleEnrollAndStepUpFullFlowTOTP(t *testing.T) {
-	h, _ := newTestAPI(t)
+	h, _, _ := newTestAPI(t)
 
-	loginRec := doJSON(t, h, http.MethodPost, "/auth/login", loginRequest{CitizenID: "c1", CitizenStatus: CitizenActive, CredentialValid: true, DeviceFingerprint: "fp", IPSubnet: "10.0.0.0/24"})
+	loginRec := doJSON(t, h, http.MethodPost, "/auth/login", loginRequest{CitizenID: "c1", CredentialValid: true, DeviceFingerprint: "fp", IPSubnet: "10.0.0.0/24"})
 	var loginResp loginResponse
 	decodeBody(t, loginRec, &loginResp)
 
@@ -148,9 +217,9 @@ func TestHandleEnrollAndStepUpFullFlowTOTP(t *testing.T) {
 }
 
 func TestHandleEnrollAndStepUpFullFlowPasskey(t *testing.T) {
-	h, _ := newTestAPI(t)
+	h, _, _ := newTestAPI(t)
 
-	loginRec := doJSON(t, h, http.MethodPost, "/auth/login", loginRequest{CitizenID: "c1", CitizenStatus: CitizenActive, CredentialValid: true, DeviceFingerprint: "fp", IPSubnet: "10.0.0.0/24"})
+	loginRec := doJSON(t, h, http.MethodPost, "/auth/login", loginRequest{CitizenID: "c1", CredentialValid: true, DeviceFingerprint: "fp", IPSubnet: "10.0.0.0/24"})
 	var loginResp loginResponse
 	decodeBody(t, loginRec, &loginResp)
 
@@ -199,9 +268,9 @@ func TestHandleEnrollAndStepUpFullFlowPasskey(t *testing.T) {
 }
 
 func TestHandleEnrollAndStepUpFullFlowFacial(t *testing.T) {
-	h, _ := newTestAPI(t)
+	h, _, _ := newTestAPI(t)
 
-	loginRec := doJSON(t, h, http.MethodPost, "/auth/login", loginRequest{CitizenID: "c1", CitizenStatus: CitizenActive, CredentialValid: true, DeviceFingerprint: "fp", IPSubnet: "10.0.0.0/24"})
+	loginRec := doJSON(t, h, http.MethodPost, "/auth/login", loginRequest{CitizenID: "c1", CredentialValid: true, DeviceFingerprint: "fp", IPSubnet: "10.0.0.0/24"})
 	var loginResp loginResponse
 	decodeBody(t, loginRec, &loginResp)
 
@@ -238,9 +307,9 @@ func TestHandleEnrollAndStepUpFullFlowFacial(t *testing.T) {
 }
 
 func TestHandleRefreshFlow(t *testing.T) {
-	h, _ := newTestAPI(t)
+	h, _, _ := newTestAPI(t)
 
-	loginRec := doJSON(t, h, http.MethodPost, "/auth/login", loginRequest{CitizenID: "c1", CitizenStatus: CitizenActive, CredentialValid: true, DeviceFingerprint: "fp-1", IPSubnet: "10.0.0.0/24"})
+	loginRec := doJSON(t, h, http.MethodPost, "/auth/login", loginRequest{CitizenID: "c1", CredentialValid: true, DeviceFingerprint: "fp-1", IPSubnet: "10.0.0.0/24"})
 	var loginResp loginResponse
 	decodeBody(t, loginRec, &loginResp)
 
@@ -262,7 +331,7 @@ func TestHandleRefreshFlow(t *testing.T) {
 	})
 
 	t.Run("device mismatch anomaly", func(t *testing.T) {
-		login2 := doJSON(t, h, http.MethodPost, "/auth/login", loginRequest{CitizenID: "c2", CitizenStatus: CitizenActive, CredentialValid: true, DeviceFingerprint: "fp-2", IPSubnet: "10.0.0.0/24"})
+		login2 := doJSON(t, h, http.MethodPost, "/auth/login", loginRequest{CitizenID: "c2", CredentialValid: true, DeviceFingerprint: "fp-2", IPSubnet: "10.0.0.0/24"})
 		var l2 loginResponse
 		decodeBody(t, login2, &l2)
 
@@ -274,7 +343,7 @@ func TestHandleRefreshFlow(t *testing.T) {
 }
 
 func TestHandleStepUpBruteForceLockout(t *testing.T) {
-	h, svc := newTestAPI(t)
+	h, svc, _ := newTestAPI(t)
 	svc.store.CreateFactor(MFAFactor{CitizenID: "c1", FactorType: FactorTOTP, Status: FactorActive, TOTPSecretEnc: mustEncrypt(t, svc, "wrong-secret-doesnt-matter")})
 	sess := svc.store.CreateSession(Session{CitizenID: "c1", Status: SessionActive})
 
@@ -301,7 +370,7 @@ func mustEncrypt(t *testing.T, svc *Service, plaintext string) []byte {
 }
 
 func TestHandleLogout(t *testing.T) {
-	h, svc := newTestAPI(t)
+	h, svc, _ := newTestAPI(t)
 	sess := svc.store.CreateSession(Session{CitizenID: "c1", Status: SessionActive, RefreshTokenHash: "rt"})
 
 	rec := doJSON(t, h, http.MethodPost, "/auth/logout", logoutRequest{SessionID: sess.ID})
@@ -320,7 +389,7 @@ func TestHandleLogout(t *testing.T) {
 }
 
 func TestHandleInternalValidate(t *testing.T) {
-	h, svc := newTestAPI(t)
+	h, svc, _ := newTestAPI(t)
 	plain, hash, _ := generateTokenPair()
 	svc.store.CreateSession(Session{CitizenID: "c1", Status: SessionActive, AccessTokenHash: hash, ExpiresAt: time.Now().Add(time.Hour)})
 
@@ -336,7 +405,7 @@ func TestHandleInternalValidate(t *testing.T) {
 }
 
 func TestHandleInternalRevokeAll(t *testing.T) {
-	h, svc := newTestAPI(t)
+	h, svc, _ := newTestAPI(t)
 	svc.store.CreateSession(Session{CitizenID: "c1", Status: SessionActive})
 	svc.store.CreateSession(Session{CitizenID: "c1", Status: SessionActive})
 
@@ -352,7 +421,7 @@ func TestHandleInternalRevokeAll(t *testing.T) {
 }
 
 func TestHandleInternalPurgeSessions(t *testing.T) {
-	h, svc := newTestAPI(t)
+	h, svc, _ := newTestAPI(t)
 	svc.store.CreateSession(Session{CitizenID: "c1", Status: SessionActive, ExpiresAt: time.Now().Add(-48 * time.Hour)})
 	svc.store.CreateSession(Session{CitizenID: "c1", Status: SessionRevoked, ExpiresAt: time.Now().Add(-1000 * time.Hour)})
 

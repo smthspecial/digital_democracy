@@ -1,12 +1,13 @@
 import { describe, expect, it, afterAll, vi } from "vitest";
 import { buildServer } from "../server.js";
 import { createStore } from "../store.js";
-import type { ExclusionEnforcer } from "../integrations.js";
+import type { ExclusionEnforcer, ReputationEmitter } from "../integrations.js";
 
 describe("conflict-of-interest routes", () => {
   const store = createStore();
   const exclusionEnforcer: ExclusionEnforcer = { exclude: vi.fn() };
-  const app = buildServer({ store, exclusionEnforcer });
+  const reputationEmitter: ReputationEmitter = { emit: vi.fn() };
+  const app = buildServer({ store, exclusionEnforcer, reputationEmitter });
 
   afterAll(async () => {
     await app.close();
@@ -36,6 +37,7 @@ describe("conflict-of-interest routes", () => {
     expect(body.disclosed_at).toBeTypeOf("string");
 
     expect(exclusionEnforcer.exclude).toHaveBeenCalledWith("citizen-3", domainId);
+    expect(reputationEmitter.emit).toHaveBeenCalledWith("citizen-3", "disclosure", 5, body.id);
   });
 
   it("404s declaring a conflict against an unknown domain", async () => {

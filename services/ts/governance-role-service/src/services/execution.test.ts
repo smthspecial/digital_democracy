@@ -11,11 +11,22 @@ const NOW = new Date("2026-03-01T00:00:00Z");
 
 function fullyApprovedAction(store: Store, actionRef: string): void {
   const types = ["citizen_supermajority", "audit_confirmation", "body_endorsement"] as const;
+  const layerByType = {
+    citizen_supermajority: "citizen",
+    audit_confirmation: "audit",
+    body_endorsement: "protocol",
+  } as const;
+  const roleTypeByLayer = {
+    citizen: "reviewer",
+    audit: "auditor",
+    protocol: "review_body",
+  } as const;
   types.forEach((approvalType, i) => {
+    const layer = layerByType[approvalType];
     const role = createRole(store, defaultAuditEmitter, {
       citizenId: `citizen-${i}`,
-      roleType: "reviewer",
-      layer: "citizen",
+      roleType: roleTypeByLayer[layer],
+      layer,
       randomized: false,
       termStart: new Date("2026-01-01T00:00:00Z"),
       termEnd: new Date("2026-12-01T00:00:00Z"),

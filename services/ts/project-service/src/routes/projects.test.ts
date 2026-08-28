@@ -26,6 +26,7 @@ async function createProject(
     proposal_id: string;
     contractor: string;
     budget_allocated: number;
+    objective: string;
     promised_outcome: string;
     milestones: { title: string; due_date: string; order_index: number }[];
   }> = {},
@@ -37,6 +38,7 @@ async function createProject(
       proposal_id: "proposal-1",
       contractor: "Acme Builders",
       budget_allocated: 10000,
+      objective: "Improve neighborhood green space",
       promised_outcome: "A new park",
       milestones: [
         { title: "Design", due_date: "2026-01-01", order_index: 0 },
@@ -227,6 +229,27 @@ describe("POST /:id/budget-spent", () => {
     });
     expect(res.statusCode).toBe(400);
   });
+
+  it("mirrors the spend into budget-service's public ledger via LedgerRecorder (TBL-028)", async () => {
+    const recorded: { projectId: string; amount: number; description: string }[] = [];
+    app = buildServer({
+      store: createStore(),
+      ledgerRecorder: {
+        recordOutflow: (projectId, amount, description) =>
+          recorded.push({ projectId, amount, description }),
+      },
+    });
+    const created = await createProject(app);
+    const { id } = created.json();
+
+    await app.inject({
+      method: "POST",
+      url: `/${id}/budget-spent`,
+      payload: { amount: 2500, description: "First contractor invoice" },
+    });
+
+    expect(recorded).toEqual([{ projectId: id, amount: 2500, description: "First contractor invoice" }]);
+  });
 });
 
 async function completeAllMilestones(app: FastifyInstance, projectId: string, milestoneIds: string[]) {
@@ -315,7 +338,7 @@ describe("POST /outcome-evaluations/sweep", () => {
 });
 
 describe("POST /outcome-evaluations/:id/submit", () => {
-  it("sets measured_outcome and it's visible on subsequent reads", async () => {
+  it("sets measured_outcome and evaluation, visible on subsequent reads", async () => {
     app = buildServer({ store: createStore() });
     const created = await createProject(app);
     const { id, outcome_evaluation: outcomeEvaluation } = created.json();
@@ -323,11 +346,12 @@ describe("POST /outcome-evaluations/:id/submit", () => {
     const res = await app.inject({
       method: "POST",
       url: `/outcome-evaluations/${outcomeEvaluation.id}/submit`,
-      payload: { measured_outcome: "Park was built on time" },
+      payload: { measured_outcome: "Park was built on time", evaluation: "successful" },
     });
 
     expect(res.statusCode).toBe(200);
     expect(res.json().measured_outcome).toBe("Park was built on time");
+    expect(res.json().evaluation).toBe("successful");
 
     const getRes = await app.inject({ method: "GET", url: `/${id}/milestones` });
     expect(getRes.statusCode).toBe(200);
@@ -338,7 +362,7 @@ describe("POST /outcome-evaluations/:id/submit", () => {
     const res = await app.inject({
       method: "POST",
       url: "/outcome-evaluations/does-not-exist/submit",
-      payload: { measured_outcome: "x" },
+      payload: { measured_outcome: "x", evaluation: "successful" },
     });
     expect(res.statusCode).toBe(404);
   });
@@ -351,14 +375,90 @@ describe("POST /outcome-evaluations/:id/submit", () => {
     await app.inject({
       method: "POST",
       url: `/outcome-evaluations/${outcomeEvaluation.id}/submit`,
-      payload: { measured_outcome: "First submission" },
+      payload: { measured_outcome: "First submission", evaluation: "partial" },
     });
     const res = await app.inject({
       method: "POST",
       url: `/outcome-evaluations/${outcomeEvaluation.id}/submit`,
-      payload: { measured_outcome: "Second submission" },
+      payload: { measured_outcome: "Second submission", evaluation: "partial" },
     });
 
     expect(res.statusCode).toBe(409);
+  });
+
+  it("rejects a body with an invalid evaluation value", async () => {
+    app = buildServer({ store: createStore() });
+    const created = await createProject(app);
+    const { outcome_evaluation: outcomeEvaluation } = created.json();
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/outcome-evaluations/${outcomeEvaluation.id}/submit`,
+      payload: { measured_outcome: "x", evaluation: "great" },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("credits the proposal author's reputation on a successful evaluation (DP-038)", async () => {
+    const events: { citizenId: string; factorType: string; delta: number; sourceRef: string }[] = [];
+    app = buildServer({
+      store: createStore(),
+      proposalAuthorLookup: { getAuthorId: async () => "citizen-author-1" },
+      reputationEmitter: {
+        emit: (citizenId, factorType, delta, sourceRef) =>
+          events.push({ citizenId, factorType, delta, sourceRef }),
+      },
+    });
+    const created = await createProject(app);
+    const { id, outcome_evaluation: outcomeEvaluation } = created.json();
+
+    await app.inject({
+      method: "POST",
+      url: `/outcome-evaluations/${outcomeEvaluation.id}/submit`,
+      payload: { measured_outcome: "Park was built on time", evaluation: "successful" },
+    });
+
+    expect(events).toEqual([
+      { citizenId: "citizen-author-1", factorType: "successful_proposal", delta: 15, sourceRef: id },
+    ]);
+  });
+
+  it("does not credit reputation for a partial or unsuccessful evaluation", async () => {
+    const events: unknown[] = [];
+    app = buildServer({
+      store: createStore(),
+      proposalAuthorLookup: { getAuthorId: async () => "citizen-author-1" },
+      reputationEmitter: { emit: (...args) => events.push(args) },
+    });
+    const created = await createProject(app);
+    const { outcome_evaluation: outcomeEvaluation } = created.json();
+
+    await app.inject({
+      method: "POST",
+      url: `/outcome-evaluations/${outcomeEvaluation.id}/submit`,
+      payload: { measured_outcome: "Delayed", evaluation: "unsuccessful" },
+    });
+
+    expect(events).toEqual([]);
+  });
+
+  it("does not credit reputation when the proposal author cannot be resolved", async () => {
+    const events: unknown[] = [];
+    app = buildServer({
+      store: createStore(),
+      proposalAuthorLookup: { getAuthorId: async () => null },
+      reputationEmitter: { emit: (...args) => events.push(args) },
+    });
+    const created = await createProject(app);
+    const { outcome_evaluation: outcomeEvaluation } = created.json();
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/outcome-evaluations/${outcomeEvaluation.id}/submit`,
+      payload: { measured_outcome: "Park was built on time", evaluation: "successful" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(events).toEqual([]);
   });
 });

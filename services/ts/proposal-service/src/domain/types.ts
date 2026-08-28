@@ -45,6 +45,47 @@ export interface ScopeChallenge {
   resolvedAt: Date | null;
 }
 
+// FR-034: the eight-stage deadlock resolution framework (US-025, EPIC-005),
+// in fixed order. A blocked proposal (development or voting) enters this
+// track and progresses strictly through these stages; landing on
+// final_decision with an outcome always concludes the case, so no process
+// can remain permanently blocked.
+export type DeadlockStage =
+  | "constraint_analysis"
+  | "alternative_generation"
+  | "resource_partitioning"
+  | "compensation_assessment"
+  | "citizen_assembly_review"
+  | "escalation_review"
+  | "constitutional_review"
+  | "final_decision";
+
+export const DEADLOCK_STAGES: readonly DeadlockStage[] = [
+  "constraint_analysis",
+  "alternative_generation",
+  "resource_partitioning",
+  "compensation_assessment",
+  "citizen_assembly_review",
+  "escalation_review",
+  "constitutional_review",
+  "final_decision",
+];
+
+export interface DeadlockHistoryEntry {
+  stage: DeadlockStage;
+  reviewerId: string;
+  notes: string;
+  at: Date;
+}
+
+export interface DeadlockState {
+  active: boolean;
+  stage: DeadlockStage | null;
+  enteredAt: Date | null;
+  resolvedAt: Date | null;
+  history: DeadlockHistoryEntry[];
+}
+
 export interface ProposalRecord {
   id: string;
   problemId: string;
@@ -65,4 +106,8 @@ export interface ProposalRecord {
   constraints: ProposalConstraint[];
   scopeChallenges: ScopeChallenge[];
   supporterIds: Set<string>;
+  // deadlock models the FR-034 staged deadlock resolution framework as
+  // embedded state, the same pattern as scopeChallengePending above --
+  // proposal-service doesn't own a dedicated deadlock table either.
+  deadlock: DeadlockState;
 }

@@ -20,16 +20,22 @@ approved-proposal implementation as public projects (SRV-013):
 - `POST /projects/:id/milestones/:milestoneId/complete` -- reports milestone
   completion (DP-018); completing the last incomplete milestone also flips
   the project to `status=completed`.
-- `POST /projects/:id/budget-spent` -- records a ledger outflow reconciled
-  against the project by budget-service (modeled here as an explicit write
-  since budget-service is a separate process).
+- `POST /projects/:id/budget-spent` -- increments `project.budget_spent`
+  locally (the fast path this service's own reads depend on) and mirrors
+  the outflow into budget-service's public ledger via `LedgerRecorder`,
+  tagged with this project (TBL-028's `project_id`), so the spend is
+  traceable government-wide too, not kept in two disconnected records.
 - `POST /projects/outcome-evaluations/sweep` -- daily cron entry point
   (DP-053): requests an outcome-evaluation assignment for each completed
   project once the configured evaluation delay (default 180 days) has
   passed, at most once per project.
 - `POST /projects/outcome-evaluations/:id/submit` -- records the measured
-  outcome for a project (DP-022); both promised and measured outcome become
-  publicly readable once submitted.
+  outcome and the submitting auditor/oversight role's `evaluation`
+  (`successful`/`partial`/`unsuccessful`, TBL-031) for a project (DP-022);
+  both become publicly readable once submitted. A `successful` evaluation
+  credits the proposal author's reputation (DP-038) via `ReputationEmitter`,
+  after resolving the author through `ProposalAuthorLookup` (project-service
+  only stores `proposal_id`, not the author).
 - `GET /projects`, `GET /projects/:id`, `GET /projects/:id/milestones` --
   public reads; no auth required (contractor and milestone data are always
   public per FR-047).
@@ -38,3 +44,8 @@ State is in-memory only (`src/store.ts`), behind a store factory so a real
 persistence layer can replace it later without changing callers. Calls to
 audit-service and civic-duty-service (which don't exist yet in this repo)
 are modeled as injectable seams (`src/integrations.ts`) with no-op defaults.
+`ProposalAuthorLookup`, `ReputationEmitter`, and `LedgerRecorder` have real
+HTTP-calling implementations (`createHttpProposalAuthorLookup`,
+`createHttpReputationEmitter`, `createHttpLedgerRecorder`) wired in by
+`index.ts` when `PROPOSAL_SERVICE_URL`/`REPUTATION_SERVICE_URL`/
+`BUDGET_SERVICE_URL` are set, falling back to no-ops otherwise.

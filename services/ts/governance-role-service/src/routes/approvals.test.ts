@@ -4,14 +4,24 @@ import { createStore } from "../store.js";
 import type { Store } from "../store.js";
 import type { ProtocolChangeExecutor, ProtocolGateChecker } from "../collaborators.js";
 
-async function createActiveRole(app: ReturnType<typeof buildServer>, citizenId: string) {
+async function createActiveRole(
+  app: ReturnType<typeof buildServer>,
+  citizenId: string,
+  layer: "citizen" | "audit" | "protocol" | "implementation" = "citizen",
+) {
+  const roleTypeByLayer = {
+    citizen: "reviewer",
+    audit: "auditor",
+    protocol: "review_body",
+    implementation: "operator",
+  } as const;
   const res = await app.inject({
     method: "POST",
     url: "/governance-roles/roles",
     payload: {
       citizen_id: citizenId,
-      role_type: "reviewer",
-      layer: "citizen",
+      role_type: roleTypeByLayer[layer],
+      layer,
       randomized: false,
       term_start: "2026-01-01T00:00:00.000Z",
       term_end: "2026-12-01T00:00:00.000Z",
@@ -102,9 +112,9 @@ describe("governance approvals routes", () => {
   });
 
   it("GET /governance-roles/actions/:actionRef/status reports partial then full approval", async () => {
-    const roleA = await createActiveRole(app, "citizen-1");
-    const roleB = await createActiveRole(app, "citizen-2");
-    const roleC = await createActiveRole(app, "citizen-3");
+    const roleA = await createActiveRole(app, "citizen-1", "citizen");
+    const roleB = await createActiveRole(app, "citizen-2", "audit");
+    const roleC = await createActiveRole(app, "citizen-3", "protocol");
 
     await app.inject({
       method: "POST",
@@ -148,9 +158,9 @@ describe("governance approvals routes", () => {
       protocolGateChecker: gate,
     });
 
-    const roleA = await createActiveRole(localApp, "citizen-1");
-    const roleB = await createActiveRole(localApp, "citizen-2");
-    const roleC = await createActiveRole(localApp, "citizen-3");
+    const roleA = await createActiveRole(localApp, "citizen-1", "citizen");
+    const roleB = await createActiveRole(localApp, "citizen-2", "audit");
+    const roleC = await createActiveRole(localApp, "citizen-3", "protocol");
     for (const [roleId, approvalType] of [
       [roleA, "citizen_supermajority"],
       [roleB, "audit_confirmation"],

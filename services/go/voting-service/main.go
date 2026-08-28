@@ -22,9 +22,18 @@ func main() {
 		port = "5001"
 	}
 
+	var delegation DelegationResolver
+	if url := os.Getenv("DELEGATION_SERVICE_URL"); url != "" {
+		delegation = newHTTPDelegationResolver(url)
+	}
+	var audit AuditEmitter
+	if url := os.Getenv("AUDIT_SERVICE_URL"); url != "" {
+		audit = newHTTPAuditEmitter(url)
+	}
+
 	srv := &http.Server{
 		Addr:         ":" + port,
-		Handler:      newRouter(logger),
+		Handler:      newRouterWithDeps(logger, delegation, audit),
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}

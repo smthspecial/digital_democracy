@@ -7,6 +7,7 @@ import {
   createDefaultDuplicateSignal,
   createDefaultIdentityHasher,
   createNoopAuditEmitter,
+  createNoopSessionRevoker,
 } from "./collaborators.js";
 import type { IdentityServiceDeps } from "./services/identity.js";
 import { DomainError } from "./errors.js";
@@ -20,6 +21,7 @@ export function buildServer(deps?: Partial<IdentityServiceDeps>) {
     approvalGate: deps?.approvalGate ?? createDefaultApprovalGate(),
     audit: deps?.audit ?? createNoopAuditEmitter(),
     duplicateSignal: deps?.duplicateSignal ?? createDefaultDuplicateSignal(),
+    sessionRevoker: deps?.sessionRevoker ?? createNoopSessionRevoker(),
   };
 
   registerHealthRoutes(app);

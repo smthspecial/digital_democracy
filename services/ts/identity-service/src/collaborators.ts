@@ -29,6 +29,35 @@ export interface IdentityHasher {
   hash(rawLegalIdentifier: string): string;
 }
 
+// SessionRevoker models DP-042's cascade into auth-service: suspending or
+// revoking a citizen must also terminate their active sessions, or the
+// citizen keeps a live, usable session until it naturally expires despite
+// no longer being eligible to hold one (SRV-017's `revoke_all_sessions`
+// endpoint exists specifically "consumed only by identity-service"). Fire-
+// and-forget, matching AuditEmitter's contract: a downed auth-service must
+// not block the status change and audit record that triggered it.
+export interface SessionRevoker {
+  revokeAllSessions(citizenId: string): void;
+}
+
+export function createNoopSessionRevoker(): SessionRevoker {
+  return { revokeAllSessions: () => {} };
+}
+
+// createHttpSessionRevoker calls auth-service's real DP-042 endpoint
+// (SRV-017, POST /auth/internal/revoke-all/:citizenId).
+export function createHttpSessionRevoker(baseUrl: string): SessionRevoker {
+  return {
+    revokeAllSessions(citizenId) {
+      fetch(`${baseUrl}/auth/internal/revoke-all/${encodeURIComponent(citizenId)}`, {
+        method: "POST",
+      }).catch(() => {
+        // Intentionally swallowed -- see contract note above.
+      });
+    },
+  };
+}
+
 export function createDefaultApprovalGate(): ApprovalGate {
   return { hasRequiredApprovals: () => true };
 }

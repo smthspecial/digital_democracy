@@ -1,6 +1,21 @@
 import type { FastifyInstance } from "fastify";
 import type { ProposalService } from "../services/proposals.js";
-import type { ProposalRecord } from "../domain/types.js";
+import type { DeadlockState, ProposalRecord } from "../domain/types.js";
+
+function toDeadlockResponse(d: DeadlockState) {
+  return {
+    active: d.active,
+    stage: d.stage,
+    entered_at: d.enteredAt ? d.enteredAt.toISOString() : null,
+    resolved_at: d.resolvedAt ? d.resolvedAt.toISOString() : null,
+    history: d.history.map((h) => ({
+      stage: h.stage,
+      reviewer_id: h.reviewerId,
+      notes: h.notes,
+      at: h.at.toISOString(),
+    })),
+  };
+}
 
 function toProposalResponse(p: ProposalRecord) {
   return {
@@ -38,6 +53,7 @@ function toProposalResponse(p: ProposalRecord) {
       created_at: c.createdAt.toISOString(),
       resolved_at: c.resolvedAt ? c.resolvedAt.toISOString() : null,
     })),
+    deadlock: toDeadlockResponse(p.deadlock),
   };
 }
 
@@ -261,7 +277,7 @@ export function registerProposalRoutes(
     "/proposals/:id/advance",
     { schema: { params: idParamsSchema } },
     async (request) => {
-      const proposal = service.advance(request.params.id);
+      const proposal = await service.advance(request.params.id);
       return toProposalResponse(proposal);
     },
   );
@@ -294,5 +310,70 @@ export function registerProposalRoutes(
       );
       return toProposalResponse(proposal);
     },
+  );
+
+  app.post<{ Params: { id: string }; Body: { reason: string } }>(
+    "/proposals/:id/deadlock/enter",
+    {
+      schema: {
+        params: idParamsSchema,
+        body: {
+          type: "object",
+          required: ["reason"],
+          additionalProperties: false,
+          properties: { reason: { type: "string", minLength: 1 } },
+        },
+      },
+    },
+    async (request) => {
+      const proposal = service.enterDeadlock(request.params.id, {
+        reason: request.body.reason,
+      });
+      return toProposalResponse(proposal);
+    },
+  );
+
+  app.post<{
+    Params: { id: string };
+    Body: {
+      reviewer_id: string;
+      notes: string;
+      outcome?: "approved" | "rejected" | "archived";
+    };
+  }>(
+    "/proposals/:id/deadlock/advance",
+    {
+      schema: {
+        params: idParamsSchema,
+        body: {
+          type: "object",
+          required: ["reviewer_id", "notes"],
+          additionalProperties: false,
+          properties: {
+            reviewer_id: { type: "string", minLength: 1 },
+            notes: { type: "string", minLength: 1 },
+            outcome: {
+              type: "string",
+              enum: ["approved", "rejected", "archived"],
+            },
+          },
+        },
+      },
+    },
+    async (request) => {
+      const proposal = service.advanceDeadlock(request.params.id, {
+        reviewerId: request.body.reviewer_id,
+        notes: request.body.notes,
+        outcome: request.body.outcome,
+      });
+      return toProposalResponse(proposal);
+    },
+  );
+
+  app.get<{ Params: { id: string } }>(
+    "/proposals/:id/deadlock",
+    { schema: { params: idParamsSchema } },
+    async (request) =>
+      toDeadlockResponse(service.getDeadlock(request.params.id)),
   );
 }

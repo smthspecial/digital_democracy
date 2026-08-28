@@ -1,0 +1,159 @@
+---
+id: ARCH-019
+type: arch
+title: "Delegated expertise (liquid democracy)"
+status: draft
+linkedIds: EPIC-010,FR-056,FR-057,ADR-008,ARCH-009
+created: 2026-08-27
+---
+
+## Overview
+
+This flow covers domain-scoped delegation creation, revocation, and auto-expiry (delegation-service, SRV-010, DP-014/DP-015/DP-045) and its one consumer relationship: voting-service resolving the delegation chain when a ballot is cast (DP-041). Both services are real, fully implemented Go services with live HTTP surfaces (`services/go/delegation-service`, `services/go/voting-service`). Two of their upstream seams also have real, live targets today — competency-service (`GET /competency/citizens/:citizenId/domains/:domainId`) and audit-service (`POST /audit/log`) — but neither service's production wiring calls them: `delegation-service/main.go` constructs `NewService(NewStore(), nil, nil)` and `voting-service/router.go` constructs `NewService(nil, nil)`, so both always fall back to their no-op defaults (`defaultCompetencyChecker` always returns `true`; `noopDelegationResolver`/`noopAuditEmitter` do nothing). Per ARCH-009 §2, this test plan therefore depends on three new HTTP-calling seam implementations that do not exist yet: `HttpCompetencyChecker` (delegation-service → competency-service), `HttpDelegationResolver` (voting-service → delegation-service), and `HttpAuditEmitter` (built once per service, delegation-service and voting-service → audit-service).
+
+Two grounded gaps shape what these scenarios can actually prove, and both are called out explicitly rather than glossed over (ARCH-009 §5): (1) `voting-service.CastBallot` invokes `DelegationResolver.ResolveAndEnqueue(citizenID, proposalID)` — the *proposal* id stands in for "domain" because proposal-service has no domain/policy-area field at all (confirmed: no `domain` reference anywhere in `services/ts/proposal-service/src`), so a delegation only resolves against a real vote if its `domain_id` happens to equal the target vote session's `proposal_id`; (2) even when resolution succeeds, `ResolveAndEnqueue` returns only an `error`, which `CastBallot` discards (`_ = s.delegation.ResolveAndEnqueue(...)`) — the resolved `delegator_ids` are never captured, so no code path today actually applies a delegate's ballot to the delegators' tally weight. DP-041's "registers the ballot as also applying to all delegating citizens" is not implemented beyond firing the lookup call; scenarios below verify that the call happens and what it returns, not a tally effect that doesn't exist in code.
+
+---
+
+## 1. Services & seams in scope
+
+| Service | Role in this flow | Real HTTP call today or seam-stub today |
+|---|---|---|
+| delegation-service (SRV-010, Go) | Owns delegation create/revoke/list (DP-014, DP-015), answers chain-resolution queries (DP-041), runs expiry sweep (DP-045) | Real HTTP surface (`/delegation/delegations`, `/delegation/resolve`, `/delegation/internal/expire`), called directly by tests. Its own `CompetencyChecker` and `AuditEmitter` dependencies are seam-stubbed (no-op defaults) in production `main.go` |
+| voting-service (SRV-008, Go) | Casts ballots (DP-016); fires DP-041 chain resolution fire-and-forget on every successful cast | Real HTTP surface (`/voting/sessions`, `/voting/ballots`, ...). Its `DelegationResolver` and `AuditEmitter` are seam-stubbed (no-op, `NewService(nil, nil)`) in production `router.go` |
+| competency-service (TS) | Real target of delegation-service's `CompetencyChecker` seam — delegate must hold active competency in the delegated domain | Real, live endpoint exists (`GET /competency/citizens/:citizenId/domains/:domainId` → `{active}`); just not wired as delegation-service's default yet |
+| audit-service (Go) | Real target of both services' `AuditEmitter` seam | Real, live endpoint exists (`POST /audit/log`, idempotency-keyed); just not wired as either service's default yet |
+| proposal-service (TS) | Notionally "owns" the domain a proposal belongs to per FR-056's intent | Not actually consulted anywhere in this flow — see Overview gap (1). Out of scope for HTTP calls; only its absence of a domain field is load-bearing here |
+
+---
+
+## 2. Preconditions & fixtures
+
+Built entirely through each service's real public API, per ARCH-009 §2 (never by reaching into another service's store):
+
+1. **A competency domain**: `POST /competency/domains {"name","description"}` on competency-service → `domainId`.
+2. **An active-competency delegate**: `POST /competency/applications {"citizen_id","domain_id":domainId}` (status `applied`) → competency `id`; then `POST /competency/applications/{id}/advance` **four times** (`application` → `automated_credential_check` → `public_review_period` → `domain_review` → `recorded_approval`) to reach `status:"active"` with a live `expires_at`. `GET /competency/citizens/{citizenId}/domains/{domainId}` must now return `{"active":true}`.
+3. **A delegation**: `POST /delegation/delegations {"delegator_id","delegate_id","domain_id":domainId,"expires_at"}` (RFC3339, strictly future) on delegation-service → `201` with the row.
+4. **A vote session the delegate can cast into**: `POST /voting/sessions {...}` with `cooling_off_until` in the past and `opens_at` at-or-after it; `POST /voting/sessions/{id}/options`; `POST /voting/sessions/{id}/open {"eligible_citizen_ids":[...]}` (transitions to `open`, issues eligibility tokens); the returned `token_secret` is what `POST /voting/ballots` needs to cast.
+5. **The domain/proposal-id workaround this codebase currently requires** (see Overview gap 1): any scenario that wants the fire-and-forget resolve call to actually *match* the fixture delegation must set the vote session's `proposal_id` equal to the competency domain's `id` from step 1 — since `CastBallot` passes `session.ProposalID` as the resolver's `domainID` argument. A scenario that instead uses two unrelated ids is documented separately (EC-26) as the realistic, always-empty-result case.
+
+---
+
+## 3. Happy path scenarios
+
+**HP-1 — Create a domain-scoped delegation for a competent delegate.** Level: integration (delegation-service + competency-service).
+1. Fixture steps 1–2 (domain + active-competency delegate).
+2. `POST /delegation/delegations` on delegation-service (DP-014) with `delegator_id=A`, `delegate_id=B` (competent), `domain_id`, `expires_at` = now+30d.
+3. delegation-service's `HttpCompetencyChecker` calls competency-service's `GET /competency/citizens/B/domains/{domainId}` and gets `{"active":true}`.
+4. Expected end state: `201`, response body is the created row with `revoked_at:null`. `GET /delegation/delegations?delegator_id=A` (FR-056 transparency) returns the row with delegator, delegate, domain, and `created_at`/`expires_at` visible with no auth gating.
+
+**HP-2 — Revoke a delegation; audit trail recorded.** Level: integration (delegation-service + audit-service).
+1. From HP-1's created delegation, delegator `A` calls `DELETE /delegation/delegations/{id} {"requesting_citizen_id":"A"}` (DP-015).
+2. `200`, `revoked_at` now set, row still present (not deleted) at `GET /delegation/delegations`.
+3. Once `HttpAuditEmitter` is wired, `POST /audit/log` receives a `delegation.revoked` entry; `GET /audit/log/verify` reports the hash chain still valid.
+
+**HP-3 — Transitive chain resolution through a real ballot cast (delegate-of-a-delegate).** Level: e2e (competency-service + delegation-service + voting-service).
+1. Fixture steps 1–2 for delegate `C` (active competency).
+2. Create `A→B` and `B→C` delegations in the same `domain_id` (DP-014), forming a 2-hop chain with no cycle.
+3. Fixture step 4–5: open a vote session whose `proposal_id == domain_id`; issue an eligibility token to `C`.
+4. `C` casts a ballot: `POST /voting/ballots` (DP-016) → `201`, non-empty `verification_code`, no `citizen_id` anywhere in the response (ADR-002).
+5. `CastBallot` fires `HttpDelegationResolver.ResolveAndEnqueue("C", domain_id)`, which calls delegation-service's `POST /delegation/resolve {"delegate_id":"C","domain_id":domain_id}` (DP-041).
+6. Expected end state, asserted directly against delegation-service (not through voting-service, which discards the result — see Overview): `200 {"delegator_ids":["B","A"]}` — both the direct delegator (`B`) and the transitive one (`A`) are present, proving `ReverseActiveWalk` walks the full chain.
+
+**HP-4 — Automatic expiry; no permanent delegates.** Level: integration (delegation-service + audit-service).
+1. Create a delegation with `expires_at` a few seconds in the future (DP-014); wait for it to elapse.
+2. `POST /delegation/internal/expire` (DP-045, cron trigger) → `200 {"revoked_count":1}`, the row now has `revoked_at` set.
+3. Immediate repeat call → `200 {"revoked_count":0}` (idempotent; already-revoked rows are excluded).
+4. Once `HttpAuditEmitter` is wired, a `delegation.expired` entry lands in `/audit/log`.
+
+---
+
+## 4. Edge cases
+
+### Input validation
+- **EC-1**: `POST /delegation/delegations` with a missing `delegator_id`/`delegate_id`/`domain_id` → `400 ErrValidation` ("validation failed"). FR-056, DP-014.
+- **EC-2**: malformed JSON body on create or revoke → `400` "malformed request body" (decode failure, before any domain logic runs). DP-014, DP-015.
+- **EC-3**: `expires_at` not parseable as RFC3339 → same generic `400` decode failure as EC-2 (Go's `time.Time` JSON unmarshal fails before `CreateDelegation` is ever called, so the domain-specific `ErrExpiryNotFuture` message never fires here). DP-014.
+
+### State-machine violations
+- **EC-4**: revoke an already-revoked delegation → `409 ErrAlreadyRevoked`. FR-057, DP-015.
+- **EC-5**: revoke a delegation *after* its target vote session has opened but *before* the delegate casts a ballot in that domain → revoke succeeds immediately (DP-015 "immediate effect"); when the delegate later casts, `ResolveAndEnqueue`/`POST /delegation/resolve` for that domain correctly excludes the revoked delegator (`activeAt(now)` is false at resolve time). FR-057, DP-041.
+- **EC-6**: revoke a delegation *after* the delegate has already cast a ballot that a prior resolve call matched — there is nothing to retroactively undo: no ballot, tally, or delegation-service record captures "this ballot was counted for delegator X" in the first place (the resolved `delegator_ids` are discarded by `CastBallot`, Overview gap 2), so DP-015's "immediate effect" has no observable retroactive target here. FR-057, DP-041.
+- **EC-7**: mid-chain revocation in a 3-hop chain `A→B→C` — revoke the `B→C` edge; `POST /delegation/resolve {"delegate_id":"C",...}` now returns `[]` (the broken edge stops the reverse walk before it ever reaches `B` or `A`), while `POST /delegation/resolve {"delegate_id":"B",...}` still returns `["A"]` (the `A→B` edge is untouched). FR-056, FR-057, DP-041.
+
+### Authorization / eligibility
+- **EC-8**: `delegator_id == delegate_id` → `400 ErrSelfDelegation`, checked before the competency lookup even runs. DP-014.
+- **EC-9**: a citizen who is not the delegator attempts to revoke → `403 ErrNotDelegator`. DP-015.
+- **EC-10**: delegate has no competency record, or one still mid-review (`applied`/any pre-`recorded_approval` stage) or `rejected`/`revoked`/`expired` in that domain → competency-service returns `{"active":false}` → `400 ErrNoCompetency`. FR-056, DP-014.
+- **EC-11**: delegate holds active competency in a *different* domain only → same `400 ErrNoCompetency` (the competency-service lookup is domain-specific: `GET .../domains/{domainId}`), proving domain-scoping is enforced at creation, not just at read time. FR-056, DP-014.
+- **EC-12**: revoke a nonexistent delegation id → `404 ErrDelegationNotFound`. DP-015.
+
+### Threshold & boundary conditions
+- **EC-13**: `expires_at` exactly equal to `now` → rejected, `400 ErrExpiryNotFuture` (`!expiresAt.After(now)`); `now + 1s` → accepted. FR-057, DP-014.
+- **EC-14**: expiry-sweep boundary asymmetry — a delegation with `expires_at` exactly equal to the cron run's `now` is **not** revoked that run (`store.ExpireDelegations` uses strict `d.ExpiresAt.Before(now)`), which is inconsistent with creation's `!expiresAt.After(now)` treating the same instant as already-expired. Document as a real, code-grounded inconsistency rather than invented behavior. FR-057, DP-045.
+- **EC-15**: `POST /delegation/resolve` for a delegate/domain pair with zero active delegations → `200 {"delegator_ids":[]}`, not an error (empty-collection case). DP-041.
+- **EC-16**: circular delegation — direct 2-cycle (`A→B` exists, `B→A` attempted in the same domain) → `400 ErrCircularDelegation`; indirect n-cycle (`A→B→C` exists, `C→A` attempted) → also `400 ErrCircularDelegation` (both caught by the same reachability walk at insert time). FR-056, DP-014.
+
+### Concurrency & idempotency
+- **EC-17**: two concurrent `DELETE` requests for the same delegation id → exactly one returns `200`, the other `409 ErrAlreadyRevoked` (single mutex-guarded check-and-set in `store.Revoke`). DP-015.
+- **EC-18**: two concurrent creates that would each be acyclic alone but together close a cycle (e.g. `A→B` and `B→A` submitted at once) — the lock covers check+insert as one unit, so the request that acquires the lock second sees the first's already-committed row and is correctly rejected. DP-014.
+- **EC-19**: repeat calls to `POST /delegation/internal/expire` — first call revokes the eligible set, an immediate repeat revokes `0` (idempotent; already-revoked rows are excluded by the same condition). DP-045.
+- **EC-20**: double-submit of the same eligibility token (`POST /voting/ballots` twice with the same `token_secret`) — second attempt fails `409 ErrTokenUsed` *before* reaching the cast-success path, so `ResolveAndEnqueue` fires at most once per token. DP-016, DP-041.
+
+### Cross-service failure & degradation
+- **EC-21**: delegation-service unreachable/erroring when voting-service casts a ballot with an upstream active delegation — the ballot cast still succeeds (`201`, verification code returned) because `CastBallot` discards `ResolveAndEnqueue`'s error entirely (`_ = s.delegation.ResolveAndEnqueue(...)`): degrade-silently, not fail-closed. This is the real trigger point for "resolution seam unavailable" — it fires synchronously at **ballot-cast time**, not at tally time, contrary to a literal reading of DP-041's "async" framing; `blocked on:` no retry/outbox/logging path exists today for a dropped resolution attempt. DP-016, DP-041.
+- **EC-22**: competency-service unreachable/erroring when delegation-service creates a delegation — `CompetencyChecker.HasActiveCompetency(citizenID, domainID) bool` returns a bare `bool` with no error channel, so any real `HttpCompetencyChecker` cannot distinguish "delegate lacks competency" from "couldn't check" without changing the interface; `blocked on:` `CompetencyChecker` interface has no error return. DP-014.
+- **EC-23**: audit-service unreachable when either service emits an audit event — delegation-service's `AuditEmitter.Emit(event string, d *Delegation)` has no return value at all (cannot signal failure even in principle); voting-service's `Emit(...) error` is called as `_ = s.audit.Emit(...)`. In both services the primary action (create/revoke/expire/cast) always succeeds regardless of audit-service's availability. DP-014, DP-015, DP-045, DP-016.
+
+### Data integrity & audit
+- **EC-24**: revoked and expired delegation rows are retained, not deleted, and remain visible via `GET /delegation/delegations` with `revoked_at` populated — proving DP-015/DP-045's "row is not deleted (audit trail)" contract at the API level, not just internally. FR-057, DP-015, DP-045.
+- **EC-25**: once `HttpAuditEmitter` is wired for both services, create/revoke/expiry (delegation-service) each produce a corresponding `POST /audit/log` entry, and `GET /audit/log/verify` still reports a valid hash chain afterward. DP-014, DP-015, DP-045.
+- **EC-26**: a delegation whose `domain_id` does *not* happen to equal any vote session's `proposal_id` — the realistic case today, since proposal-service has no domain/policy-area field and voting-service substitutes `proposal_id` for "domain" (Overview gap 1). The delegate's ballot casts normally; the fire-and-forget resolve call is made with a `domainID` that matches nothing, delegation-service correctly returns an empty `delegator_ids` set, and no audit or data trail records that a domain-scoped delegation "should" have applied semantically. This reframes the requested "delegation targets a domain the proposal isn't actually in" scenario against real code: today the system performs no domain-membership check on the proposal at all — the correct-looking empty result is an emergent property of two unrelated id spaces not colliding, not a deliberate validation. FR-056, DP-041.
+
+---
+
+## 5. Traceability
+
+| Scenario | FR/DP/NFR ids | Level | Automated test id |
+|---|---|---|---|
+| HP-1 | FR-056, DP-014 | integration | TBD (`IT-019-HP1`) |
+| HP-2 | FR-057, DP-015 | integration | TBD (`IT-019-HP2`) |
+| HP-3 | FR-056, DP-016, DP-041 | e2e | TBD (`E2E-019-HP3`) |
+| HP-4 | FR-057, DP-045 | integration | TBD (`IT-019-HP4`) |
+| EC-1 | FR-056, DP-014 | integration | TBD (`IT-019-EC1`) |
+| EC-2 | DP-014, DP-015 | integration | TBD (`IT-019-EC2`) |
+| EC-3 | DP-014 | integration | TBD (`IT-019-EC3`) |
+| EC-4 | FR-057, DP-015 | integration | TBD (`IT-019-EC4`) |
+| EC-5 | FR-057, DP-041 | e2e | TBD (`E2E-019-EC5`) |
+| EC-6 | FR-057, DP-041 | e2e | TBD (`E2E-019-EC6`) |
+| EC-7 | FR-056, FR-057, DP-041 | integration | TBD (`IT-019-EC7`) |
+| EC-8 | DP-014 | integration | TBD (`IT-019-EC8`) |
+| EC-9 | DP-015 | integration | TBD (`IT-019-EC9`) |
+| EC-10 | FR-056, DP-014 | integration | TBD (`IT-019-EC10`) |
+| EC-11 | FR-056, DP-014 | integration | TBD (`IT-019-EC11`) |
+| EC-12 | DP-015 | integration | TBD (`IT-019-EC12`) |
+| EC-13 | FR-057, DP-014 | integration | TBD (`IT-019-EC13`) |
+| EC-14 | FR-057, DP-045 | integration | TBD (`IT-019-EC14`) |
+| EC-15 | DP-041 | integration | TBD (`IT-019-EC15`) |
+| EC-16 | FR-056, DP-014 | integration | TBD (`IT-019-EC16`) |
+| EC-17 | DP-015 | integration | TBD (`IT-019-EC17`) |
+| EC-18 | DP-014 | integration | TBD (`IT-019-EC18`) |
+| EC-19 | DP-045 | integration | TBD (`IT-019-EC19`) |
+| EC-20 | DP-016, DP-041 | e2e | TBD (`E2E-019-EC20`) |
+| EC-21 | DP-016, DP-041 | e2e | TBD (`E2E-019-EC21`) |
+| EC-22 | DP-014 | integration | TBD (`IT-019-EC22`) |
+| EC-23 | DP-014, DP-015, DP-045, DP-016 | integration | TBD (`IT-019-EC23`) |
+| EC-24 | FR-057, DP-015, DP-045 | integration | TBD (`IT-019-EC24`) |
+| EC-25 | DP-014, DP-015, DP-045 | integration | TBD (`IT-019-EC25`) |
+| EC-26 | FR-056, DP-041 | e2e | TBD (`E2E-019-EC26`) |
+
+---
+
+## Status update (2026-08-27)
+
+The two code-grounded gaps this doc's Overview flagged are both resolved:
+
+1. `voting-service`'s `ResolveAndEnqueue` discarding its result (so resolved delegator ids never reached the tally) is fixed — renamed `ResolveDelegators`, its result now sets a per-ballot `Weight` that `CloseSession` applies before tallying. EC-15/EC-20/EC-21 (chain resolution reaching the tally) can now be written for real, with an actual weighted-outcome assertion instead of a `blocked` placeholder.
+2. `voting-service`'s production wiring no longer always passes `nil` seams: `main.go` constructs real `httpDelegationResolver`/`httpAuditEmitter` implementations (`remote.go`) when `DELEGATION_SERVICE_URL`/`AUDIT_SERVICE_URL` are set, falling back to the no-op default otherwise.
+
+Still open: the `domain_id=proposal_id` workaround (proposal-service has no dedicated domain field) is unchanged, so chain resolution still only matches by coincidence of ids rather than a real competency domain.

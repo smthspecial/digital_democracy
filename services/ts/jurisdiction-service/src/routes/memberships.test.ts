@@ -12,7 +12,7 @@ describe("membership routes", () => {
     const res = await app.inject({
       method: "POST",
       url: "/jurisdiction/jurisdictions",
-      payload: { parent_id: null, name, scope_level: "city", boundary_ref: "ref" },
+      payload: { parent_id: null, name, scope_level: "municipality", boundary_ref: "ref" },
     });
     return res.json();
   }
@@ -63,7 +63,7 @@ describe("membership routes", () => {
       await app.inject({
         method: "POST",
         url: "/jurisdiction/jurisdictions",
-        payload: { parent_id: nation.id, name: "Nested City", scope_level: "city", boundary_ref: "ref" },
+        payload: { parent_id: nation.id, name: "Nested City", scope_level: "municipality", boundary_ref: "ref" },
       })
     ).json();
     const citizenId = "33333333-3333-3333-3333-333333333333";

@@ -47,8 +47,10 @@ function toOutcomeEvaluationDto(evaluation: OutcomeEvaluation) {
   return {
     id: evaluation.id,
     project_id: evaluation.projectId,
+    objective: evaluation.objective,
     promised_outcome: evaluation.promisedOutcome,
     measured_outcome: evaluation.measuredOutcome,
+    evaluation: evaluation.evaluation,
     evaluated_at: evaluation.evaluatedAt
       ? evaluation.evaluatedAt.toISOString()
       : null,
@@ -59,6 +61,7 @@ interface CreateProjectBody {
   proposal_id: string;
   contractor: string;
   budget_allocated: number;
+  objective: string;
   promised_outcome: string;
   milestones: { title: string; due_date: string; order_index: number }[];
 }
@@ -70,6 +73,7 @@ const createProjectSchema = {
       "proposal_id",
       "contractor",
       "budget_allocated",
+      "objective",
       "promised_outcome",
       "milestones",
     ],
@@ -78,6 +82,7 @@ const createProjectSchema = {
       proposal_id: { type: "string", minLength: 1 },
       contractor: { type: "string", minLength: 1 },
       budget_allocated: { type: "number", minimum: 0 },
+      objective: { type: "string", minLength: 1 },
       promised_outcome: { type: "string", minLength: 1 },
       milestones: {
         type: "array",
@@ -131,21 +136,26 @@ const sweepSchema = {
 
 interface SubmitEvaluationBody {
   measured_outcome: string;
+  evaluation: "successful" | "partial" | "unsuccessful";
 }
 
 const submitEvaluationSchema = {
   body: {
     type: "object",
-    required: ["measured_outcome"],
+    required: ["measured_outcome", "evaluation"],
     additionalProperties: false,
     properties: {
       measured_outcome: { type: "string", minLength: 1 },
+      evaluation: {
+        type: "string",
+        enum: ["successful", "partial", "unsuccessful"],
+      },
     },
   },
 };
 
 export function registerProjectRoutes(app: FastifyInstance, deps: Deps): void {
-  const { store, auditEmitter, assignmentRequester } = deps;
+  const { store, auditEmitter, assignmentRequester, ledgerRecorder, proposalAuthorLookup, reputationEmitter } = deps;
 
   app.post<{ Body: CreateProjectBody }>(
     "/",
@@ -156,6 +166,7 @@ export function registerProjectRoutes(app: FastifyInstance, deps: Deps): void {
         proposalId: body.proposal_id,
         contractor: body.contractor,
         budgetAllocated: body.budget_allocated,
+        objective: body.objective,
         promisedOutcome: body.promised_outcome,
         milestones: body.milestones.map((m) => ({
           title: m.title,
@@ -204,6 +215,7 @@ export function registerProjectRoutes(app: FastifyInstance, deps: Deps): void {
     async (request) => {
       const project = recordBudgetSpent(
         store,
+        ledgerRecorder,
         request.params.id,
         request.body.amount,
         request.body.description,
@@ -232,10 +244,15 @@ export function registerProjectRoutes(app: FastifyInstance, deps: Deps): void {
     "/outcome-evaluations/:id/submit",
     { schema: submitEvaluationSchema },
     async (request) => {
-      const evaluation = submitOutcomeEvaluation(
+      const evaluation = await submitOutcomeEvaluation(
         store,
+        reputationEmitter,
+        proposalAuthorLookup,
         request.params.id,
-        request.body.measured_outcome,
+        {
+          measuredOutcome: request.body.measured_outcome,
+          evaluation: request.body.evaluation,
+        },
       );
       return toOutcomeEvaluationDto(evaluation);
     },

@@ -4,11 +4,15 @@ import { registerProposalRoutes } from "./routes/proposals.js";
 import { createStore, type ProposalStore } from "./store.js";
 import { createProposalService } from "./services/proposals.js";
 import {
+  defaultAssignmentChecker,
   defaultAuditEmitter,
   defaultConstitutionalReviewer,
+  defaultScopeEscalationRequester,
   defaultVoteSessionRequester,
+  type AssignmentChecker,
   type AuditEmitter,
   type ConstitutionalReviewer,
+  type ScopeEscalationRequester,
   type VoteSessionRequester,
 } from "./integrations.js";
 import { DomainError } from "./errors.js";
@@ -18,6 +22,8 @@ export interface Deps {
   constitutionalReviewer: ConstitutionalReviewer;
   voteSessionRequester: VoteSessionRequester;
   auditEmitter: AuditEmitter;
+  assignmentChecker: AssignmentChecker;
+  scopeEscalationRequester: ScopeEscalationRequester;
 }
 
 export function buildServer(deps: Partial<Deps> = {}) {
@@ -30,6 +36,9 @@ export function buildServer(deps: Partial<Deps> = {}) {
     voteSessionRequester:
       deps.voteSessionRequester ?? defaultVoteSessionRequester,
     auditEmitter: deps.auditEmitter ?? defaultAuditEmitter,
+    assignmentChecker: deps.assignmentChecker ?? defaultAssignmentChecker,
+    scopeEscalationRequester:
+      deps.scopeEscalationRequester ?? defaultScopeEscalationRequester,
   };
 
   const proposalService = createProposalService(resolvedDeps);

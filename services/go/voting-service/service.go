@@ -7,22 +7,38 @@ import (
 )
 
 // DelegationResolver models DP-041 (delegation chain resolution), owned by
-// SRV-010/delegation-service which doesn't exist yet in this codebase and
-// there is no message queue to enqueue onto -- CastBallot calls this
-// in-process, synchronously, fire-and-forget instead.
+// SRV-010/delegation-service. There is no message queue to enqueue onto, so
+// CastBallot calls this in-process, synchronously, fire-and-forget: a
+// resolver failure must not undo the already-committed ballot (see
+// CastBallot below). It returns the citizen ids that have an active
+// delegation to citizenID in domainID -- CastBallot uses the count to
+// weight the ballot so a delegate's vote actually counts once for each
+// citizen who delegated to them, per DP-041's "ballot also applies to
+// delegators" requirement. See remote.go for the real HTTP-calling
+// implementation used when DELEGATION_SERVICE_URL is configured.
 type DelegationResolver interface {
-	ResolveAndEnqueue(citizenID, domainID string) error
+	ResolveDelegators(citizenID, domainID string) ([]string, error)
 }
 
 type noopDelegationResolver struct{}
 
-func (noopDelegationResolver) ResolveAndEnqueue(string, string) error { return nil }
+func (noopDelegationResolver) ResolveDelegators(string, string) ([]string, error) { return nil, nil }
 
 // AuditEmitter models the DP-036 audit-service emission on certification;
 // audit-service isn't implemented here, so this is a no-op by default.
 type AuditEmitter interface {
 	Emit(eventType, payload string) error
 }
+
+// No ReputationEmitter seam is modeled here, unlike DelegationResolver and
+// AuditEmitter above: SRV-014 lists voting-service among reputation-
+// service's event sources, but ballot secrecy (no citizen_id is ever
+// stored on a Ballot -- see CastBallot/store.go) means this service has no
+// legitimate per-citizen signal to emit in the first place, not merely an
+// unwired one. A real "accurate_prediction" factor would have to be
+// computed elsewhere, correlating an anonymous tally result against
+// deliberation-service's preference declarations without re-identifying
+// any individual ballot.
 
 type noopAuditEmitter struct{}
 
@@ -192,8 +208,15 @@ func (s *Service) CastBallot(sessionID, tokenSecret, choicePlaintext string, now
 
 	// Fire-and-forget: a resolver failure must not undo the already-committed
 	// ballot. The proposal stands in for "domain" until proposal-service's
-	// domain model is available here.
-	_ = s.delegation.ResolveAndEnqueue(citizenID, proposalID)
+	// domain model is available here. Every resolved delegator raises this
+	// ballot's weight by one, so CloseSession's tally counts it once for the
+	// citizen and once more for each citizen who delegated to them.
+	if delegatorIDs, err := s.delegation.ResolveDelegators(citizenID, proposalID); err == nil && len(delegatorIDs) > 0 {
+		weight := 1 + len(delegatorIDs)
+		if err := s.store.SetBallotWeight(sessionID, ballot.ID, weight); err == nil {
+			ballot.Weight = weight
+		}
+	}
 
 	return ballot, nil
 }
@@ -227,13 +250,25 @@ func (s *Service) CloseSession(sessionID string, now time.Time) (*VoteSession, e
 		return nil, err
 	}
 
-	plainChoices := make([]string, len(ballots))
-	for i, b := range ballots {
+	// A weight-N ballot is fed into the tally as N identical entries: every
+	// method here (approval counts, preference-score averages, ranked-choice
+	// IRV counts, comparative pairwise counts) is a linear aggregate over
+	// the ballot multiset, so replaying a ballot N times is mathematically
+	// equivalent to counting it once with weight N -- no per-method weight
+	// parameter is needed. See Ballot.Weight and DelegationResolver.
+	plainChoices := make([]string, 0, len(ballots))
+	for _, b := range ballots {
 		plain, err := decryptAESGCM(key, b.Nonce, b.EncryptedChoice)
 		if err != nil {
 			return nil, fmt.Errorf("decrypt ballot %s: %w", b.ID, err)
 		}
-		plainChoices[i] = string(plain)
+		weight := b.Weight
+		if weight < 1 {
+			weight = 1
+		}
+		for i := 0; i < weight; i++ {
+			plainChoices = append(plainChoices, string(plain))
+		}
 	}
 
 	outcome := computeMethodOutcome(session.Method, optionIDs, plainChoices)
@@ -268,7 +303,10 @@ func (s *Service) CloseSession(sessionID string, now time.Time) (*VoteSession, e
 	}
 
 	if quorumMet {
-		_ = s.audit.Emit("vote_session.certified", sessionID)
+		// "vote_certified" matches audit-service's ActionType enum exactly
+		// (TBL-034) so httpAuditEmitter can pass it straight through as
+		// action_type with no translation.
+		_ = s.audit.Emit("vote_certified", sessionID)
 	}
 
 	return updated, nil

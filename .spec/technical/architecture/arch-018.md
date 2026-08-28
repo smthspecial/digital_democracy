@@ -1,0 +1,196 @@
+---
+id: ARCH-018
+type: arch
+title: "Civic knowledge & participation: assignments, quotas & inactivity"
+status: draft
+linkedIds: EPIC-009,FR-034,FR-050,FR-051,FR-052,FR-053,FR-054,FR-055,FR-058,DP-036,DP-039,DP-040,DP-048,DP-049,DP-050,DP-052,DP-053,DP-054,DP-065,ADR-009,ADR-019
+created: 2026-08-27
+---
+
+## Overview
+
+This flow covers civic-duty-service's core participation-management loop (EPIC-009): randomized weighted civic-assignment generation across all four assignment types (proposal review, audit review, expertise verification, budget oversight — ADR-009), load-balancing so no citizen is overloaded and no task goes permanently unassigned, monthly participation scoring against the 2-4 hour/month quota, exemption handling, staged-but-humane inactivity escalation, and monthly audit-pool refresh (FR-050 through FR-055). civic-duty-service (SRV-009, TypeScript/Fastify per ADR-019) is the only service in this flow with a real, callable HTTP surface today, booted in-process on an ephemeral port the way every ARCH-009 integration test boots its services. Every producer that should trigger it (proposal-service for reviews, governance-role-service for rotation replacements and review-body panels, project-service for outcome-evaluation audits) and its one intended consumer (notification-service) are wired only as no-op in-process seams. This test plan therefore names new production code it depends on that doesn't exist yet: an `HttpCivicAssignmentRequester`-style seam in proposal-service/project-service/governance-role-service that assembles candidates from jurisdiction-service, competency-service and identity-service and calls civic-duty-service's real endpoints, plus an `Http`-backed `NotificationEmitter` in civic-duty-service that actually calls notification-service's `/notifications/dispatch`. Several FR-053/FR-054 acceptance criteria (exemption claims, stage-3 privilege suspension) also have zero implementation surface in the current code — those scenarios are marked `blocked on` rather than assumed to work.
+
+---
+
+## 1. Services & seams in scope
+
+| Service | Role in this flow | Real HTTP call today or seam-stub today |
+|---|---|---|
+| civic-duty-service (SRV-009, TS, `:4008`) | Owns TBL-024 `civic_assignment` / TBL-025 `participation_record`; exposes DP-040 generate, DP-052 rebalance, DP-054 audit-pool refresh, DP-048 score, DP-049 sweep | **Real.** `POST /civic-duty/assignments/generate`, `POST /civic-duty/assignments/:id/{accept,abandon,complete}`, `GET /civic-duty/citizens/:id/assignments`, `POST /civic-duty/assignments/rebalance`, `POST /civic-duty/audit-pool/refresh`, `POST /civic-duty/participation/score`, `POST /civic-duty/inactivity/sweep` all exist and are callable (`src/routes/assignments.ts`, `src/routes/participation.ts`). |
+| notification-service (SRV-015, TS, `:4012`) | Intended consumer of DP-039 events: new assignment, inactivity reminder/reduced | **Real endpoint, unwired consumer.** `POST /notifications/dispatch` exists and redacts banned payload keys (`src/services/redaction.ts`), but nothing in this flow calls it. civic-duty-service's `NotificationEmitter` (`src/notifications.ts`) is a no-op by default and `notify()` is only ever invoked from `sweepInactivity` — `generateAssignment`/`refreshAuditPool` never call it. |
+| identity-service (SRV-001, TS, `:4001`) | Source of the active-citizen candidate pool | **Real**, but uncalled from this flow. `GET /identity/citizens` exists; civic-duty-service has no seam that calls it — a caller must fetch the pool and pass `candidates` in the request body. |
+| jurisdiction-service (SRV-002, TS, `:4002`) | Source of the `sphere_relevant` weighting input | **Real**, but uncalled from this flow. `GET /jurisdiction/eligibility?citizen_id=&scope_jurisdiction_id=` exists; civic-duty-service never calls it — same caller-assembles-input pattern. |
+| competency-service (SRV-005, TS, `:4005`) | Source of the `competency_match` weighting input | **Real**, but uncalled from this flow. `GET /competency/citizens/:citizenId/domains/:domainId` exists; civic-duty-service never calls it. |
+| proposal-service (SRV-004, TS, `:4004`) | Should trigger DP-040 (`proposal_review`) when a proposal enters review | **Stub/absent.** `src/integrations.ts` defines no seam at all toward civic-duty-service (only `ConstitutionalReviewer`, `VoteSessionRequester`, `AuditEmitter`, `AssignmentChecker`) — DP-040's "proposal" trigger leg is entirely unwired in production code. |
+| governance-role-service (SRV-011, TS, `:4009`) | DP-050 rotation sweep should enqueue a DP-040 replacement assignment; DP-065 review-body selection should write `civic_assignment` rows for scope challenges/appeals/constitutional review/deadlocks | **Stub / not implemented.** `ReplacementRequester.requestReplacement(roleId)` (`src/collaborators.ts`) is a no-op that only carries `roleId`, no citizen/type/target payload. DP-065 has no implemented route at all — `src/routes/` has only `roles.ts`, `rotation.ts`, `approvals.ts`, `health.ts`. |
+| project-service (SRV-013, TS, `:4010`) | DP-053 outcome-evaluation trigger should enqueue a DP-040 audit assignment | **Stub.** `AssignmentRequester.request(projectId)` (`src/integrations.ts`) is a no-op carrying only `projectId`. |
+
+---
+
+## 2. Preconditions & fixtures
+
+- **Active citizen pool**: seed via identity-service's registration flow (ARCH-010) or reuse fixture citizens; `GET /identity/citizens` returns the pool for a test to draw from.
+- **`sphere_relevant` per candidate**: `GET /jurisdiction/eligibility?citizen_id=<id>&scope_jurisdiction_id=<scope>` against the target's scope jurisdiction.
+- **`competency_match` per candidate**: `GET /competency/citizens/:citizenId/domains/:domainId` against the relevant domain.
+- Since no production service performs this assembly today (§1), the integration test harness stands in for the missing orchestrator: it calls identity-service, jurisdiction-service and competency-service for real, assembles the `candidates` array itself, then calls civic-duty-service's real endpoint. This is legitimate per ARCH-009 §2 (fixtures built through public APIs) even though the equivalent production orchestration code doesn't exist yet.
+- **A `civic_assignment` in a specific state**: `POST /civic-duty/assignments/generate` to create (always lands in `assigned`), then `POST /civic-duty/assignments/:id/{abandon,complete}` to move it to a terminal state. There is no API path to `exempted` — that `CivicAssignmentStatus` value is currently unreachable (§4 EC-11).
+- **A `participation_record` for a period**: `POST /civic-duty/participation/score` (upserts by `citizenId`+`period`); `quota_target` must be supplied by the caller — there is no derivation from jurisdiction memberships/competencies in code despite srv-009's description, so fixtures must pass an explicit number.
+- **An inactivity stage**: repeated `POST /civic-duty/inactivity/sweep` calls against a low-scoring record — each call advances at most one stage.
+- **`exemptionStatus`**: **cannot be set through any public API today.** `recordParticipationScores` only ever defaults it to `"none"` or carries forward whatever the store already has, and no route writes any other value. Any FR-053 fixture needing a non-`"none"` exemption is `blocked on: no POST/PUT exemption endpoint exists in civic-duty-service`.
+- **Notification-service verification**: `GET /notifications/citizens/:id` after a flow, once civic-duty-service is actually wired to call `/notifications/dispatch` (currently `blocked on` per §1).
+
+---
+
+## 3. Happy path scenarios
+
+**HP-1: Randomized weighted proposal-review assignment across a real candidate pool** (DP-040, FR-050)
+1. identity-service: seed 3 active citizens `c1`/`c2`/`c3`; `GET /identity/citizens` confirms the pool.
+2. jurisdiction-service: `GET /jurisdiction/eligibility` for each against the proposal's scope jurisdiction — `c1` eligible (`sphere_relevant=true`), `c2`/`c3` not.
+3. competency-service: `GET /competency/citizens/:id/domains/:domainId` — `c2` has an active domain match (`competency_match=true`), `c1`/`c3` don't.
+4. civic-duty-service: `POST /civic-duty/assignments/generate` `{type:"proposal_review", target_ref:"<proposal-id>", candidates:[c1{sphere:true,comp:false}, c2{sphere:false,comp:true}, c3{sphere:false,comp:false}]}`.
+5. Assert `201`; `body.weights` has 3 entries with `c1`'s and `c2`'s base weight (1.5) higher than `c3`'s (1.0) before jitter; `assignment.citizenId` is one of the 3, `status="assigned"`, `dueAt=null`.
+6. `GET /civic-duty/citizens/:id/assignments` for the winning citizen returns the new record.
+
+Expected end state: exactly one `civic_assignment` row created, tied to the real proposal's `target_ref`. **Level: integration.**
+
+**HP-2: Load-balancing keeps a zero-assignment citizen from staying unassigned** (DP-052 → DP-040, FR-050/FR-051)
+1. civic-duty-service: seed citizen `loaded` with 2 open `proposal_review` assignments and citizen `idle` with none.
+2. `POST /civic-duty/assignments/rebalance` `{candidates:["loaded","idle"], overload_threshold:1}` → `{overloaded:["loaded"], underloaded:["idle"]}`.
+3. Using `idle` as the sole candidate, `POST /civic-duty/assignments/generate` — assignment lands on `idle` (only candidate).
+4. Re-run rebalance: `idle` now has 1 open assignment and drops out of `underloaded`.
+
+Expected end state: no citizen has zero assignments after rebalance-and-generate; `loaded` received no new work while over threshold. **Level: integration** (exercised the way DP-052's cron would).
+
+**HP-3: Monthly participation scoring keeps the low-workload quota visible** (DP-048, FR-051/FR-052)
+1. civic-duty-service: seed 4 completed `proposal_review` + 2 completed `audit_review` assignments for citizen `c1` (via generate+complete).
+2. `POST /civic-duty/participation/score` `{period:"2026-07", inputs:[{citizen_id:"c1", voting_count:3, review_count:4, audit_count:2, quota_target:4}]}`.
+3. Assert `200`; `score=9` (3+4+2 equal-weighted sum), `quotaTarget=4`, `inactivityStage=0`, `exemptionStatus="none"`.
+4. Re-POST the same period with different counts — assert the same record is updated in place (no duplicate) and prior `inactivityStage`/`exemptionStatus` preserved.
+
+Expected end state: one `participation_record` per citizen+period; score never referenced by any voting-weight computation anywhere in the codebase (no service reads civic-duty-service's `participation_record`). **Level: integration.**
+
+**HP-4: Escalating-then-recovering inactivity preserves stage semantics across sweeps** (DP-049, FR-054)
+1. Seed `participation_record` for `c1`, period `2026-06`, `score=0`, `quotaTarget=4`, `inactivityStage=0`.
+2. `POST /civic-duty/inactivity/sweep` `{period:"2026-06", inactivity_threshold_score:5}` → stage 0→1 (reminder); assert the injectable notifier is called with `kind="inactivity_reminder"` (real cross-service dispatch to notification-service is `blocked on` per §1).
+3. Sweep again, unchanged score → stage 1→2 (reduced); same notifier caveat, `kind="inactivity_reduced"`.
+4. Sweep again, unchanged score → stage 2→3 (inactive); no notification kind exists for stage 3 at all in `notifications.ts` — this leg is `blocked on: NotificationEmitter has no stage-3 notification kind`.
+5. Re-score `c1` with sufficient voting/review counts to push score above threshold, sweep again → stage resets straight to 0 (not 3→2→1→0).
+
+Expected end state: stage transitions exactly match DP-049's 0→1→2→3 stepping and one-shot recovery-to-0 behavior; `c1`'s assignment/identity access is untouched throughout (nothing in the codebase gates on `inactivityStage` — see EC-12). **Level: integration.**
+
+**HP-5: Monthly audit-pool refresh selects a fresh, non-repeating pool** (DP-054, FR-055)
+1. identity-service: seed 5 active citizens.
+2. civic-duty-service: give citizen `prior` an already-open `audit_review` assignment.
+3. `POST /civic-duty/audit-pool/refresh` `{candidates:[...5 ids...], count:3}`.
+4. Assert `201`; exactly 3 new `audit_review` assignments created, none for `prior`; all `status="assigned"`, `targetRef="audit_pool_refresh"`.
+5. Re-run refresh immediately with `count:3` over the same candidate list — the 3 just-selected citizens are now excluded too (open `audit_review`), so the remaining pool (1 citizen, since `prior` is also excluded) yields at most 1 new assignment (`Math.min(3, pool.length)`).
+
+Expected end state: no citizen holds two concurrent open `audit_review` assignments; selection is uniform-random over the eligible pool (`refreshAuditPool` never calls `computeWeight`/`pickWeighted` — unlike DP-040's generate path, this path is not impact/competency-weighted). **Level: integration.**
+
+---
+
+## 4. Edge cases
+
+### Input validation
+
+- **EC-1**: `assignments/generate` with an empty `candidates` array → `400` (schema `minItems:1`, plus a defense-in-depth service-level `validation()` throw). FR-050. Integration.
+- **EC-2**: `assignments/generate` with a `type` outside the 4-member enum → `400` (schema `enum`). FR-050. Integration.
+- **EC-3**: a candidate object missing `competency_match` or carrying an extra unexpected field → `400` (`additionalProperties:false`). FR-050. Integration.
+- **EC-4**: `participation/score` with `period` not matching `^\d{4}-\d{2}$` (e.g. `"2026-6"`) → `400`. FR-051/FR-052. Integration.
+- **EC-5**: `inactivity/sweep` missing `inactivity_threshold_score` → `400`. FR-054. Integration.
+- **EC-6**: `rebalance`/`audit-pool/refresh` with a negative `overload_threshold` or negative `count` → `400` (`minimum:0`). FR-050/FR-051/FR-055. Integration.
+
+### State-machine violations
+
+- **EC-7**: `complete` an already-`abandoned` assignment → `409` (`transitionAssignment` requires `status==="assigned"`). FR-050. Integration.
+- **EC-8**: `abandon` an already-`completed` assignment → `409`. FR-050. Integration.
+- **EC-9**: `accept` an assignment already `completed`/`abandoned` → `409` (accept still requires `status==="assigned"` even though it's semantically a no-op transition). FR-050. Integration.
+- **EC-10**: `accept`/`abandon`/`complete` on an unknown assignment id → `404` for all three actions. FR-050. Integration.
+- **EC-11**: attempt to move an assignment to `CivicAssignmentStatus="exempted"` — no route exists; `transitionAssignment`'s action union is only `accept|abandon|complete`. `blocked on: "exempted" is defined in domain/types.ts but is unreachable through any endpoint.` FR-053. Integration (documents the gap; cannot be exercised end-to-end today).
+
+### Authorization / eligibility
+
+- **EC-12**: a citizen at `inactivityStage=3` ("inactive", advanced privileges suspended per FR-054) is still accepted as a normal candidate and can still be selected by `/civic-duty/assignments/generate` — `generateAssignment`/`computeWeight` never read `participation_record`, only `countOpenAssignments`. Expected per FR-054 intent: excluded or down-weighted; actual: unaffected. This is directly exercisable and fails against current code (not blocked). FR-054. Integration.
+- **EC-13**: a citizen with a non-`"none"` `exemptionStatus` (once settable — see EC-11's sibling gap) still receives new assignments via `/assignments/generate`, `/assignments/rebalance`'s `underloaded` classification, and `/audit-pool/refresh` — none of the three read `exemptionStatus`. `blocked on: exemptionStatus cannot be set to a non-"none" value through any API, so this can only be exercised by seeding the store directly (disallowed per ARCH-009 §2) until an exemption endpoint exists.` FR-053. Integration.
+- **EC-14**: a citizen with zero sphere-relevance and zero competency-match (base weight exactly `1`, no bonuses) is still a legitimate, selectable candidate — confirms the random component alone can still select a "cold" candidate; included to confirm no candidate is silently excluded from the pool. FR-050. Integration.
+- **EC-15**: DP-065 review-body panel selection should exclude a citizen with a declared COI in the dispute domain before any `civic_assignment` is written. `blocked on: DP-065 has no implemented route in governance-role-service (src/routes/ has only roles.ts, rotation.ts, approvals.ts, health.ts); proposal-service's own AssignmentChecker.isAssignedReviewer defaults to always-true (defaultAssignmentChecker), so a reviewer check against a never-populated assignment always trivially passes.` FR-034/FR-055/FR-058. E2E (documents the gap).
+
+### Threshold & boundary conditions
+
+- **EC-16**: `/assignments/generate` with exactly one candidate — `pickWeighted` must deterministically return that candidate regardless of the random draw (no off-by-one at the cumulative-weight array boundary). FR-050. Integration.
+- **EC-17**: `/audit-pool/refresh` with `count` greater than the eligible pool size — returns `Math.min(count, pool.length)` assignments, not an error and not padded/repeated. FR-055. Integration.
+- **EC-18**: `/audit-pool/refresh` with `count:0` — schema allows `minimum:0`; returns `201` with an empty array, not a `400`. FR-055. Integration.
+- **EC-19**: `/assignments/rebalance` with a candidate at *exactly* `overload_threshold` open assignments — classified as neither overloaded (`>` threshold only) nor underloaded (`===0` only); the one-at-threshold citizen appears in neither list. FR-051. Integration.
+- **EC-20**: `/audit-pool/refresh` where every candidate already holds an open `audit_review` assignment (empty eligible pool after filtering) — returns `201` with an empty array rather than erroring, even though `count>0` was requested (a governance task effectively goes temporarily unassigned, in tension with srv-009's stated "no governance task goes unassigned"). FR-055. Integration.
+- **EC-21**: participation score inputs at `voting_count=review_count=audit_count=0` — score computes to exactly `0`, a valid non-error state distinct from "no record yet". FR-052. Integration.
+- **EC-22**: inactivity sweep run against a period with zero `participation_record` rows — `listParticipationRecordsByPeriod` returns `[]`, sweep returns `[]`, no error. FR-054. Integration.
+
+### Concurrency & idempotency
+
+- **EC-23**: two `/civic-duty/inactivity/sweep` calls back-to-back for the same period with an unchanged score — the second call is a true no-op: no stage change, no duplicate notification. FR-054. Integration.
+- **EC-24**: two `/civic-duty/participation/score` POSTs for the same citizen+period (e.g. a retried cron run) — upsert-by-key semantics overwrite rather than duplicate (`listParticipationRecordsByPeriod` stays at length 1). FR-051/FR-052. Integration.
+- **EC-25**: two concurrent `/assignments/generate` calls against overlapping candidate pools before either's `countOpenAssignments` read is reflected by the other — the in-memory `Map`-backed store has no read-then-write locking, so a race could pick the same "least loaded" citizen twice in a row. Document as a known gap in the in-memory store rather than a designed idempotency guarantee. FR-050. Integration, exploratory.
+- **EC-26**: replaying `POST /assignments/:id/complete` for an assignment already completed by an earlier, in-flight duplicate request → `409`, not a silent `200` — confirms the endpoint is not naively idempotent-by-replay; a client-side idempotency key would need to be layered on top for true replay-safety. FR-050. Integration.
+
+### Cross-service failure & degradation
+
+- **EC-27**: proposal-service reaches its review stage but has no seam to call civic-duty-service's `/assignments/generate`. `blocked on: proposal-service/src/integrations.ts defines no civic-duty-assignment-requesting interface at all (only ConstitutionalReviewer/VoteSessionRequester/AuditEmitter/AssignmentChecker exist); DP-040's "proposal" trigger leg is entirely unwired in production code.` FR-050/DP-040. E2E, documents the gap.
+- **EC-28**: governance-role-service's DP-050 rotation sweep flags a role nearing `term_end` and should request a DP-040 replacement assignment. `blocked on: ReplacementRequester.requestReplacement(roleId) is a no-op, and even swapped for a real Http implementation its signature carries only roleId — no citizen-candidate/type/target payload for civic-duty-service to act on.` FR-062/DP-050. Integration, documents the gap.
+- **EC-29**: project-service's DP-053 outcome-evaluation trigger should enqueue an audit assignment. `blocked on: AssignmentRequester.request(projectId) is a no-op carrying only projectId, the same thin-signature gap as EC-28.` DP-053. Integration, documents the gap.
+- **EC-30**: civic-duty-service generates a new assignment; notification-service should receive a "new assignment" dispatch per srv-009's stated `Emits to: notification-service (DP-039: new assignment, reminder, inactivity warning)`. `blocked on: civic-duty-service's NotificationEmitter (src/notifications.ts) only defines "inactivity_reminder"/"inactivity_reduced" kinds; generateAssignment and refreshAuditPool never call notifier.notify() at all — there is no "new assignment" notification code path to exercise.` FR-050/DP-039. Integration, documents the gap.
+- **EC-31**: notification-service is down/erroring when civic-duty-service's (future) `HttpNotificationEmitter` calls `/notifications/dispatch` during `sweepInactivity` — per DP-039/srv-015's best-effort/non-blocking contract, the inactivity-stage transition itself must still succeed and persist even if the notification call fails. `blocked on: no Http notifier implementation exists yet to exercise this against; documented for when one is built.` FR-054/DP-039. Integration.
+- **EC-32**: identity-service, jurisdiction-service, or competency-service is down when a test harness (standing in for the missing production orchestrator, §2) tries to assemble a candidate pool for `/assignments/generate` — the call should fail closed (no assignment created) rather than silently defaulting `sphere_relevant`/`competency_match` to `false`. Documented as expected behavior since no real orchestrator exists yet to assert against. FR-050. Integration, exploratory.
+
+### Data integrity & audit
+
+- **EC-33**: `/civic-duty/audit-pool/refresh` creates `civic_assignment` rows but civic-duty-service never emits to audit-service from `refreshAuditPool`/`generateAssignment`/`transitionAssignment` — civic-duty-service has no `AuditEmitter`-style seam or `integrations.ts` file at all, despite srv-009's own dependency table implying audit emission belongs to the flow (`Emits to: ... audit-service (DP-036)`). `blocked on: no audit-emission seam exists in civic-duty-service.` FR-055/DP-036. Integration, documents the gap.
+- **EC-34**: `exemptionStatus` changes must be auditable per FR-053's acceptance criteria ("Exemption records are auditable") — moot until an exemption-setting endpoint exists at all (see EC-11/EC-13); flagged here so the audit requirement isn't lost once that endpoint is built. FR-053. Integration, documents the gap.
+- **EC-35**: a notification payload dispatched for an inactivity event must never carry ballot choices, legal identity, or government identifiers — notification-service's `redaction.ts` (`findBannedKey`) enforces this at dispatch time for whatever payload is sent; once civic-duty-service's real dispatch exists (EC-30/EC-31), a payload accidentally including e.g. `legal_identity` must be rejected before delivery rather than silently forwarded. FR-054/DP-039. Integration.
+
+---
+
+## 5. Traceability
+
+| Scenario | FR/DP/NFR ids | Level | Automated test id |
+|---|---|---|---|
+| HP-1 | FR-050, DP-040 | integration | TBD |
+| HP-2 | FR-050, FR-051, DP-052 | integration | TBD |
+| HP-3 | FR-051, FR-052, DP-048 | integration | TBD |
+| HP-4 | FR-054, DP-049 | integration | TBD |
+| HP-5 | FR-055, DP-054 | integration | TBD |
+| EC-1 | FR-050 | integration | TBD |
+| EC-2 | FR-050 | integration | TBD |
+| EC-3 | FR-050 | integration | TBD |
+| EC-4 | FR-051, FR-052 | integration | TBD |
+| EC-5 | FR-054 | integration | TBD |
+| EC-6 | FR-050, FR-051, FR-055 | integration | TBD |
+| EC-7 | FR-050 | integration | TBD |
+| EC-8 | FR-050 | integration | TBD |
+| EC-9 | FR-050 | integration | TBD |
+| EC-10 | FR-050 | integration | TBD |
+| EC-11 | FR-053 | integration | TBD |
+| EC-12 | FR-054 | integration | TBD |
+| EC-13 | FR-053 | integration | TBD |
+| EC-14 | FR-050 | integration | TBD |
+| EC-15 | FR-034, FR-055, FR-058 | e2e | TBD |
+| EC-16 | FR-050 | integration | TBD |
+| EC-17 | FR-055 | integration | TBD |
+| EC-18 | FR-055 | integration | TBD |
+| EC-19 | FR-051 | integration | TBD |
+| EC-20 | FR-055 | integration | TBD |
+| EC-21 | FR-052 | integration | TBD |
+| EC-22 | FR-054 | integration | TBD |
+| EC-23 | FR-054 | integration | TBD |
+| EC-24 | FR-051, FR-052 | integration | TBD |
+| EC-25 | FR-050 | integration | TBD |
+| EC-26 | FR-050 | integration | TBD |
+| EC-27 | FR-050, DP-040 | e2e | TBD |
+| EC-28 | FR-062, DP-050 | integration | TBD |
+| EC-29 | DP-053 | integration | TBD |
+| EC-30 | FR-050, DP-039 | integration | TBD |
+| EC-31 | FR-054, DP-039 | integration | TBD |
+| EC-32 | FR-050 | integration | TBD |
+| EC-33 | FR-055, DP-036 | integration | TBD |
+| EC-34 | FR-053 | integration | TBD |
+| EC-35 | FR-054, DP-039 | integration | TBD |

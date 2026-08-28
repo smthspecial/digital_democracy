@@ -8,16 +8,20 @@ import (
 )
 
 type fakeDelegationResolver struct {
-	mu    sync.Mutex
-	calls []struct{ citizenID, domainID string }
-	err   error
+	mu           sync.Mutex
+	calls        []struct{ citizenID, domainID string }
+	err          error
+	delegatorIDs []string // returned by every call until reassigned
 }
 
-func (f *fakeDelegationResolver) ResolveAndEnqueue(citizenID, domainID string) error {
+func (f *fakeDelegationResolver) ResolveDelegators(citizenID, domainID string) ([]string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, struct{ citizenID, domainID string }{citizenID, domainID})
-	return f.err
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.delegatorIDs, nil
 }
 
 type fakeAuditEmitter struct {
@@ -281,6 +285,95 @@ func TestCastBallotFullFlowAndDelegationResolver(t *testing.T) {
 	}
 	if resolver.calls[0].domainID != session.ProposalID {
 		t.Fatalf("resolver domainID = %q, want %q", resolver.calls[0].domainID, session.ProposalID)
+	}
+}
+
+func TestCastBallotAppliesDelegationWeight(t *testing.T) {
+	svc, resolver, _ := newTestService()
+	resolver.delegatorIDs = []string{"citizen-2"}
+	now := time.Now().UTC()
+	session, err := svc.CreateSession(validCreateInput(now))
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	if err := svc.TransitionOpen(session.ID, now); err != nil {
+		t.Fatalf("TransitionOpen: %v", err)
+	}
+	issued, err := svc.IssueEligibilityTokens(session.ID, []string{"citizen-1"})
+	if err != nil {
+		t.Fatalf("IssueEligibilityTokens: %v", err)
+	}
+
+	ballot, err := svc.CastBallot(session.ID, issued[0].TokenSecret, "opt1", now)
+	if err != nil {
+		t.Fatalf("CastBallot: %v", err)
+	}
+	if ballot.Weight != 2 {
+		t.Fatalf("ballot.Weight = %d, want 2 (citizen-1 plus resolved delegator citizen-2)", ballot.Weight)
+	}
+}
+
+// TestCloseSessionCountsDelegatedVotes is the DP-041 regression this fix
+// closes: before it, a delegate's ballot always counted as exactly one
+// vote no matter how many citizens had delegated to them, so a delegated
+// majority could lose a tally it should have won.
+func TestCloseSessionCountsDelegatedVotes(t *testing.T) {
+	svc, resolver, _ := newTestService()
+	now := time.Now().UTC()
+	session, err := svc.CreateSession(CreateSessionInput{
+		ProposalID: "p", JurisdictionID: "j", Method: MethodApproval, ThresholdRule: ThresholdSimpleMajority,
+		MinParticipation: 1, CoolingOffUntil: now.Add(-time.Hour), OpensAt: now.Add(-time.Minute), ClosesAt: now.Add(time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	optA, err := svc.AddOption(session.ID, AddOptionInput{Label: "A"})
+	if err != nil {
+		t.Fatalf("AddOption A: %v", err)
+	}
+	optB, err := svc.AddOption(session.ID, AddOptionInput{Label: "B"})
+	if err != nil {
+		t.Fatalf("AddOption B: %v", err)
+	}
+	if err := svc.TransitionOpen(session.ID, now); err != nil {
+		t.Fatalf("TransitionOpen: %v", err)
+	}
+	secrets := issueTokensMap(t, svc, session.ID, []string{"citizen-delegate", "citizen-direct-1", "citizen-direct-2"})
+
+	// citizen-delegate votes A and carries two delegators' worth of weight
+	// (three total votes for A, since weight = 1 + len(delegators)); two
+	// other citizens vote B directly (two votes for B). Without weighting,
+	// A and B would tie 1-2 and B would win the lexicographic tiebreak;
+	// with weighting, A must win 3-2.
+	resolver.delegatorIDs = []string{"citizen-delegator-1", "citizen-delegator-2"}
+	castApprovalBallot(t, svc, session.ID, secrets["citizen-delegate"], optA.ID, now)
+	resolver.delegatorIDs = nil
+	castApprovalBallot(t, svc, session.ID, secrets["citizen-direct-1"], optB.ID, now)
+	castApprovalBallot(t, svc, session.ID, secrets["citizen-direct-2"], optB.ID, now)
+
+	closed, err := svc.CloseSession(session.ID, now.Add(2*time.Minute))
+	if err != nil {
+		t.Fatalf("CloseSession: %v", err)
+	}
+	if closed.Status != StatusCertified {
+		t.Fatalf("status = %q, want certified", closed.Status)
+	}
+
+	tally, err := svc.GetTally(session.ID)
+	if err != nil {
+		t.Fatalf("GetTally: %v", err)
+	}
+	if tally.WinnerOptionID == nil || *tally.WinnerOptionID != optA.ID {
+		t.Fatalf("winner = %v, want %v (A should win 3-2 once the delegated vote is weighted)", tally.WinnerOptionID, optA.ID)
+	}
+	if tally.Counts[optA.ID] != 3 {
+		t.Fatalf("counts[A] = %v, want 3 (one delegate ballot replayed at weight 3)", tally.Counts[optA.ID])
+	}
+	if tally.Counts[optB.ID] != 2 {
+		t.Fatalf("counts[B] = %v, want 2 (two direct ballots at weight 1 each)", tally.Counts[optB.ID])
+	}
+	if tally.TotalBallots != 3 {
+		t.Fatalf("TotalBallots = %d, want 3 actual ballots cast (weighting must not inflate this field)", tally.TotalBallots)
 	}
 }
 

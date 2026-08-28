@@ -45,7 +45,19 @@ tallied. Tally algorithms for all four methods (`ranked_choice` via
 Instant-Runoff, `approval`, `preference_score`, `comparative` via
 Condorcet/Copeland) live in `tally.go`.
 
-Two integration seams that depend on services not yet built
-(delegation-service's DP-041 chain resolution, audit-service's
-certification emission) are modeled as small injectable interfaces with
-no-op defaults in `service.go`.
+Two integration seams -- delegation-service's DP-041 chain resolution
+(`DelegationResolver`) and audit-service's certification emission
+(`AuditEmitter`) -- are modeled as small injectable interfaces in
+`service.go`, defaulting to no-ops. `remote.go` provides real HTTP-calling
+implementations (`httpDelegationResolver`, `httpAuditEmitter`); `main.go`
+wires them in when `DELEGATION_SERVICE_URL` / `AUDIT_SERVICE_URL` are set,
+falling back to the no-op default when unset so the service still runs
+standalone with zero configuration.
+
+`CastBallot` resolves delegators synchronously right after the ballot
+commits (fire-and-forget: a resolver failure never undoes the ballot) and
+sets the ballot's `Weight` to `1 + len(delegators)`. `CloseSession` feeds
+each ballot's plaintext choice into the tally once per unit of weight --
+every method in `tally.go` is a linear aggregate over the ballot multiset,
+so this is mathematically equivalent to a first-class weighted count
+without needing separate weighted variants of each algorithm.

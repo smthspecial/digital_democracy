@@ -7,18 +7,19 @@ import "time"
 type ActionType string
 
 const (
-	ActionProposalCreated ActionType = "proposal_created"
-	ActionVoteCertified   ActionType = "vote_certified"
-	ActionSystemUpdate    ActionType = "system_update"
-	ActionRuleChange      ActionType = "rule_change"
-	ActionAdminAction     ActionType = "admin_action"
-	ActionIdentityEvent   ActionType = "identity_event"
+	ActionProposalCreated       ActionType = "proposal_created"
+	ActionProposalStatusChanged ActionType = "proposal_status_changed"
+	ActionVoteCertified         ActionType = "vote_certified"
+	ActionSystemUpdate          ActionType = "system_update"
+	ActionRuleChange            ActionType = "rule_change"
+	ActionAdminAction           ActionType = "admin_action"
+	ActionIdentityEvent         ActionType = "identity_event"
 )
 
 func (a ActionType) Valid() bool {
 	switch a {
-	case ActionProposalCreated, ActionVoteCertified, ActionSystemUpdate,
-		ActionRuleChange, ActionAdminAction, ActionIdentityEvent:
+	case ActionProposalCreated, ActionProposalStatusChanged, ActionVoteCertified,
+		ActionSystemUpdate, ActionRuleChange, ActionAdminAction, ActionIdentityEvent:
 		return true
 	default:
 		return false

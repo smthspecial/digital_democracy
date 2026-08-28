@@ -19,3 +19,42 @@ export interface NotificationEmitter {
 export const noopNotificationEmitter: NotificationEmitter = {
   notifyExpired: () => {},
 };
+
+// ReputationEmitter models DP-038 (reputation-service ingest). Two events
+// here map cleanly onto reputation-service's factor types (FR-027):
+// proactively declaring a conflict of interest is exactly the "disclosure"
+// positive factor, and an upheld challenge is exactly the kind of
+// integrity violation the negative factors (misinformation,
+// undisclosed_conflict, manipulation, fraud) exist for -- see
+// declareConflict/resolveChallenge in services/conflicts.ts and
+// services/challenges.ts. Fire-and-forget, matching every other emitter in
+// this codebase: a downed reputation-service must not block the action
+// that triggered it.
+export interface ReputationEmitter {
+  emit(citizenId: string, factorType: string, delta: number, sourceRef: string): void;
+}
+
+export const noopReputationEmitter: ReputationEmitter = {
+  emit: () => {},
+};
+
+// createHttpReputationEmitter calls reputation-service's real
+// POST /reputation/records (SRV-014).
+export function createHttpReputationEmitter(baseUrl: string): ReputationEmitter {
+  return {
+    emit(citizenId, factorType, delta, sourceRef) {
+      fetch(`${baseUrl}/reputation/records`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          citizen_id: citizenId,
+          factor_type: factorType,
+          delta,
+          source_ref: sourceRef,
+        }),
+      }).catch(() => {
+        // Intentionally swallowed -- see contract note above.
+      });
+    },
+  };
+}

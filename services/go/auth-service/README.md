@@ -44,8 +44,17 @@ with a mandatory liveness flag, AES-256-GCM encryption at rest for secrets/
 embeddings, and sha256-hashed access/refresh tokens (plaintext is never
 persisted).
 
-There is no live identity-service, KMS, or audit-service integration yet —
-each is modeled as a small injectable seam (see comments at `AuditEmitter` in
-`service.go` and the encryption-key comment in `crypto.go`), or accepted as
-explicit, caller-trusted request fields (e.g. `citizen_status`,
-`credential_valid` on `/auth/login`) documented in `handlers.go`.
+`POST /auth/login` resolves `citizen_status` itself via `IdentityChecker`
+(`service.go`) rather than trusting a caller-supplied value — `remote.go`
+provides the real HTTP-calling implementation (`GET
+/identity/citizens/:id`), wired in by `main.go` when `IDENTITY_SERVICE_URL`
+is set. The default, unconfigured `IdentityChecker` fails **closed**: an
+unresolved status denies login rather than treating every citizen as
+active, so standing up this service with zero configuration cannot log
+anyone in. `credential_valid` has no identity-service equivalent to look
+up (no credential store exists anywhere in this codebase) and remains an
+explicit, caller-trusted request field.
+
+There is no live KMS or audit-service integration yet for the rest of this
+service — `AuditEmitter` (`service.go`) and the encryption-key handling
+(`crypto.go`) are still no-op/local-only seams.

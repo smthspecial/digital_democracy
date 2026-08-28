@@ -92,6 +92,11 @@ type Ballot struct {
 	Nonce            []byte    `json:"-"`
 	VerificationCode string    `json:"verification_code"`
 	CastAt           time.Time `json:"cast_at"`
+	// Weight is 1 plus the number of citizens whose active delegation
+	// (DP-041) resolved to this ballot's caster at cast time -- see
+	// DelegationResolver. CloseSession counts this ballot's choice Weight
+	// times in the tally, not just once.
+	Weight int `json:"-"`
 }
 
 // TallyResult is the outcome computed and stored by CloseSession.

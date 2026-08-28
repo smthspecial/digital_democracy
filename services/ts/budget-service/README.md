@@ -21,10 +21,13 @@ pnpm --filter @dd/budget-service test   # vitest
   averages each voted-on category's percentage across citizens and writes
   `allocated_amount = total_pool * avgPercentage / 100`. `total_pool` is an explicit
   request field since this service's schema has no separate total-budget table.
-- `POST /budget/ledger` (DP-019) -- append-only public ledger entry (inflow/outflow).
-  No update or delete route exists for ledger entries, ever; corrections are new
-  compensating entries.
-- `GET /budget/ledger` -- public ledger listing, optional `?category_id=` filter.
+- `POST /budget/ledger` (DP-019) -- append-only public ledger entry (inflow/outflow),
+  optionally tagged with a `project_id` (TBL-028) linking it to a project-service
+  project -- project-service's `LedgerRecorder` seam calls this on every recorded
+  spend, so a project's outflows are traceable in the public ledger too, not just
+  in project-service's own record. No update or delete route exists for ledger
+  entries, ever; corrections are new compensating entries.
+- `GET /budget/ledger` -- public ledger listing, optional `?category_id=`/`?project_id=` filters.
 - `POST /budget/reconcile` (DP-055) -- sums outflow ledger entries per category
   against `allocated_amount` and returns the discrepancies; an injected
   `AlertEmitter` (no-op by default) is called once per category with a non-zero

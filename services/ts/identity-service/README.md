@@ -27,9 +27,16 @@ Health contract (`/healthz`, `/readyz`) plus the civic identity lifecycle
   citizen.
 - `POST /identity/citizens/:id/suspend`, `POST /identity/citizens/:id/revoke`
   -- both gated by an injectable `ApprovalGate` modeling the DP-023 -> DP-035
-  multi-approval workflow (`403` without approval); revoke covers only this
-  service's boundary of DP-042 (status flip + audit emit), not the
-  cross-service cascade.
+  multi-approval workflow (`403` without approval), and both terminate the
+  citizen's active sessions via an injectable `SessionRevoker` (DP-042's
+  cascade into auth-service's `revoke_all_sessions`) so a suspension or
+  revocation takes effect immediately rather than only once the session's
+  own TTL lapses. `SessionRevoker` has a real HTTP-calling implementation
+  (`createHttpSessionRevoker`, calling `POST
+  /auth/internal/revoke-all/:citizenId`), wired in by `index.ts` whenever
+  `AUTH_SERVICE_URL` is set, falling back to a no-op otherwise. The rest of
+  DP-042's cascade (delegations, assignments, tokens, governance roles) is
+  owned by other services and out of scope here.
 - `POST /identity/duplicates/scan` -- runs the DP-024/DP-056 duplicate
   detector (exact `legal_identity_hash` matches plus an injectable
   `DuplicateSignal` heuristic) across all citizens.

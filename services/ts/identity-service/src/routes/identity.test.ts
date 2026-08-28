@@ -213,6 +213,34 @@ describe.each([
     expect(res.statusCode).toBe(200);
     expect(res.json().status).toBe(expectedStatus);
   });
+
+  it(`revokes the citizen's active sessions on ${action} (DP-042 cascade)`, async () => {
+    const revoked: string[] = [];
+    const app = (currentApp = buildTestServer({
+      approvalGate: { hasRequiredApprovals: () => true },
+      sessionRevoker: { revokeAllSessions: (citizenId) => revoked.push(citizenId) },
+    }));
+    const created = await registerCitizen(app);
+    const id = created.json().id as string;
+
+    const res = await app.inject({ method: "POST", url: `/identity/citizens/${id}/${action}` });
+    expect(res.statusCode).toBe(200);
+    expect(revoked).toEqual([id]);
+  });
+
+  it(`does not revoke sessions when ${action} is blocked by missing approvals`, async () => {
+    const revoked: string[] = [];
+    const app = (currentApp = buildTestServer({
+      approvalGate: { hasRequiredApprovals: () => false },
+      sessionRevoker: { revokeAllSessions: (citizenId) => revoked.push(citizenId) },
+    }));
+    const created = await registerCitizen(app);
+    const id = created.json().id as string;
+
+    const res = await app.inject({ method: "POST", url: `/identity/citizens/${id}/${action}` });
+    expect(res.statusCode).toBe(403);
+    expect(revoked).toEqual([]);
+  });
 });
 
 describe("POST /identity/duplicates/scan", () => {

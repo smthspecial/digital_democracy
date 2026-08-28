@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { Store } from "../store.js";
 import { declareConflict } from "../services/conflicts.js";
 import { serializeConflict } from "../serializers.js";
-import type { ExclusionEnforcer } from "../integrations.js";
+import type { ExclusionEnforcer, ReputationEmitter } from "../integrations.js";
 
 const declareSchema = {
   body: {
@@ -21,12 +21,13 @@ export function registerConflictRoutes(
   app: FastifyInstance,
   store: Store,
   exclusionEnforcer: ExclusionEnforcer,
+  reputationEmitter: ReputationEmitter,
 ) {
   app.post<{ Body: { citizen_id: string; domain_id: string; description: string } }>(
     "/competency/conflicts",
     { schema: declareSchema },
     async (request, reply) => {
-      const coi = declareConflict(store, exclusionEnforcer, {
+      const coi = declareConflict(store, exclusionEnforcer, reputationEmitter, {
         citizenId: request.body.citizen_id,
         domainId: request.body.domain_id,
         description: request.body.description,

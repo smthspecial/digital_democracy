@@ -1,0 +1,176 @@
+---
+id: ARCH-020
+type: arch
+title: "Constitutional layer: protected rights & constitutional review"
+status: draft
+linkedIds: ADR-010,ADR-019,EPIC-011,FR-034,FR-058,FR-059,DP-034,DP-036
+created: 2026-08-27
+---
+
+## Overview
+
+This flow covers the constitutional layer end to end: defining protected rights outside ordinary voting (FR-058), running DP-034's constitutional review at the proposal-service `development`→`voting` gate, the elevated-threshold path a constitutional matter's vote session takes through voting-service (FR-059), and the `constitutional_review` stage (7th of 8) in FR-034's deadlock resolution framework as the last checkpoint before `final_decision` resolves a case regardless of how it entered. `audit-service` (Go, `:5003`) is fully real today — `POST /audit/proposals/{id}/constitutional-review` genuinely executes DP-034 against `constitutional_right` rows and writes hash-chained `constitutional_review` + `audit_log` rows. `proposal-service` (TS, `:4004`) genuinely enforces the gate and the 8-stage deadlock machine. But every cross-service seam that would connect them is still its no-op default: `ConstitutionalReviewer.review()` always returns `{blocked:false}` (`integrations.ts:9-11`), `VoteSessionRequester.requestSession()` and `AuditEmitter.emit()` are no-ops, and the deadlock framework's `constitutional_review` stage makes **no seam call to audit-service at all** — it is purely a human-advanced label today. For these tests to be meaningful, this doc depends on new production code that does not exist yet: an `HttpConstitutionalReviewer` that POSTs to audit-service's review endpoint, an `HttpVoteSessionRequester` that POSTs to voting-service's `/voting/sessions`, and an `HttpAuditEmitter` that POSTs to `/audit/log`. It also depends on a governance-role-service endpoint that does not exist at all yet for checking `review_body`-role assignment, which the deadlock framework's `AssignmentChecker` seam would call — that part is marked `blocked on` throughout per ARCH-009 §2.
+
+---
+
+## 1. Services & seams in scope
+
+| Service | Role in this flow | Real HTTP call today or seam-stub today |
+|---|---|---|
+| `audit-service` (SRV-012, Go, `:5003`, `/audit`) | Owns `constitutional_right` (TBL-035) and `constitutional_review` (TBL-036); executes DP-034 via `POST /audit/proposals/{id}/constitutional-review`; owns the hash-chained `audit_log` (TBL-034, DP-036) | Real, fully implemented HTTP surface (`router.go`, `service.go`, `store.go`). Nothing in the repo calls it yet — it has no caller. |
+| `proposal-service` (SRV-004, TS, `:4004`, `/proposals`) | Gates `development`→`voting` on constitutional review (`services/proposals.ts` `advance()`); hosts the FR-034 8-stage deadlock machine including `constitutional_review` (stage 7) and `final_decision` (stage 8) | `ConstitutionalReviewer.review(proposalId)` — seam interface takes **only** `proposalId`, no change-summary text, yet audit-service's endpoint requires a `change_summary` body field to run its keyword-match assessor. A real `HttpConstitutionalReviewer` must derive that text (e.g. from the proposal's `title`+`description`) since the seam interface doesn't plumb one through — this doc's scenarios assume that mapping. Currently `defaultConstitutionalReviewer` (no-op, always `{blocked:false}`). `VoteSessionRequester.requestSession()` and `AuditEmitter.emit()` are also no-ops (`integrations.ts`). |
+| `governance-role-service` (SRV-011, TS, `:4009`, `/governance-roles`) | Defines the `review_body` role type (`domain/types.ts`) intended to staff constitutional review | No endpoint exists to answer "is citizen X an assigned `review_body` reviewer for proposal Y." `AssignmentChecker.isAssignedReviewer()` in proposal-service is a no-op default (`always true`) with no real target to call — **blocked on: a review-body-assignment endpoint that doesn't exist in governance-role-service yet.** |
+| `voting-service` (SRV-008, Go, `:5001`, `/voting`) | Enforces FR-059's elevated threshold: `POST /voting/sessions` accepts `threshold_rule`; at `POST /voting/sessions/{id}/close`, `threshold_rule=supermajority` rejects the winner unless `WinnerShare >= 2/3` (`service.go:241`) | Real HTTP surface exists for session lifecycle. Does **not** call audit-service to verify DP-034 clearance before scheduling, despite SRV-012's key rules claiming session creation is gated on it — grep of the Go source finds no `constitutional` reference anywhere in `voting-service`. Also: nothing in the current data model marks a proposal as "a constitutional matter," so no service today can *automatically* pick `threshold_rule=supermajority` because a right was implicated — a caller must choose it explicitly. Both gaps are documented as cross-service edge cases below. |
+
+---
+
+## 2. Preconditions & fixtures
+
+All fixtures are built through each service's real public API, per ARCH-009 §2 — nothing reaches into another service's store directly.
+
+- **A protected right**: `POST /audit/rights` on audit-service with `{name, description, protected: true}` (e.g. `name: "freedom of speech"`). An unprotected right (`protected: false`) is also needed for EC scenarios distinguishing protected vs. non-protected rights.
+- **A proposal at the `development`→`voting` gate, fully eligible**: on proposal-service, `POST /proposals` (draft) → `POST /proposals/:id/scope-assignment` (sets `scope_jurisdiction_id` + `support_threshold`, FR-017) → `POST /proposals/:id/support` from enough distinct `citizen_id`s to clear `support_threshold` → `POST /proposals/:id/advance` (`gathering_support`→`development`) → `PUT /proposals/:id/budget` with all four required fields (`cost`, `funding_source`, `maintenance_cost`, `expected_benefits`, FR-037) → proposal is now eligible for the `development`→`voting` advance that triggers DP-034.
+- **A rights-violating proposal**: same sequence, but `title`/`description` chosen so the derived `change_summary` case-insensitively contains a protected right's `name` (mirrors audit-service's default `keywordMatchAssessor`).
+- **A competing, non-violating proposal on the same problem**: a second `POST /proposals` with the same `problem_id` (FR-018 explicitly allows multiple proposals per problem) whose title/description does not reference any protected right's name, taken through the same sequence.
+- **A deadlocked proposal at the `constitutional_review` stage**: `POST /proposals/:id/deadlock/enter {reason}` from `development` or `voting` status (`DEADLOCK_ELIGIBLE_STATUSES`) sets stage `constraint_analysis`; six subsequent `POST /proposals/:id/deadlock/advance {reviewer_id, notes}` calls walk the stage through `alternative_generation → resource_partitioning → compensation_assessment → citizen_assembly_review → escalation_review → constitutional_review`.
+- **A scheduled constitutional-matter vote session**: on voting-service, `POST /voting/sessions {proposal_id, jurisdiction_id, method, threshold_rule: "supermajority", min_participation, cooling_off_until, opens_at, closes_at}`, then `POST /voting/sessions/:id/options` for each option, `POST /voting/sessions/:id/open`.
+
+---
+
+## 3. Happy path scenarios
+
+**HP-1 — Non-conflicting proposal clears DP-034 and advances to `voting`.**
+1. audit-service: `POST /audit/rights` creates a `protected=true` right ("freedom of speech").
+2. proposal-service: build a proposal to `development` (all budget/scope fields set) whose title/description does not mention the right.
+3. proposal-service: `POST /proposals/:id/advance` → `HttpConstitutionalReviewer.review(id)` → real HTTP `POST /audit/proposals/:id/constitutional-review` on audit-service with a derived `change_summary` → audit-service runs DP-034, writes one `constitutional_review` row (`result=cleared`) and one `audit_log` entry (DP-036) per protected right, returns `{blocked:false}`.
+4. proposal-service transitions `development`→`voting` (200), `VoteSessionRequester.requestSession(id)` fires.
+5. Assert: proposal `status=voting`; audit-service `GET /audit/log?action_type=rule_change` shows the review's log entry; `GET /audit/log/verify` reports `valid:true`.
+Expected end state: proposal in `voting`; one `cleared` `constitutional_review` row on audit-service per protected right.
+Level: integration (proposal-service + audit-service).
+FR/DP: FR-058, DP-034, DP-036.
+
+**HP-2 — Rights-violating proposal is blocked; a competing, compliant proposal on the same problem clears instead.**
+1. Build proposal A to `development` whose title/description matches the protected right's name.
+2. `POST /proposals/A/advance` → DP-034 returns `blocked:true` (at least one `constitutional_review` row `result=blocked`) → proposal-service throws 409 "blocked by constitutional review"; proposal A stays `development`; `VoteSessionRequester` is never called.
+3. Build proposal B on the same `problem_id` (FR-018) to `development`, with title/description that does not reference the right.
+4. `POST /proposals/B/advance` clears DP-034 and transitions to `voting`.
+Expected end state: proposal A remains `development` with a `blocked` review on record; proposal B reaches `voting`. (There is no proposal-edit endpoint in the current code, so "becoming compliant" is realized through FR-018's competing-proposal mechanism rather than in-place revision of A.)
+Level: integration (proposal-service + audit-service).
+FR/DP: FR-058, FR-018, DP-034.
+
+**HP-3 — A constitutional-matter proposal's vote session enforces the FR-059 supermajority threshold.**
+1. Proposal clears DP-034 as in HP-1 and reaches `voting`.
+2. Caller schedules the vote session on voting-service with `threshold_rule="supermajority"` (the policy decision that this is a constitutional matter is made by the caller — no service today derives it automatically from the DP-034 outcome, see §1).
+3. Session opens, ballots are cast such that the leading option's approval share is exactly `2/3`.
+4. `POST /voting/sessions/:id/close` → `service.go`'s `ThresholdRule == ThresholdSupermajority && outcome.WinnerShare < 2/3` check does **not** trigger (exactly-at-threshold passes) → winner is certified, `vote_session.certified` is emitted to audit-service.
+Expected end state: session `status=certified`, `WinnerOptionID` set, tally's `CertifiedAt` populated.
+Level: e2e (proposal-service → audit-service → voting-service), blocked on `HttpVoteSessionRequester` not existing yet — production code gap noted in Overview.
+FR/DP: FR-059, DP-034, DP-026, DP-027.
+
+**HP-4 — The deadlock framework's `constitutional_review` stage is the last checkpoint before `final_decision` resolves the case, regardless of entry reason.**
+1. Enter deadlock on a proposal for a reason unrelated to rights (`reason: "unresolved resource partitioning dispute"`) — demonstrating `final_decision` resolves *any* deadlock case, not only rights-related ones.
+2. Six `deadlock/advance` calls walk the stage to `constitutional_review` (stage 7).
+3. A seventh `deadlock/advance` call moves the stage to `final_decision` (stage 8) — this transition requires no `outcome` (only the terminal step does).
+4. An eighth `deadlock/advance` call supplies `outcome: "approved"` → `deadlock.active=false`, `deadlock.resolvedAt` set, proposal `status="approved"` even though `resolveProposal`'s normal rule only allows `approved` from `voting` — the deadlock escape hatch is exempt from that rule by design.
+Expected end state: `deadlock.active=false`, `history` has 8 entries, proposal `status=approved`.
+Level: integration (proposal-service's status-change and deadlock-entry events emitted to real audit-service via `HttpAuditEmitter`, once implemented) — the `AssignmentChecker` leg of every `deadlock/advance` call in this scenario stays on the no-op default; verifying a real assigned `review_body` reviewer is **blocked on: governance-role-service exposing no review-body-assignment endpoint.**
+FR/DP: FR-034, DP-036.
+
+---
+
+## 4. Edge cases
+
+### Input validation
+- **EC-1**: `POST /audit/rights` with empty `name` → `400` (`store.go` `CreateRight` rejects `name==""`). FR-058.
+- **EC-2**: `POST /audit/log` (used by `HttpAuditEmitter`/`HttpConstitutionalReviewer`'s DP-036 emission) missing `actor_ref` → `400`. DP-036.
+- **EC-3**: Malformed JSON body to any audit-service POST endpoint → `400 "malformed JSON body"`. DP-034, DP-036.
+- **EC-4**: `POST /audit/log` with an invalid `action_type` (not one of the six enum values) → `400 "invalid action_type"`. TBL-034.
+- **EC-5**: `POST /proposals/:id/advance` from `development` with one or more of `cost`/`funding_source`/`maintenance_cost`/`expected_benefits`/`scope_jurisdiction_id` still null → `409 "missing required fields: ..."`, and this check runs *before* the constitutional review call — DP-034 is never invoked, audit-service sees no request. FR-008, FR-037.
+- **EC-6**: `advanceDeadlock`'s terminal step (`final_decision`→resolved) called without an `outcome` → `400` validation error ("an outcome is required to conclude the deadlock resolution track"). FR-034.
+
+### State-machine violations
+- **EC-7**: `POST /proposals/:id/deadlock/enter` from a status outside `{development, voting}` (e.g. `draft`, `gathering_support`, `approved`) → `409`. FR-034.
+- **EC-8**: `POST /proposals/:id/deadlock/enter` called twice on the same proposal → `409 "already in the deadlock resolution track"`. FR-034.
+- **EC-9**: `POST /proposals/:id/deadlock/advance` called on a proposal that never entered deadlock → `409 "not currently in the deadlock resolution track"`. FR-034.
+- **EC-10**: While `deadlock.active=true` (including while parked at the `constitutional_review` stage), `POST /proposals/:id/advance` or `/resolve` → `409` — the normal lifecycle is locked out until the deadlock track concludes via `final_decision`. FR-034.
+- **EC-11**: A proposal with a pending, unresolved scope challenge (`scopeChallengePending=true`) attempting `development`→`voting` → `409 "a scope challenge is pending"`, checked before DP-034 runs — constitutional review is never reached. FR-034 (deadlock is a separate track from scope challenges), DP-020.
+
+### Authorization / eligibility
+- **EC-12**: `POST /proposals/:id/deadlock/advance` at the `constitutional_review` stage with a `reviewer_id` the `AssignmentChecker` seam does not recognize as assigned → `403`. Currently exercised only against the no-op default (`isAssignedReviewer` always `true`), so this scenario cannot yet be made to fail against a real reviewer roster — **blocked on: governance-role-service's `review_body` role has no assignment-check endpoint to call.** FR-034, SRV-011.
+- **EC-13**: Independent audit bodies reading `GET /audit/log` or `GET /audit/rights` concurrently while a review is being written — audit-service supports multiple concurrent readers by design (FR-066), no write access is exposed to readers. FR-066.
+
+### Threshold & boundary conditions
+- **EC-14**: `threshold_rule=supermajority` at session close with `WinnerShare` exactly `2/3` → winner certified (boundary passes, `< 2/3` is the reject condition, not `<=`). FR-059.
+- **EC-15**: `threshold_rule=supermajority` with `WinnerShare` one increment under `2/3` → winner set to `nil`, no option certified even though a plurality leader exists. FR-059.
+- **EC-16**: `threshold_rule=supermajority` with no ballots cast (`WinnerOptionID` nil from `computeMethodOutcome`) → winner stays `nil` regardless of share math (zero-population boundary). FR-059.
+- **EC-17**: Zero `constitutional_right` rows exist at all (empty rights table) → DP-034 returns `blocked:false` with zero `constitutional_review` rows and zero audit-log entries — the proposal trivially clears because there is nothing protected to violate. FR-058, DP-034.
+- **EC-18**: Every existing right has `protected=false` → same as EC-17: `ProtectedRights()` filters them all out, DP-034 writes nothing and returns `blocked:false`. FR-058.
+- **EC-19**: `min_participation` quorum boundary at session close (`participationRate` exactly equal to `min_participation`) → `quorumMet=true`, certifies; one ballot under quorum → `quorumMet=false`, status becomes `closed` (failed quorum), not `certified`, per SRV-008's key rules. FR-059, DP-027.
+
+### Concurrency & idempotency
+- **EC-20**: Two concurrent `POST /proposals/:id/advance` calls on the same `development`-status proposal — `ProposalStore` is a plain `Map` with no per-record lock or optimistic version check, and `ConstitutionalReviewer.review()` is stateless (re-evaluates every call rather than persisting a "already cleared" flag). Both concurrent calls can observe `status="development"`, both pass the gate, and both call `VoteSessionRequester.requestSession(id)` — a real `HttpVoteSessionRequester` could request two vote sessions for one proposal. Documented as a genuine gap in the current implementation, not an invented one. FR-008, DP-029, DP-034.
+- **EC-21**: `HttpConstitutionalReviewer`/`HttpAuditEmitter` retrying a call after a timeout, reusing the same `idempotency_key` on `POST /audit/log` → audit-service returns the original entry's id both times and stores exactly one row (`TestHandlersAppendIdempotencyDedup` behavior). DP-036, ADR-005.
+- **EC-22**: An out-of-order `audit_log` append (an entry whose claimed `prev_hash` isn't the current chain tip) is buffered in `pending` rather than rejected or silently linked, and is auto-flushed once its predecessor commits — relevant if `HttpAuditEmitter` calls from multiple concurrent proposal-service requests race each other into audit-service. DP-036.
+
+### Cross-service failure & degradation
+- **EC-23**: audit-service is down or times out when `HttpConstitutionalReviewer` calls it during `development`→`voting` — expected behavior (once the HTTP seam exists) is to fail closed: the proposal must not advance to `voting` on an inconclusive review, matching FR-058's guarantee that rights-violating changes cannot slip through. Currently undefined in code since the seam is a no-op; this scenario is `blocked on: HttpConstitutionalReviewer implementation deciding its own failure-mode contract`. FR-058, ARCH-009 §2.
+- **EC-24**: voting-service is never actually told a proposal is constitutional — no field on `ProposalRecord`/TBL-008 marks "this proposal touched a protected right," so nothing prevents a caller from scheduling a constitutional-matter proposal's session with `threshold_rule=simple_majority` instead of `supermajority`. This is a real, currently-unenforced gap between FR-058 (review can block) and FR-059 (elevated threshold must apply) — the two requirements are not linked by any code path today. FR-059, SRV-008.
+- **EC-25**: The deadlock framework's `constitutional_review` stage makes no call to audit-service at all — a case can sit at that stage and be advanced by any assignment-checked reviewer without audit-service's `constitutional_right`/`constitutional_review` data ever being consulted. `blocked on: no seam connects the deadlock stage to audit-service.` FR-034, DP-034.
+
+### Data integrity & audit
+- **EC-26**: Every `constitutional_review` row DP-034 writes has a matching `audit_log` entry (`action_type=rule_change`) — verified by counting `reviews.length == log entries` for a given review call, as the Go unit tests already assert. DP-034, DP-036.
+- **EC-27**: `GET /audit/log/verify` after a tampered field (e.g. `actor_ref` mutated on a stored entry) reports `valid:false` with `broken_at` set to the tampered entry's id — the hash chain (`prev_hash`/row-hash/`signature`) detects it deterministically. ADR-005, FR-060.
+- **EC-28**: proposal-service's `advance()` never emits `proposal.status_changed` to a real audit-service today (`defaultAuditEmitter` no-op) — so today's constitutional-review-triggering transition produces no proposal-service-side audit trail at all, only audit-service's own DP-034-internal log entries. This is a real gap: SRV-004's key rule "all status transitions are emitted to audit-service" is not implemented. `blocked on: HttpAuditEmitter`. DP-036.
+- **EC-29**: Ballot content is never written to the audit log even for a constitutional-matter (supermajority) session — `NFR-001`/SRV-012's rule holds regardless of `threshold_rule`; only session-level events (`vote_session.certified`) are recorded. NFR-001, DP-036.
+
+---
+
+## 5. Traceability
+
+| Scenario | FR/DP/NFR ids | Level | Automated test id |
+|---|---|---|---|
+| HP-1 | FR-058, DP-034, DP-036 | integration | TBD |
+| HP-2 | FR-058, FR-018, DP-034 | integration | TBD |
+| HP-3 | FR-059, DP-034, DP-026, DP-027 | e2e | TBD |
+| HP-4 | FR-034, DP-036 | integration | TBD |
+| EC-1 | FR-058 | integration | TBD |
+| EC-2 | DP-036 | integration | TBD |
+| EC-3 | DP-034, DP-036 | integration | TBD |
+| EC-4 | — (TBL-034) | integration | TBD |
+| EC-5 | FR-008, FR-037 | integration | TBD |
+| EC-6 | FR-034 | integration | TBD |
+| EC-7 | FR-034 | integration | TBD |
+| EC-8 | FR-034 | integration | TBD |
+| EC-9 | FR-034 | integration | TBD |
+| EC-10 | FR-034 | integration | TBD |
+| EC-11 | FR-034, DP-020 | integration | TBD |
+| EC-12 | FR-034 | integration | TBD (blocked on: SRV-011 endpoint) |
+| EC-13 | FR-066 | integration | TBD |
+| EC-14 | FR-059 | integration | TBD |
+| EC-15 | FR-059 | integration | TBD |
+| EC-16 | FR-059 | integration | TBD |
+| EC-17 | FR-058, DP-034 | integration | TBD |
+| EC-18 | FR-058 | integration | TBD |
+| EC-19 | FR-059, DP-027 | integration | TBD |
+| EC-20 | FR-008, DP-029, DP-034 | integration | TBD |
+| EC-21 | DP-036 | integration | TBD |
+| EC-22 | DP-036 | integration | TBD |
+| EC-23 | FR-058 | integration | TBD (blocked on: HttpConstitutionalReviewer failure contract) |
+| EC-24 | FR-059 | e2e | TBD (blocked on: proposal↔session constitutional linkage) |
+| EC-25 | FR-034, DP-034 | integration | TBD (blocked on: deadlock↔audit-service seam) |
+| EC-26 | DP-034, DP-036 | integration | TBD |
+| EC-27 | ADR-005, FR-060 | integration | TBD |
+| EC-28 | DP-036 | integration | TBD (blocked on: HttpAuditEmitter) |
+| EC-29 | NFR-001, DP-036 | integration | TBD |
+
+---
+
+## Status update (2026-08-27)
+
+Three of this doc's flagged gaps are resolved:
+
+1. **`ConstitutionalReviewer` now has a real HTTP implementation** (`createHttpConstitutionalReviewer` in `integrations.ts`), calling audit-service's `POST /audit/proposals/:id/constitutional-review`, wired in by default whenever `AUDIT_SERVICE_URL` is configured. EC-23 is no longer `blocked`.
+2. **The missing change-summary is fixed.** `review()` now takes `(proposalId, changeSummary)`, and `advance()` passes the proposal's actual title+description, so audit-service's keyword-match assessor has real text to check against protected right names instead of nothing (finding #1 in this doc's original ground-truthing). `advance()` is now `async` to support the real network call, and fails **closed**: an unreachable or erroring audit-service rejects the promise rather than silently letting the proposal through.
+3. **`AuditEmitter` is real** (`createHttpAuditEmitter`, same file), resolving EC-28.
+
+Still open: nothing in the data model marks a proposal as "constitutional" (finding #3), so FR-058 and FR-059 remain unlinked by any code path — EC-24 stays blocked. The deadlock framework's `constitutional_review` stage (finding #2) still makes no call to audit-service; it remains a human-advanced label only — EC-25 stays blocked.

@@ -47,7 +47,7 @@ describe("GET /jurisdiction/eligibility", () => {
   }
 
   it("is eligible when membership and sufficient residency both hold at the scope jurisdiction", async () => {
-    const city = await createJurisdiction(null, "City-eligible", "city");
+    const city = await createJurisdiction(null, "City-eligible", "municipality");
     await addMembership(city.id);
     await addResidency(city.id, daysAgo(60));
 
@@ -57,7 +57,7 @@ describe("GET /jurisdiction/eligibility", () => {
   });
 
   it("is ineligible with a reason when there is no membership at all", async () => {
-    const city = await createJurisdiction(null, "City-no-membership", "city");
+    const city = await createJurisdiction(null, "City-no-membership", "municipality");
 
     const res = await checkEligibility(city.id, 30);
     expect(res.statusCode).toBe(200);
@@ -68,7 +68,7 @@ describe("GET /jurisdiction/eligibility", () => {
   });
 
   it("is ineligible with a reason when membership exists but there is no current residency", async () => {
-    const city = await createJurisdiction(null, "City-no-residency", "city");
+    const city = await createJurisdiction(null, "City-no-residency", "municipality");
     await addMembership(city.id);
 
     const res = await checkEligibility(city.id, 30);
@@ -80,7 +80,7 @@ describe("GET /jurisdiction/eligibility", () => {
   });
 
   it("is ineligible with a reason when residency is shorter than the minimum period", async () => {
-    const city = await createJurisdiction(null, "City-short-residency", "city");
+    const city = await createJurisdiction(null, "City-short-residency", "municipality");
     await addMembership(city.id);
     await addResidency(city.id, daysAgo(5));
 
@@ -93,7 +93,7 @@ describe("GET /jurisdiction/eligibility", () => {
   });
 
   it("defaults min_residency_days to 30 when the query param is omitted", async () => {
-    const city = await createJurisdiction(null, "City-default-min", "city");
+    const city = await createJurisdiction(null, "City-default-min", "municipality");
     await addMembership(city.id);
     await addResidency(city.id, daysAgo(10));
 
@@ -103,9 +103,9 @@ describe("GET /jurisdiction/eligibility", () => {
   });
 
   it("a membership and residency in a descendant jurisdiction satisfies an ancestor scope check", async () => {
-    const region = await createJurisdiction(null, "Region-desc", "region");
-    const city = await createJurisdiction(region.id, "City-desc", "city");
-    const neighborhood = await createJurisdiction(city.id, "Neighborhood-desc", "neighborhood");
+    const region = await createJurisdiction(null, "Region-desc", "regional");
+    const city = await createJurisdiction(region.id, "City-desc", "municipality");
+    const neighborhood = await createJurisdiction(city.id, "Neighborhood-desc", "street");
     await addMembership(neighborhood.id);
     await addResidency(neighborhood.id, daysAgo(60));
 
@@ -115,9 +115,9 @@ describe("GET /jurisdiction/eligibility", () => {
   });
 
   it("membership in one branch and residency in an unrelated branch does not satisfy eligibility", async () => {
-    const region = await createJurisdiction(null, "Region-mixed", "region");
-    const cityA = await createJurisdiction(region.id, "City-A", "city");
-    const cityB = await createJurisdiction(region.id, "City-B", "city");
+    const region = await createJurisdiction(null, "Region-mixed", "regional");
+    const cityA = await createJurisdiction(region.id, "City-A", "municipality");
+    const cityB = await createJurisdiction(region.id, "City-B", "municipality");
     await addMembership(cityA.id);
     await addResidency(cityB.id, daysAgo(60));
 

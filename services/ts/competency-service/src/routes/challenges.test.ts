@@ -1,6 +1,7 @@
-import { describe, expect, it, afterAll } from "vitest";
+import { describe, expect, it, afterAll, vi } from "vitest";
 import { buildServer } from "../server.js";
 import { createStore } from "../store.js";
+import type { ReputationEmitter } from "../integrations.js";
 
 async function createDomain(app: ReturnType<typeof buildServer>) {
   const res = await app.inject({
@@ -130,6 +131,67 @@ describe("competency challenge routes", () => {
       url: `/competency/citizens/citizen-expert-4/domains/${domainId}`,
     });
     expect(statusRes.json()).toEqual({ active: true });
+  });
+
+  it("upheld resolution credits a negative reputation delta mapped from the challenge reason (DP-038)", async () => {
+    const localStore = createStore();
+    const reputationEmitter: ReputationEmitter = { emit: vi.fn() };
+    const localApp = buildServer({ store: localStore, reputationEmitter });
+    const domainId = await createDomain(localApp);
+    const competencyId = await grantActiveCompetency(localApp, domainId, "citizen-expert-7");
+    const challengeRes = await localApp.inject({
+      method: "POST",
+      url: "/competency/challenges",
+      payload: {
+        competency_id: competencyId,
+        challenger_id: "citizen-challenger-7",
+        reason: "conflict",
+        evidence_ref: "https://evidence.example/doc-7",
+      },
+    });
+    const challengeId = challengeRes.json().id;
+
+    await localApp.inject({
+      method: "POST",
+      url: `/competency/challenges/${challengeId}/resolve`,
+      payload: { result: "upheld" },
+    });
+
+    expect(reputationEmitter.emit).toHaveBeenCalledWith(
+      "citizen-expert-7",
+      "undisclosed_conflict",
+      -20,
+      challengeId,
+    );
+    await localApp.close();
+  });
+
+  it("dismissed resolution does not credit any reputation delta", async () => {
+    const localStore = createStore();
+    const reputationEmitter: ReputationEmitter = { emit: vi.fn() };
+    const localApp = buildServer({ store: localStore, reputationEmitter });
+    const domainId = await createDomain(localApp);
+    const competencyId = await grantActiveCompetency(localApp, domainId, "citizen-expert-8");
+    const challengeRes = await localApp.inject({
+      method: "POST",
+      url: "/competency/challenges",
+      payload: {
+        competency_id: competencyId,
+        challenger_id: "citizen-challenger-8",
+        reason: "misconduct",
+        evidence_ref: "https://evidence.example/doc-8",
+      },
+    });
+    const challengeId = challengeRes.json().id;
+
+    await localApp.inject({
+      method: "POST",
+      url: `/competency/challenges/${challengeId}/resolve`,
+      payload: { result: "dismissed" },
+    });
+
+    expect(reputationEmitter.emit).not.toHaveBeenCalled();
+    await localApp.close();
   });
 
   it("404s submitting a challenge against an unknown competency", async () => {

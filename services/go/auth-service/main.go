@@ -1,7 +1,6 @@
 // Command auth-service is SRV-017 (.spec/technical/services/srv-017.md):
-// Owns session lifecycle, MFA factor management, and step-up authentication
-// used by every other service. Only the health contract is wired up so far
-// -- business handlers are added alongside their data processes as specified in .spec/technical/data-processes/.
+// Owns session lifecycle, MFA factor management, step-up authentication,
+// and anomaly detection used by every other service.
 package main
 
 import (
@@ -30,9 +29,14 @@ func main() {
 	}
 	svc := NewService(newStore(), enc, noopAuditEmitter{})
 
+	var identity IdentityChecker
+	if url := os.Getenv("IDENTITY_SERVICE_URL"); url != "" {
+		identity = newHTTPIdentityChecker(url)
+	}
+
 	srv := &http.Server{
 		Addr:         ":" + port,
-		Handler:      newRouter(logger, svc),
+		Handler:      newRouterWithDeps(logger, svc, identity),
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}

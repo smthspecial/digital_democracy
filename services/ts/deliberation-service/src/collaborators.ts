@@ -22,3 +22,14 @@ export const noopSynthesisTrigger: SynthesisTrigger = {
 };
 
 export const DEFAULT_SYNTHESIS_THRESHOLD = 5;
+
+// No ReputationEmitter seam is modeled here, unlike AuditEmitter and
+// SynthesisTrigger above: SRV-014 lists deliberation-service among
+// reputation-service's event sources for the "constructive" positive
+// factor, but nothing in this service's feature set scores an argument's
+// constructiveness -- posting one (DeliberationArgument) carries no
+// quality signal at all, only stance and evidence_ref. Wiring a seam here
+// would mean inventing a scoring heuristic with no specification behind
+// it, so this stays an acknowledged gap rather than a fabricated trigger
+// until a real "constructive" signal (e.g. a moderation or endorsement
+// feature) exists to drive it.

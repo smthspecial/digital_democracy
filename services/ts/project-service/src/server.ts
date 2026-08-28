@@ -2,7 +2,13 @@ import Fastify from "fastify";
 import { registerHealthRoutes } from "./routes/health.js";
 import { registerProjectRoutes } from "./routes/projects.js";
 import { createStore } from "./store.js";
-import { noopAuditEmitter, noopAssignmentRequester } from "./integrations.js";
+import {
+  noopAuditEmitter,
+  noopAssignmentRequester,
+  noopLedgerRecorder,
+  noopProposalAuthorLookup,
+  noopReputationEmitter,
+} from "./integrations.js";
 import { DomainError } from "./errors.js";
 import type { Deps } from "./deps.js";
 
@@ -11,6 +17,9 @@ export function buildServer(deps: Partial<Deps> = {}) {
     store: deps.store ?? createStore(),
     auditEmitter: deps.auditEmitter ?? noopAuditEmitter,
     assignmentRequester: deps.assignmentRequester ?? noopAssignmentRequester,
+    ledgerRecorder: deps.ledgerRecorder ?? noopLedgerRecorder,
+    proposalAuthorLookup: deps.proposalAuthorLookup ?? noopProposalAuthorLookup,
+    reputationEmitter: deps.reputationEmitter ?? noopReputationEmitter,
   };
 
   const app = Fastify({ logger: true });

@@ -1,23 +1,29 @@
 import { randomUUID } from "node:crypto";
 import {
+  DEADLOCK_STAGES,
   SUPPORT_THRESHOLD_RATIO,
   TERMINAL_STATUSES,
+  type DeadlockState,
   type ProposalRecord,
   type ProposalStatus,
 } from "../domain/types.js";
 import type { ProposalStore } from "../store.js";
 import type {
+  AssignmentChecker,
   AuditEmitter,
   ConstitutionalReviewer,
+  ScopeEscalationRequester,
   VoteSessionRequester,
 } from "../integrations.js";
-import { conflict, notFound } from "../errors.js";
+import { conflict, forbidden, notFound, validation } from "../errors.js";
 
 export interface ProposalServiceDeps {
   store: ProposalStore;
   constitutionalReviewer: ConstitutionalReviewer;
   voteSessionRequester: VoteSessionRequester;
   auditEmitter: AuditEmitter;
+  assignmentChecker: AssignmentChecker;
+  scopeEscalationRequester: ScopeEscalationRequester;
 }
 
 export interface CreateProposalInput {
@@ -51,10 +57,27 @@ export interface FileScopeChallengeInput {
 
 export type ResolveOutcome = "approved" | "rejected" | "archived";
 
+export interface EnterDeadlockInput {
+  reason: string;
+}
+
+export interface AdvanceDeadlockInput {
+  reviewerId: string;
+  notes: string;
+  outcome?: ResolveOutcome;
+}
+
 const CONSTRAINT_ADD_STATUSES: readonly ProposalStatus[] = [
   "draft",
   "gathering_support",
   "development",
+];
+
+// FR-034: only a blocked development or voting-stage proposal can enter the
+// deadlock resolution track.
+const DEADLOCK_ELIGIBLE_STATUSES: readonly ProposalStatus[] = [
+  "development",
+  "voting",
 ];
 
 export function createProposalService(deps: ProposalServiceDeps) {
@@ -100,6 +123,13 @@ export function createProposalService(deps: ProposalServiceDeps) {
       constraints: [],
       scopeChallenges: [],
       supporterIds: new Set(),
+      deadlock: {
+        active: false,
+        stage: null,
+        enteredAt: null,
+        resolvedAt: null,
+        history: [],
+      },
     };
     deps.store.save(proposal);
     deps.auditEmitter.emit("proposal.created", { proposalId: proposal.id });
@@ -153,7 +183,7 @@ export function createProposalService(deps: ProposalServiceDeps) {
     input: FileScopeChallengeInput,
   ): ProposalRecord {
     const proposal = getOrThrow(id);
-    proposal.scopeChallenges.push({
+    const challenge = {
       id: randomUUID(),
       proposalId: proposal.id,
       citizenId: input.citizenId,
@@ -161,8 +191,11 @@ export function createProposalService(deps: ProposalServiceDeps) {
       resolved: false,
       createdAt: new Date(),
       resolvedAt: null,
-    });
+    };
+    proposal.scopeChallenges.push(challenge);
     proposal.scopeChallengePending = true;
+    // DP-020: route the new dispute to an independent review body.
+    deps.scopeEscalationRequester.requestReviewBody(proposal.id, challenge.id);
     return proposal;
   }
 
@@ -209,8 +242,13 @@ export function createProposalService(deps: ProposalServiceDeps) {
     return missing;
   }
 
-  function advance(id: string): ProposalRecord {
+  async function advance(id: string): Promise<ProposalRecord> {
     const proposal = getOrThrow(id);
+    if (proposal.deadlock.active) {
+      throw conflict(
+        `proposal ${id} is in the deadlock resolution track and cannot advance normally`,
+      );
+    }
     const from = proposal.status;
 
     if (from === "draft") {
@@ -241,7 +279,10 @@ export function createProposalService(deps: ProposalServiceDeps) {
       if (proposal.scopeChallengePending) {
         throw conflict("a scope challenge is pending for this proposal");
       }
-      const review = deps.constitutionalReviewer.review(proposal.id);
+      const review = await deps.constitutionalReviewer.review(
+        proposal.id,
+        `${proposal.title}\n\n${proposal.description}`,
+      );
       if (review.blocked) {
         throw conflict("blocked by constitutional review");
       }
@@ -259,6 +300,11 @@ export function createProposalService(deps: ProposalServiceDeps) {
     outcome: ResolveOutcome,
   ): ProposalRecord {
     const proposal = getOrThrow(id);
+    if (proposal.deadlock.active) {
+      throw conflict(
+        `proposal ${id} is in the deadlock resolution track and cannot resolve normally`,
+      );
+    }
     const from = proposal.status;
 
     if (outcome === "archived") {
@@ -274,6 +320,88 @@ export function createProposalService(deps: ProposalServiceDeps) {
     proposal.status = outcome;
     emitTransition(proposal, from, proposal.status);
     return proposal;
+  }
+
+  function enterDeadlock(
+    id: string,
+    input: EnterDeadlockInput,
+  ): ProposalRecord {
+    const proposal = getOrThrow(id);
+    if (!DEADLOCK_ELIGIBLE_STATUSES.includes(proposal.status)) {
+      throw conflict(
+        `cannot enter deadlock resolution while proposal status is ${proposal.status}`,
+      );
+    }
+    if (proposal.deadlock.active) {
+      throw conflict(
+        `proposal ${id} is already in the deadlock resolution track`,
+      );
+    }
+    const now = new Date();
+    const stage = DEADLOCK_STAGES[0]!;
+    proposal.deadlock = {
+      active: true,
+      stage,
+      enteredAt: now,
+      resolvedAt: null,
+      history: [
+        { stage, reviewerId: proposal.authorId, notes: input.reason, at: now },
+      ],
+    };
+    deps.auditEmitter.emit("proposal.deadlock_entered", {
+      proposalId: proposal.id,
+    });
+    return proposal;
+  }
+
+  function advanceDeadlock(
+    id: string,
+    input: AdvanceDeadlockInput,
+  ): ProposalRecord {
+    const proposal = getOrThrow(id);
+    const deadlock = proposal.deadlock;
+    if (!deadlock.active || deadlock.stage === null) {
+      throw conflict(
+        `proposal ${id} is not currently in the deadlock resolution track`,
+      );
+    }
+    if (!deps.assignmentChecker.isAssignedReviewer(input.reviewerId, id)) {
+      throw forbidden(
+        `reviewer ${input.reviewerId} is not assigned to review proposal ${id}`,
+      );
+    }
+
+    const currentIndex = DEADLOCK_STAGES.indexOf(deadlock.stage);
+    const nextStage = DEADLOCK_STAGES[currentIndex + 1];
+
+    if (nextStage !== undefined) {
+      const now = new Date();
+      deadlock.stage = nextStage;
+      deadlock.history.push({
+        stage: nextStage,
+        reviewerId: input.reviewerId,
+        notes: input.notes,
+        at: now,
+      });
+      return proposal;
+    }
+
+    if (!input.outcome) {
+      throw validation(
+        "an outcome is required to conclude the deadlock resolution track from final_decision",
+      );
+    }
+    const now = new Date();
+    const from = proposal.status;
+    deadlock.active = false;
+    deadlock.resolvedAt = now;
+    proposal.status = input.outcome;
+    emitTransition(proposal, from, proposal.status);
+    return proposal;
+  }
+
+  function getDeadlock(id: string): DeadlockState {
+    return getOrThrow(id).deadlock;
   }
 
   function get(id: string): ProposalRecord {
@@ -294,6 +422,9 @@ export function createProposalService(deps: ProposalServiceDeps) {
     addSupport,
     advance,
     resolveProposal,
+    enterDeadlock,
+    advanceDeadlock,
+    getDeadlock,
     get,
     list,
   };

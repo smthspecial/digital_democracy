@@ -8,13 +8,24 @@ import (
 
 // newRouter wires the liveness/readiness contract every service
 // implements identically (see infra/helm/service/templates/deployment.yaml's
-// probes), plus this service's business routes (SRV-017).
+// probes), plus this service's business routes (SRV-017). identity defaults
+// to the fail-closed no-op -- see newRouterWithDeps for the production
+// wiring used when identity-service is configured.
 func newRouter(logger *slog.Logger, svc *Service) http.Handler {
+	return newRouterWithDeps(logger, svc, nil)
+}
+
+// newRouterWithDeps lets main.go (and tests) supply a real IdentityChecker
+// implementation instead of the no-op default.
+func newRouterWithDeps(logger *slog.Logger, svc *Service, identity IdentityChecker) http.Handler {
+	if identity == nil {
+		identity = noopIdentityChecker{}
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", handleHealthz)
 	mux.HandleFunc("GET /readyz", handleReadyz)
 
-	a := &api{svc: svc}
+	a := &api{svc: svc, identity: identity}
 	mux.HandleFunc("POST /auth/login", a.handleLogin)
 	mux.HandleFunc("POST /auth/logout", a.handleLogout)
 	mux.HandleFunc("POST /auth/refresh", a.handleRefresh)

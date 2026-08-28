@@ -1,7 +1,12 @@
 import { buildServer } from "./server.js";
 import { config } from "./config.js";
+import { createHttpReputationEmitter } from "./integrations.js";
 
-const app = buildServer();
+const app = buildServer(
+  config.reputationServiceUrl
+    ? { reputationEmitter: createHttpReputationEmitter(config.reputationServiceUrl) }
+    : {},
+);
 
 app
   .listen({ port: config.port, host: "0.0.0.0" })

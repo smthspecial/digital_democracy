@@ -279,6 +279,22 @@ describe("proposal routes", () => {
       });
       expect(res.statusCode).toBe(404);
     });
+
+    it("filing a challenge requests an independent review body (DP-020)", async () => {
+      const requestReviewBody = vi.fn();
+      app = build({ scopeEscalationRequester: { requestReviewBody } });
+      const created = (await createProposal(app)).json();
+
+      const filed = await app.inject({
+        method: "POST",
+        url: `/proposals/${created.id}/scope-challenges`,
+        payload: { citizen_id: "citizen-a", reason: "wrong jurisdiction" },
+      });
+      const challengeId = filed.json().scope_challenges[0].id;
+
+      expect(requestReviewBody).toHaveBeenCalledTimes(1);
+      expect(requestReviewBody).toHaveBeenCalledWith(created.id, challengeId);
+    });
   });
 
   describe("POST /proposals/:id/advance", () => {
@@ -396,7 +412,7 @@ describe("proposal routes", () => {
     });
 
     it("development -> voting is blocked when the constitutional reviewer blocks it", async () => {
-      const constitutionalReviewer = { review: () => ({ blocked: true }) };
+      const constitutionalReviewer = { review: async () => ({ blocked: true }) };
       app = build({ constitutionalReviewer });
       const proposal = await advanceTo(app, "development", {
         completeBudget: true,
@@ -437,7 +453,7 @@ describe("proposal routes", () => {
     it("VoteSessionRequester is not called on a blocked development -> voting attempt", async () => {
       const requestSession = vi.fn();
       app = build({
-        constitutionalReviewer: { review: () => ({ blocked: true }) },
+        constitutionalReviewer: { review: async () => ({ blocked: true }) },
         voteSessionRequester: { requestSession },
       });
       const proposal = await advanceTo(app, "development", {
@@ -525,6 +541,262 @@ describe("proposal routes", () => {
     );
   });
 
+  describe("deadlock resolution framework (FR-034)", () => {
+    const STAGES = [
+      "constraint_analysis",
+      "alternative_generation",
+      "resource_partitioning",
+      "compensation_assessment",
+      "citizen_assembly_review",
+      "escalation_review",
+      "constitutional_review",
+      "final_decision",
+    ] as const;
+
+    async function enterDeadlock(app: FastifyInstance, id: string) {
+      return app.inject({
+        method: "POST",
+        url: `/proposals/${id}/deadlock/enter`,
+        payload: { reason: "stuck on funding disagreement" },
+      });
+    }
+
+    it.each(["draft", "gathering_support", "approved"] as const)(
+      "rejects entering deadlock from ineligible status %s",
+      async (status) => {
+        app = build();
+        const proposal = await advanceTo(app, status);
+        const res = await enterDeadlock(app, proposal.id);
+        expect(res.statusCode).toBe(409);
+      },
+    );
+
+    it.each(["development", "voting"] as const)(
+      "enters deadlock from status %s, setting stage to constraint_analysis",
+      async (status) => {
+        app = build();
+        const proposal = await advanceTo(app, status);
+        const res = await enterDeadlock(app, proposal.id);
+        expect(res.statusCode).toBe(200);
+        expect(res.json().deadlock).toMatchObject({
+          active: true,
+          stage: "constraint_analysis",
+        });
+        expect(res.json().deadlock.entered_at).toBeTypeOf("string");
+        expect(res.json().deadlock.history).toHaveLength(1);
+      },
+    );
+
+    it("rejects entering deadlock twice", async () => {
+      app = build();
+      const proposal = await advanceTo(app, "development");
+      const first = await enterDeadlock(app, proposal.id);
+      expect(first.statusCode).toBe(200);
+      const second = await enterDeadlock(app, proposal.id);
+      expect(second.statusCode).toBe(409);
+    });
+
+    it("rejects advancing the deadlock track before it has been entered", async () => {
+      app = build();
+      const proposal = await advanceTo(app, "development");
+      const res = await app.inject({
+        method: "POST",
+        url: `/proposals/${proposal.id}/deadlock/advance`,
+        payload: { reviewer_id: "reviewer-1", notes: "n/a" },
+      });
+      expect(res.statusCode).toBe(409);
+    });
+
+    it("rejects advancing when the reviewer is not assigned, and succeeds when assigned", async () => {
+      const isAssignedReviewer = vi.fn().mockReturnValue(false);
+      app = build({ assignmentChecker: { isAssignedReviewer } });
+      const proposal = await advanceTo(app, "development");
+      await enterDeadlock(app, proposal.id);
+
+      const rejected = await app.inject({
+        method: "POST",
+        url: `/proposals/${proposal.id}/deadlock/advance`,
+        payload: { reviewer_id: "reviewer-1", notes: "reviewing" },
+      });
+      expect(rejected.statusCode).toBe(403);
+      expect(isAssignedReviewer).toHaveBeenCalledWith(
+        "reviewer-1",
+        proposal.id,
+      );
+
+      isAssignedReviewer.mockReturnValue(true);
+      const allowed = await app.inject({
+        method: "POST",
+        url: `/proposals/${proposal.id}/deadlock/advance`,
+        payload: { reviewer_id: "reviewer-1", notes: "reviewing" },
+      });
+      expect(allowed.statusCode).toBe(200);
+      expect(allowed.json().deadlock.stage).toBe("alternative_generation");
+    });
+
+    it("blocks the normal /advance endpoint with 409 while deadlock is active", async () => {
+      app = build();
+      const proposal = await advanceTo(app, "development");
+      await enterDeadlock(app, proposal.id);
+      const res = await app.inject({
+        method: "POST",
+        url: `/proposals/${proposal.id}/advance`,
+      });
+      expect(res.statusCode).toBe(409);
+    });
+
+    it("blocks the normal /resolve endpoint with 409 while deadlock is active", async () => {
+      app = build();
+      const proposal = await advanceTo(app, "voting");
+      await enterDeadlock(app, proposal.id);
+      const res = await app.inject({
+        method: "POST",
+        url: `/proposals/${proposal.id}/resolve`,
+        payload: { outcome: "approved" },
+      });
+      expect(res.statusCode).toBe(409);
+    });
+
+    it("rejects reaching final_decision without an outcome", async () => {
+      app = build();
+      const proposal = await advanceTo(app, "development");
+      await enterDeadlock(app, proposal.id);
+      let last;
+      for (let i = 1; i < STAGES.length; i++) {
+        last = await app.inject({
+          method: "POST",
+          url: `/proposals/${proposal.id}/deadlock/advance`,
+          payload: { reviewer_id: "reviewer-1", notes: `advancing to ${STAGES[i]}` },
+        });
+        expect(last.json().deadlock.stage).toBe(STAGES[i]);
+      }
+      expect(last!.json().deadlock.stage).toBe("final_decision");
+
+      const noOutcome = await app.inject({
+        method: "POST",
+        url: `/proposals/${proposal.id}/deadlock/advance`,
+        payload: { reviewer_id: "reviewer-1", notes: "ready to decide" },
+      });
+      expect(noOutcome.statusCode).toBe(400);
+    });
+
+    it("resolves the proposal when an outcome is provided at final_decision, bypassing normal gates", async () => {
+      app = build();
+      // Enter deadlock from development -- normal resolveProposal only
+      // allows "approved" from voting, but the deadlock escape hatch must
+      // be able to conclude the case regardless of the status it was
+      // entered from.
+      const proposal = await advanceTo(app, "development");
+      await enterDeadlock(app, proposal.id);
+      for (let i = 1; i < STAGES.length; i++) {
+        await app.inject({
+          method: "POST",
+          url: `/proposals/${proposal.id}/deadlock/advance`,
+          payload: { reviewer_id: "reviewer-1", notes: "advancing" },
+        });
+      }
+
+      const resolved = await app.inject({
+        method: "POST",
+        url: `/proposals/${proposal.id}/deadlock/advance`,
+        payload: {
+          reviewer_id: "reviewer-1",
+          notes: "final decision reached",
+          outcome: "approved",
+        },
+      });
+      expect(resolved.statusCode).toBe(200);
+      expect(resolved.json().status).toBe("approved");
+      expect(resolved.json().deadlock.active).toBe(false);
+      expect(resolved.json().deadlock.resolved_at).toBeTypeOf("string");
+      expect(resolved.json().deadlock.history).toHaveLength(STAGES.length);
+
+      const read = await app.inject({
+        method: "GET",
+        url: `/proposals/${proposal.id}`,
+      });
+      expect(read.json().status).toBe("approved");
+    });
+
+    it("GET /proposals/:id/deadlock reads stage, active flag, and full history", async () => {
+      app = build();
+      const proposal = await advanceTo(app, "development");
+      await enterDeadlock(app, proposal.id);
+      await app.inject({
+        method: "POST",
+        url: `/proposals/${proposal.id}/deadlock/advance`,
+        payload: { reviewer_id: "reviewer-1", notes: "moving on" },
+      });
+
+      const res = await app.inject({
+        method: "GET",
+        url: `/proposals/${proposal.id}/deadlock`,
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({
+        active: true,
+        stage: "alternative_generation",
+      });
+      expect(res.json().history).toHaveLength(2);
+      expect(res.json().history[1]).toMatchObject({
+        stage: "alternative_generation",
+        reviewer_id: "reviewer-1",
+        notes: "moving on",
+      });
+    });
+
+    it("404s reading the deadlock state of an unknown proposal", async () => {
+      app = build();
+      const res = await app.inject({
+        method: "GET",
+        url: "/proposals/does-not-exist/deadlock",
+      });
+      expect(res.statusCode).toBe(404);
+    });
+
+    it("runs the full 8-stage deadlock happy path end-to-end", async () => {
+      app = build();
+      const proposal = await advanceTo(app, "voting");
+
+      const entered = await enterDeadlock(app, proposal.id);
+      expect(entered.json().deadlock.stage).toBe("constraint_analysis");
+
+      let last;
+      for (let i = 1; i < STAGES.length; i++) {
+        last = await app.inject({
+          method: "POST",
+          url: `/proposals/${proposal.id}/deadlock/advance`,
+          payload: {
+            reviewer_id: "reviewer-1",
+            notes: `entering ${STAGES[i]}`,
+          },
+        });
+        expect(last.statusCode).toBe(200);
+        expect(last.json().deadlock.stage).toBe(STAGES[i]);
+        expect(last.json().deadlock.active).toBe(true);
+      }
+
+      const final = await app.inject({
+        method: "POST",
+        url: `/proposals/${proposal.id}/deadlock/advance`,
+        payload: {
+          reviewer_id: "reviewer-1",
+          notes: "final decision",
+          outcome: "rejected",
+        },
+      });
+      expect(final.statusCode).toBe(200);
+      expect(final.json().status).toBe("rejected");
+      expect(final.json().deadlock.active).toBe(false);
+
+      const history = final.json().deadlock.history;
+      expect(history).toHaveLength(STAGES.length);
+      expect(history.map((h: { stage: string }) => h.stage)).toEqual([
+        ...STAGES,
+      ]);
+    });
+  });
+
   it("runs the full happy-path lifecycle for one proposal", async () => {
     const requestSession = vi.fn();
     app = build({
@@ -608,13 +880,11 @@ async function advanceTo(
   const created = (await createProposal(app)).json();
   if (status === "draft") return created;
 
-  if (options.assignScope || status !== "draft") {
-    await app.inject({
-      method: "POST",
-      url: `/proposals/${created.id}/scope-assignment`,
-      payload: { scope_jurisdiction_id: "jurisdiction-1", population: 20 },
-    });
-  }
+  await app.inject({
+    method: "POST",
+    url: `/proposals/${created.id}/scope-assignment`,
+    payload: { scope_jurisdiction_id: "jurisdiction-1", population: 20 },
+  });
   await app.inject({
     method: "POST",
     url: `/proposals/${created.id}/support`,

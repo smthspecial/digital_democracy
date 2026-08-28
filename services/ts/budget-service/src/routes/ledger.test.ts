@@ -41,6 +41,27 @@ describe("budget ledger routes", () => {
     });
   });
 
+  it("POST /budget/ledger accepts and stores a project_id, filterable via GET (TBL-028)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/budget/ledger",
+      payload: {
+        category_id: null,
+        project_id: "project-1",
+        type: "outflow",
+        amount: 300,
+        description: "Contractor payment",
+        recorded_by: "operator-1",
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({ projectId: "project-1" });
+
+    const listRes = await app.inject({ method: "GET", url: "/budget/ledger?project_id=project-1" });
+    expect(listRes.json()).toHaveLength(1);
+    expect(listRes.json()[0].projectId).toBe("project-1");
+  });
+
   it("POST /budget/ledger rejects a category_id that does not exist", async () => {
     const res = await app.inject({
       method: "POST",

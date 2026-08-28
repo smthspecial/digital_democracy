@@ -17,8 +17,11 @@ Implements, in-memory (no database yet):
   list time-limited governance roles (TBL-032).
 - `POST /governance-roles/approvals` -- submit an approval decision on a
   critical action (DP-023). Rejects a role that isn't currently active, a
-  citizen with a conflict of interest, and a second approval from the same
-  citizen on the same `action_ref`.
+  citizen with a conflict of interest, a second approval from the same
+  citizen on the same `action_ref`, and an approval whose type doesn't
+  match the approver role's accountability layer (`citizen_supermajority`
+  requires layer `citizen`, `audit_confirmation` requires layer `audit`,
+  `body_endorsement` requires layer `protocol` -- ADR-001).
 - `GET /governance-roles/actions/:actionRef/status` -- which of the three
   required approval types (`citizen_supermajority`, `audit_confirmation`,
   `body_endorsement`) are satisfied, and whether the action is fully

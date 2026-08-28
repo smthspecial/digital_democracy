@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { Store } from "../store.js";
 import { submitChallenge, resolveChallenge } from "../services/challenges.js";
 import { serializeChallenge } from "../serializers.js";
+import type { ReputationEmitter } from "../integrations.js";
 
 const submitSchema = {
   body: {
@@ -33,7 +34,11 @@ const resolveSchema = {
   },
 } as const;
 
-export function registerChallengeRoutes(app: FastifyInstance, store: Store) {
+export function registerChallengeRoutes(
+  app: FastifyInstance,
+  store: Store,
+  reputationEmitter: ReputationEmitter,
+) {
   app.post<{
     Body: {
       competency_id: string;
@@ -56,7 +61,7 @@ export function registerChallengeRoutes(app: FastifyInstance, store: Store) {
     "/competency/challenges/:id/resolve",
     { schema: resolveSchema },
     async (request) => {
-      const challenge = resolveChallenge(store, request.params.id, request.body.result);
+      const challenge = resolveChallenge(store, reputationEmitter, request.params.id, request.body.result);
       return serializeChallenge(challenge);
     },
   );

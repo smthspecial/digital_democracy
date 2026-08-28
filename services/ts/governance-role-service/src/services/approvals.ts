@@ -1,8 +1,22 @@
 import type { AuditEmitter, COIChecker } from "../collaborators.js";
 import { conflict, forbidden, notFound } from "../errors.js";
 import { APPROVAL_TYPES } from "../domain/types.js";
-import type { Approval, ApprovalType, GovernanceRole } from "../domain/types.js";
+import type { Approval, ApprovalType, GovernanceRole, Layer } from "../domain/types.js";
 import type { CreateApprovalInput, Store } from "../store.js";
+
+// ADR-001's four independent accountability layers back each of the three
+// required approval types one-to-one: a citizen_supermajority speaks for
+// the citizen layer, an audit_confirmation for the audit layer, and a
+// body_endorsement for the protocol layer (a review body / protocol
+// council seat). Without this mapping, any role holder could supply any
+// approval type, collapsing the layers into one and defeating ADR-001's
+// "no single layer can modify, execute, and validate" guarantee -- see
+// ARCH-021 EC-26.
+const REQUIRED_LAYER_BY_APPROVAL_TYPE: Record<ApprovalType, Layer> = {
+  citizen_supermajority: "citizen",
+  audit_confirmation: "audit",
+  body_endorsement: "protocol",
+};
 
 export interface ActionStatus {
   actionRef: string;
@@ -40,6 +54,13 @@ export function submitApproval(
   });
   if (alreadySubmitted) {
     throw conflict("citizen has already submitted an approval for this action_ref");
+  }
+
+  const requiredLayer = REQUIRED_LAYER_BY_APPROVAL_TYPE[input.approvalType];
+  if (role.layer !== requiredLayer) {
+    throw forbidden(
+      `approval_type ${input.approvalType} requires a role in the ${requiredLayer} layer, but approver_role_id is in the ${role.layer} layer`,
+    );
   }
 
   const approval = store.createApproval(input);

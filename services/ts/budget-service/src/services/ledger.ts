@@ -5,6 +5,7 @@ import { validation } from "../errors.js";
 
 export interface RecordLedgerEntryInput {
   categoryId: string | null;
+  projectId: string | null;
   type: LedgerEntryType;
   amount: number;
   description: string;
@@ -21,6 +22,7 @@ export function recordLedgerEntry(
   const entry: LedgerEntry = {
     id: randomUUID(),
     categoryId: input.categoryId,
+    projectId: input.projectId,
     type: input.type,
     amount: input.amount,
     description: input.description,
@@ -34,11 +36,13 @@ export function recordLedgerEntry(
 export function listLedgerEntries(
   store: Store,
   categoryId?: string,
+  projectId?: string,
 ): LedgerEntry[] {
-  if (categoryId === undefined) {
-    return [...store.ledgerEntries];
-  }
-  return store.ledgerEntries.filter((e) => e.categoryId === categoryId);
+  return store.ledgerEntries.filter(
+    (e) =>
+      (categoryId === undefined || e.categoryId === categoryId) &&
+      (projectId === undefined || e.projectId === projectId),
+  );
 }
 
 export function sumOutflowsByCategory(store: Store): Map<string, number> {

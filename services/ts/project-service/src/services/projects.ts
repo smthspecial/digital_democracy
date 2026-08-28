@@ -1,14 +1,27 @@
 import { randomUUID } from "node:crypto";
 import type { Store } from "../store.js";
-import type { AuditEmitter, AssignmentRequester } from "../integrations.js";
+import type {
+  AuditEmitter,
+  AssignmentRequester,
+  LedgerRecorder,
+  ProposalAuthorLookup,
+  ReputationEmitter,
+} from "../integrations.js";
 import { notFound, conflict } from "../errors.js";
 import type {
   Project,
   ProjectMilestone,
   OutcomeEvaluation,
+  EvaluationResult,
 } from "../domain/types.js";
 
 export const DEFAULT_EVALUATION_DELAY_DAYS = 180;
+
+// DP-038's positive successful_proposal factor (reputation-service's
+// domain/types.ts SIGNIFICANT_DELTA_THRESHOLD is 10; this is set above it
+// so a successful outcome evaluation always crosses the notification
+// threshold there).
+export const SUCCESSFUL_PROPOSAL_REPUTATION_DELTA = 15;
 
 export interface CreateProjectMilestoneInput {
   title: string;
@@ -20,6 +33,7 @@ export interface CreateProjectInput {
   proposalId: string;
   contractor: string;
   budgetAllocated: number;
+  objective: string;
   promisedOutcome: string;
   milestones: CreateProjectMilestoneInput[];
 }
@@ -68,8 +82,10 @@ export function createProject(
   const outcomeEvaluation: OutcomeEvaluation = {
     id: randomUUID(),
     projectId: project.id,
+    objective: input.objective,
     promisedOutcome: input.promisedOutcome,
     measuredOutcome: null,
+    evaluation: null,
     createdAt: now,
     evaluatedAt: null,
   };
@@ -147,6 +163,7 @@ export function completeMilestone(
 
 export function recordBudgetSpent(
   store: Store,
+  ledgerRecorder: LedgerRecorder,
   projectId: string,
   amount: number,
   description: string,
@@ -161,6 +178,9 @@ export function recordBudgetSpent(
     recordedAt: new Date(),
   });
   project.budgetSpent += amount;
+  // DP-019: mirror the spend into budget-service's public ledger, tagged
+  // with this project, so it's traceable government-wide, not just here.
+  ledgerRecorder.recordOutflow(projectId, amount, description);
   return project;
 }
 
@@ -193,19 +213,47 @@ export function sweepOutcomeEvaluations(
   return requestedProjectIds;
 }
 
-export function submitOutcomeEvaluation(
+export interface SubmitOutcomeEvaluationInput {
+  measuredOutcome: string;
+  evaluation: EvaluationResult;
+}
+
+export async function submitOutcomeEvaluation(
   store: Store,
+  reputationEmitter: ReputationEmitter,
+  proposalAuthorLookup: ProposalAuthorLookup,
   evaluationId: string,
-  measuredOutcome: string,
-): OutcomeEvaluation {
-  const evaluation = store.outcomeEvaluations.get(evaluationId);
-  if (!evaluation) {
+  input: SubmitOutcomeEvaluationInput,
+): Promise<OutcomeEvaluation> {
+  const outcomeEvaluation = store.outcomeEvaluations.get(evaluationId);
+  if (!outcomeEvaluation) {
     throw notFound(`outcome evaluation ${evaluationId} not found`);
   }
-  if (evaluation.measuredOutcome !== null) {
+  if (outcomeEvaluation.measuredOutcome !== null) {
     throw conflict(`outcome evaluation ${evaluationId} already submitted`);
   }
-  evaluation.measuredOutcome = measuredOutcome;
-  evaluation.evaluatedAt = new Date();
-  return evaluation;
+  outcomeEvaluation.measuredOutcome = input.measuredOutcome;
+  outcomeEvaluation.evaluation = input.evaluation;
+  outcomeEvaluation.evaluatedAt = new Date();
+
+  // DP-022: "Triggers DP-038 (reputation update)" -- credit the proposal's
+  // author on a successful outcome. Best-effort: an unresolved author (the
+  // lookup failed, or the proposal has none) just means no credit is
+  // recorded, not that the evaluation submission itself fails.
+  if (input.evaluation === "successful") {
+    const project = store.projects.get(outcomeEvaluation.projectId);
+    if (project) {
+      const authorId = await proposalAuthorLookup.getAuthorId(project.proposalId);
+      if (authorId) {
+        reputationEmitter.emit(
+          authorId,
+          "successful_proposal",
+          SUCCESSFUL_PROPOSAL_REPUTATION_DELTA,
+          project.id,
+        );
+      }
+    }
+  }
+
+  return outcomeEvaluation;
 }

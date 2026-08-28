@@ -35,7 +35,7 @@ describe("jurisdiction routes", () => {
     const res = await createJurisdiction({
       parent_id: "00000000-0000-0000-0000-000000000000",
       name: "Ghost city",
-      scope_level: "city",
+      scope_level: "municipality",
       boundary_ref: "ref",
     });
     expect(res.statusCode).toBe(400);
@@ -61,19 +61,19 @@ describe("jurisdiction routes", () => {
     const region = (await createJurisdiction({
       parent_id: nation.id,
       name: "Region",
-      scope_level: "region",
+      scope_level: "regional",
       boundary_ref: "ref-region",
     })).json();
     const city = (await createJurisdiction({
       parent_id: region.id,
       name: "City",
-      scope_level: "city",
+      scope_level: "municipality",
       boundary_ref: "ref-city",
     })).json();
     await createJurisdiction({
       parent_id: city.id,
       name: "Neighborhood",
-      scope_level: "neighborhood",
+      scope_level: "street",
       boundary_ref: "ref-neighborhood",
     });
 
@@ -101,13 +101,13 @@ describe("jurisdiction routes", () => {
     const jurisdiction = (await approvalGateApp.inject({
       method: "POST",
       url: "/jurisdiction/jurisdictions",
-      payload: { parent_id: null, name: "X", scope_level: "city", boundary_ref: "ref" },
+      payload: { parent_id: null, name: "X", scope_level: "municipality", boundary_ref: "ref" },
     })).json();
 
     const res = await approvalGateApp.inject({
       method: "POST",
       url: `/jurisdiction/jurisdictions/${jurisdiction.id}/scope-level`,
-      payload: { scope_level: "region" },
+      payload: { scope_level: "regional" },
     });
     expect(res.statusCode).toBe(403);
     await approvalGateApp.close();
@@ -118,16 +118,16 @@ describe("jurisdiction routes", () => {
     const jurisdiction = (await approvalGateApp.inject({
       method: "POST",
       url: "/jurisdiction/jurisdictions",
-      payload: { parent_id: null, name: "X", scope_level: "city", boundary_ref: "ref" },
+      payload: { parent_id: null, name: "X", scope_level: "municipality", boundary_ref: "ref" },
     })).json();
 
     const res = await approvalGateApp.inject({
       method: "POST",
       url: `/jurisdiction/jurisdictions/${jurisdiction.id}/scope-level`,
-      payload: { scope_level: "region" },
+      payload: { scope_level: "regional" },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json().scope_level).toBe("region");
+    expect(res.json().scope_level).toBe("regional");
     await approvalGateApp.close();
   });
 
@@ -135,7 +135,7 @@ describe("jurisdiction routes", () => {
     const res = await app.inject({
       method: "POST",
       url: "/jurisdiction/jurisdictions/00000000-0000-0000-0000-000000000000/scope-level",
-      payload: { scope_level: "region" },
+      payload: { scope_level: "regional" },
     });
     expect(res.statusCode).toBe(404);
   });
@@ -146,12 +146,12 @@ describe("jurisdiction routes", () => {
     const jurisdiction = (await auditApp.inject({
       method: "POST",
       url: "/jurisdiction/jurisdictions",
-      payload: { parent_id: null, name: "X", scope_level: "city", boundary_ref: "ref" },
+      payload: { parent_id: null, name: "X", scope_level: "municipality", boundary_ref: "ref" },
     })).json();
     await auditApp.inject({
       method: "POST",
       url: `/jurisdiction/jurisdictions/${jurisdiction.id}/scope-level`,
-      payload: { scope_level: "region" },
+      payload: { scope_level: "regional" },
     });
     expect(events).toEqual(["jurisdiction.created", "jurisdiction.scope_level_changed"]);
     await auditApp.close();

@@ -1,4 +1,4 @@
-import { describe, expect, it, afterAll } from "vitest";
+import { describe, expect, it } from "vitest";
 import { buildServer } from "../server.js";
 import { createStore } from "../store.js";
 

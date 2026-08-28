@@ -210,12 +210,30 @@ func (st *store) CastBallot(sessionID, tokenSecret, choicePlaintext string, now 
 		Nonce:            nonce,
 		VerificationCode: code,
 		CastAt:           now,
+		Weight:           1,
 	}
 	st.ballots[sessionID] = append(st.ballots[sessionID], b)
 	st.verify[sessionID][code] = true
 	tok.Used = true
 
 	return b, tok.CitizenID, session.ProposalID, nil
+}
+
+// SetBallotWeight updates an already-cast ballot's tally weight (see
+// Ballot.Weight). Called after CastBallot returns, once delegation
+// resolution completes, so a resolver failure never blocks the ballot cast
+// itself -- it just leaves the weight at its default of 1.
+func (st *store) SetBallotWeight(sessionID, ballotID string, weight int) error {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+
+	for _, b := range st.ballots[sessionID] {
+		if b.ID == ballotID {
+			b.Weight = weight
+			return nil
+		}
+	}
+	return ErrBallotNotFound
 }
 
 // uniqueVerificationCodeLocked must be called with st.mu already held.
