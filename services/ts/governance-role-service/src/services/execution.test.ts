@@ -9,7 +9,7 @@ import type { Store } from "../store.js";
 
 const NOW = new Date("2026-03-01T00:00:00Z");
 
-function fullyApprovedAction(store: Store, actionRef: string): void {
+async function fullyApprovedAction(store: Store, actionRef: string): Promise<void> {
   const types = ["citizen_supermajority", "audit_confirmation", "body_endorsement"] as const;
   const layerByType = {
     citizen_supermajority: "citizen",
@@ -21,7 +21,7 @@ function fullyApprovedAction(store: Store, actionRef: string): void {
     audit: "auditor",
     protocol: "review_body",
   } as const;
-  types.forEach((approvalType, i) => {
+  for (const [i, approvalType] of types.entries()) {
     const layer = layerByType[approvalType];
     const role = createRole(store, defaultAuditEmitter, {
       citizenId: `citizen-${i}`,
@@ -31,14 +31,14 @@ function fullyApprovedAction(store: Store, actionRef: string): void {
       termStart: new Date("2026-01-01T00:00:00Z"),
       termEnd: new Date("2026-12-01T00:00:00Z"),
     });
-    submitApproval(
+    await submitApproval(
       store,
       defaultCOIChecker,
       defaultAuditEmitter,
       { actionRef, approverRoleId: role.id, approvalType, decision: "approved" },
       NOW,
     );
-  });
+  }
 }
 
 function confirmedGate(): ProtocolGateChecker {
@@ -64,9 +64,9 @@ describe("executeAction", () => {
     expect(executor.execute).not.toHaveBeenCalled();
   });
 
-  it("rejects when delay has not elapsed", () => {
+  it("rejects when delay has not elapsed", async () => {
     const store = createStore();
-    fullyApprovedAction(store, "action-1");
+    await fullyApprovedAction(store, "action-1");
     const executor: ProtocolChangeExecutor = { execute: vi.fn() };
 
     expect(() =>
@@ -83,9 +83,9 @@ describe("executeAction", () => {
     expect(executor.execute).not.toHaveBeenCalled();
   });
 
-  it("rejects when the change was not publicly visible", () => {
+  it("rejects when the change was not publicly visible", async () => {
     const store = createStore();
-    fullyApprovedAction(store, "action-1");
+    await fullyApprovedAction(store, "action-1");
     const executor: ProtocolChangeExecutor = { execute: vi.fn() };
 
     expect(() =>
@@ -102,9 +102,9 @@ describe("executeAction", () => {
     expect(executor.execute).not.toHaveBeenCalled();
   });
 
-  it("rejects when the protocol gate is not confirmed", () => {
+  it("rejects when the protocol gate is not confirmed", async () => {
     const store = createStore();
-    fullyApprovedAction(store, "action-1");
+    await fullyApprovedAction(store, "action-1");
     const executor: ProtocolChangeExecutor = { execute: vi.fn() };
     const unconfirmedGate: ProtocolGateChecker = { isConfirmed: () => false };
 
@@ -122,9 +122,9 @@ describe("executeAction", () => {
     expect(executor.execute).not.toHaveBeenCalled();
   });
 
-  it("succeeds and calls the executor exactly once when every precondition is met", () => {
+  it("succeeds and calls the executor exactly once when every precondition is met", async () => {
     const store = createStore();
-    fullyApprovedAction(store, "action-1");
+    await fullyApprovedAction(store, "action-1");
     const executor: ProtocolChangeExecutor = { execute: vi.fn() };
 
     const result = executeAction(
@@ -143,9 +143,9 @@ describe("executeAction", () => {
     expect(executor.execute).toHaveBeenCalledWith("action-1");
   });
 
-  it("is idempotent: a second execute call returns the same result without re-invoking the gate or executor", () => {
+  it("is idempotent: a second execute call returns the same result without re-invoking the gate or executor", async () => {
     const store = createStore();
-    fullyApprovedAction(store, "action-1");
+    await fullyApprovedAction(store, "action-1");
     const executor: ProtocolChangeExecutor = { execute: vi.fn() };
     const gate: ProtocolGateChecker = { isConfirmed: vi.fn(() => true) };
 

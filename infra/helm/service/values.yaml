@@ -28,6 +28,11 @@ autoscaling:
   maxReplicas: 10
   targetCPUUtilizationPercentage: 70
 
+# ADR-026: a node drain must never evict every replica of a service at once.
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
 # Additional per-service edges this service is allowed to call, per the
 # arch-005 producer/consumer table -- rendered into the NetworkPolicy so
 # the mesh's default-deny posture (ADR-018) has an explicit allow-list.

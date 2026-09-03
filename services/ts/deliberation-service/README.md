@@ -31,12 +31,16 @@ pnpm --filter @dd/deliberation-service test   # vitest
   declared preferences, sorted by `created_at`.
 
 DP-037 (AI policy synthesis, SRV-016) and DP-036 (audit log append,
-SRV-012) are modeled as injectable no-op collaborators (`SynthesisTrigger`,
-`AuditEmitter`) since those services don't exist in this codebase yet --
-see `src/collaborators.ts`. The synthesis trigger fires once per
-configurable threshold of new arguments/preferences crossed (default 5),
-tracked per `proposal_id` for arguments and per `problem_id` for
-preferences.
+SRV-012) are modeled as injectable collaborators (`SynthesisTrigger`,
+`AuditEmitter`) -- see `src/collaborators.ts`. `SynthesisTrigger` stays
+no-op-only since ai-synthesis-service doesn't expose a real endpoint yet.
+`AuditEmitter` has a real queue-backed implementation,
+`createNatsAuditEmitter` (ADR-023): when `NATS_URL` is set it publishes to
+the `audit.append` JetStream stream instead of doing nothing
+(`deliberation.argument.posted` has no dedicated TBL-034 bucket, so it maps
+to `system_update`). The synthesis trigger fires once per configurable
+threshold of new arguments/preferences crossed (default 5), tracked per
+`proposal_id` for arguments and per `problem_id` for preferences.
 
 Storage is in-memory only (`src/store.ts`), behind the same seam a real
 persistence layer will sit behind later.

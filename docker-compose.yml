@@ -1,0 +1,283 @@
+# Local development compose file (ADR-026, ARCH-025 §4).
+#
+# This is the fast inner-loop alternative to the k3s target described in
+# ARCH-025 §1 -- for a developer who just wants to run the
+# currently-implemented services locally against their real dependencies,
+# no cluster required: `docker compose up`.
+#
+# Every service below builds from its own Dockerfile with the repo root as
+# build context (the Dockerfiles' own COPY paths already expect this) and
+# publishes its real dev port (see each service's .env.example / README.md
+# table), not the fixed 8080 the Kubernetes chart (infra/helm/service) uses
+# internally -- this file is for hitting each service directly on its own
+# familiar port during local dev.
+#
+# NATS (JetStream) is real and shared -- every service's NATS_URL below
+# points at it, matching each service's already-real AuditEmitter/event-bus
+# wiring (ADR-023). Postgres is NOT real yet: see infra/compose/postgres-init.sql
+# -- no service currently connects to it (every service still runs
+# in-memory), it's forward-compatible scaffolding for ARCH-025 §4.
+
+services:
+  # ---------------------------------------------------------------------
+  # Shared infrastructure
+  # ---------------------------------------------------------------------
+
+  nats:
+    image: nats:2-alpine
+    command: ["-js", "-m", "8222"] # enable JetStream (ADR-023) + HTTP monitoring
+    ports:
+      - "4222:4222" # client connections
+      - "8222:8222" # HTTP monitoring endpoint
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: dd
+      POSTGRES_PASSWORD: dd
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # One database per service that already has a migration -- see the
+      # comment at the top of this file for why none is actually used yet.
+      - ./infra/compose/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+  # ---------------------------------------------------------------------
+  # Go services (services/go/*, SRV ports 5001-5004)
+  # ---------------------------------------------------------------------
+
+  voting-service:
+    build:
+      context: .
+      dockerfile: services/go/voting-service/Dockerfile
+    ports:
+      - "5001:5001"
+    environment:
+      PORT: "5001"
+      DELEGATION_SERVICE_URL: http://delegation-service:5002
+      AUDIT_SERVICE_URL: http://audit-service:5003
+      NATS_URL: nats://nats:4222
+    depends_on:
+      - nats
+
+  delegation-service:
+    build:
+      context: .
+      dockerfile: services/go/delegation-service/Dockerfile
+    ports:
+      - "5002:5002"
+    environment:
+      PORT: "5002"
+      NATS_URL: nats://nats:4222
+    depends_on:
+      - nats
+
+  audit-service:
+    build:
+      context: .
+      dockerfile: services/go/audit-service/Dockerfile
+    ports:
+      - "5003:5003"
+    environment:
+      PORT: "5003"
+      NATS_URL: nats://nats:4222
+    depends_on:
+      - nats
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/go/auth-service/Dockerfile
+    ports:
+      - "5004:5004"
+    environment:
+      PORT: "5004"
+      IDENTITY_SERVICE_URL: http://identity-service:4001
+      NATS_URL: nats://nats:4222
+    depends_on:
+      - nats
+
+  # ---------------------------------------------------------------------
+  # TypeScript services (services/ts/*, SRV ports 4001-4014)
+  # ---------------------------------------------------------------------
+
+  identity-service:
+    build:
+      context: .
+      dockerfile: services/ts/identity-service/Dockerfile
+    ports:
+      - "4001:4001"
+    environment:
+      PORT: "4001"
+      AUTH_SERVICE_URL: http://auth-service:5004
+      GOVERNANCE_ROLE_SERVICE_URL: http://governance-role-service:4009
+      NATS_URL: nats://nats:4222
+    depends_on:
+      - nats
+
+  jurisdiction-service:
+    build:
+      context: .
+      dockerfile: services/ts/jurisdiction-service/Dockerfile
+    ports:
+      - "4002:4002"
+    environment:
+      PORT: "4002"
+      GOVERNANCE_ROLE_SERVICE_URL: http://governance-role-service:4009
+      NATS_URL: nats://nats:4222
+    depends_on:
+      - nats
+
+  problem-service:
+    build:
+      context: .
+      dockerfile: services/ts/problem-service/Dockerfile
+    ports:
+      - "4003:4003"
+    environment:
+      PORT: "4003"
+      NATS_URL: nats://nats:4222
+    depends_on:
+      - nats
+
+  proposal-service:
+    build:
+      context: .
+      dockerfile: services/ts/proposal-service/Dockerfile
+    ports:
+      - "4004:4004"
+    environment:
+      PORT: "4004"
+      AUDIT_SERVICE_URL: http://audit-service:5003
+      JURISDICTION_SERVICE_URL: http://jurisdiction-service:4002
+      PROBLEM_SERVICE_URL: http://problem-service:4003
+      NATS_URL: nats://nats:4222
+    depends_on:
+      - nats
+
+  competency-service:
+    build:
+      context: .
+      dockerfile: services/ts/competency-service/Dockerfile
+    ports:
+      - "4005:4005"
+    environment:
+      PORT: "4005"
+      REPUTATION_SERVICE_URL: http://reputation-service:4011
+    depends_on:
+      - nats
+
+  deliberation-service:
+    build:
+      context: .
+      dockerfile: services/ts/deliberation-service/Dockerfile
+    ports:
+      - "4006:4006"
+    environment:
+      PORT: "4006"
+      NATS_URL: nats://nats:4222
+    depends_on:
+      - nats
+
+  budget-service:
+    build:
+      context: .
+      dockerfile: services/ts/budget-service/Dockerfile
+    ports:
+      - "4007:4007"
+    environment:
+      PORT: "4007"
+    depends_on:
+      - nats
+
+  civic-duty-service:
+    build:
+      context: .
+      dockerfile: services/ts/civic-duty-service/Dockerfile
+    ports:
+      - "4008:4008"
+    environment:
+      PORT: "4008"
+    depends_on:
+      - nats
+
+  governance-role-service:
+    build:
+      context: .
+      dockerfile: services/ts/governance-role-service/Dockerfile
+    ports:
+      - "4009:4009"
+    environment:
+      PORT: "4009"
+      COMPETENCY_SERVICE_URL: http://competency-service:4005
+      NATS_URL: nats://nats:4222
+    depends_on:
+      - nats
+
+  project-service:
+    build:
+      context: .
+      dockerfile: services/ts/project-service/Dockerfile
+    ports:
+      - "4010:4010"
+    environment:
+      PORT: "4010"
+      PROPOSAL_SERVICE_URL: http://proposal-service:4004
+      REPUTATION_SERVICE_URL: http://reputation-service:4011
+      BUDGET_SERVICE_URL: http://budget-service:4007
+      NATS_URL: nats://nats:4222
+    depends_on:
+      - nats
+
+  reputation-service:
+    build:
+      context: .
+      dockerfile: services/ts/reputation-service/Dockerfile
+    ports:
+      - "4011:4011"
+    environment:
+      PORT: "4011"
+      NATS_URL: nats://nats:4222
+    depends_on:
+      - nats
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/ts/notification-service/Dockerfile
+    ports:
+      - "4012:4012"
+    environment:
+      PORT: "4012"
+    depends_on:
+      - nats
+
+  ai-synthesis-service:
+    build:
+      context: .
+      dockerfile: services/ts/ai-synthesis-service/Dockerfile
+    ports:
+      - "4013:4013"
+    environment:
+      PORT: "4013"
+      NATS_URL: nats://nats:4222
+    depends_on:
+      - nats
+
+  iam-service:
+    build:
+      context: .
+      dockerfile: services/ts/iam-service/Dockerfile
+    ports:
+      - "4014:4014"
+    environment:
+      PORT: "4014"
+      GOVERNANCE_ROLE_SERVICE_URL: http://governance-role-service:4009
+      NATS_URL: nats://nats:4222
+    depends_on:
+      - nats
+
+volumes:
+  pgdata:

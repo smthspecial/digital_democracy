@@ -21,6 +21,13 @@ see `openapi.yaml` for the full contract. Persistence is in-memory only
 expiry notifications) are modeled as injectable seams with no-op
 defaults (`src/integrations.ts`).
 
+- `GET /competency/conflicts?citizen_id=...` -- whether a citizen has any
+  declared conflict of interest, in any domain, plus the list of domains it
+  was declared in. This is the read side consumed by other services'
+  `COIChecker` seams (e.g. governance-role-service's, ARCH-010 EC-8) that
+  need a domain-agnostic conflict signal for actions with no domain of
+  their own.
+
 Two events credit reputation-service (DP-038, FR-027): declaring a
 conflict of interest emits a positive `disclosure` delta, and an upheld
 challenge emits a negative delta (mapped from the challenge's `reason` --

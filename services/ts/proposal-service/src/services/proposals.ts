@@ -12,6 +12,8 @@ import type {
   AssignmentChecker,
   AuditEmitter,
   ConstitutionalReviewer,
+  JurisdictionClient,
+  ProblemStatusNotifier,
   ScopeEscalationRequester,
   VoteSessionRequester,
 } from "../integrations.js";
@@ -24,6 +26,8 @@ export interface ProposalServiceDeps {
   auditEmitter: AuditEmitter;
   assignmentChecker: AssignmentChecker;
   scopeEscalationRequester: ScopeEscalationRequester;
+  jurisdictionClient: JurisdictionClient;
+  problemStatusNotifier: ProblemStatusNotifier;
 }
 
 export interface CreateProposalInput {
@@ -101,6 +105,21 @@ export function createProposalService(deps: ProposalServiceDeps) {
     });
   }
 
+  // ARCH-012 EC-33: SRV-003's rule is "closed when a proposal is approved OR
+  // all of a problem's proposals are rejected/archived" -- both conditions
+  // collapse into one check, since a single approved proposal already
+  // satisfies "every proposal for this problem is terminal" on its own.
+  function notifyProblemClosedIfEveryProposalIsTerminal(
+    proposal: ProposalRecord,
+  ): void {
+    const siblings = deps.store
+      .list()
+      .filter((p) => p.problemId === proposal.problemId);
+    if (siblings.every((p) => TERMINAL_STATUSES.includes(p.status))) {
+      deps.problemStatusNotifier.notify(proposal.problemId, "closed");
+    }
+  }
+
   function createProposal(input: CreateProposalInput): ProposalRecord {
     const proposal: ProposalRecord = {
       id: randomUUID(),
@@ -169,12 +188,31 @@ export function createProposalService(deps: ProposalServiceDeps) {
     return proposal;
   }
 
-  function assignScope(id: string, input: AssignScopeInput): ProposalRecord {
+  // ARCH-011 EC-5/EC-30: scope_jurisdiction_id is validated against
+  // jurisdiction-service instead of being trusted as caller-asserted input.
+  // No status gate here is intentional (ARCH-011 EC-7): assignScope can be
+  // re-run against a proposal in any status, matching current behavior --
+  // documented as a spec-intent gap in ARCH-011, not fixed here since
+  // narrowing it wasn't itself the reason EC-5/EC-30 existed.
+  async function assignScope(
+    id: string,
+    input: AssignScopeInput,
+  ): Promise<ProposalRecord> {
     const proposal = getOrThrow(id);
+    if (!(await deps.jurisdictionClient.exists(input.scopeJurisdictionId))) {
+      throw validation(
+        `scope_jurisdiction_id ${input.scopeJurisdictionId} does not exist`,
+      );
+    }
     proposal.scopeJurisdictionId = input.scopeJurisdictionId;
     proposal.supportThreshold = Math.ceil(
       input.population * SUPPORT_THRESHOLD_RATIO,
     );
+    deps.auditEmitter.emit("proposal.scope_assigned", {
+      proposalId: proposal.id,
+      scopeJurisdictionId: input.scopeJurisdictionId,
+      supportThreshold: proposal.supportThreshold,
+    });
     return proposal;
   }
 
@@ -194,6 +232,10 @@ export function createProposalService(deps: ProposalServiceDeps) {
     };
     proposal.scopeChallenges.push(challenge);
     proposal.scopeChallengePending = true;
+    deps.auditEmitter.emit("proposal.scope_challenge_filed", {
+      proposalId: proposal.id,
+      challengeId: challenge.id,
+    });
     // DP-020: route the new dispute to an independent review body.
     deps.scopeEscalationRequester.requestReviewBody(proposal.id, challenge.id);
     return proposal;
@@ -216,6 +258,10 @@ export function createProposalService(deps: ProposalServiceDeps) {
     challenge.resolved = true;
     challenge.resolvedAt = new Date();
     proposal.scopeChallengePending = false;
+    deps.auditEmitter.emit("proposal.scope_challenge_resolved", {
+      proposalId: proposal.id,
+      challengeId: challenge.id,
+    });
     return proposal;
   }
 
@@ -268,6 +314,8 @@ export function createProposalService(deps: ProposalServiceDeps) {
       }
       proposal.status = "development";
       emitTransition(proposal, from, proposal.status);
+      // ARCH-012 EC-33: SRV-003's open -> proposing rule.
+      deps.problemStatusNotifier.notify(proposal.problemId, "proposing");
       return proposal;
     }
 
@@ -319,6 +367,7 @@ export function createProposalService(deps: ProposalServiceDeps) {
 
     proposal.status = outcome;
     emitTransition(proposal, from, proposal.status);
+    notifyProblemClosedIfEveryProposalIsTerminal(proposal);
     return proposal;
   }
 
@@ -397,6 +446,7 @@ export function createProposalService(deps: ProposalServiceDeps) {
     deadlock.resolvedAt = now;
     proposal.status = input.outcome;
     emitTransition(proposal, from, proposal.status);
+    notifyProblemClosedIfEveryProposalIsTerminal(proposal);
     return proposal;
   }
 

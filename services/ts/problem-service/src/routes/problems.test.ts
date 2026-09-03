@@ -83,4 +83,25 @@ describe("GET /problems/:id", () => {
     expect(res.statusCode).toBe(404);
     expect(res.json()).toHaveProperty("error");
   });
+
+  // ARCH-012 EC-27: a problem with zero endorsements and zero linked
+  // proposals is still publicly visible, not an error -- empty-collection
+  // boundary. (problem-service's own response carries no embedded
+  // support/proposal list to assert empty; the boundary this proves is
+  // that "no endorsements yet" is a normal, readable state, not a 404 or
+  // 500.)
+  it("IT-012-EC-27: a freshly submitted problem with zero endorsements is publicly visible", async () => {
+    app = buildServer();
+    const created = (
+      await app.inject({ method: "POST", url: "/problems", payload: validSubmission })
+    ).json();
+
+    const read = await app.inject({ method: "GET", url: `/problems/${created.id}` });
+    expect(read.statusCode).toBe(200);
+    expect(read.json().status).toBe("open");
+
+    const list = await app.inject({ method: "GET", url: "/problems" });
+    expect(list.statusCode).toBe(200);
+    expect(list.json()).toContainEqual(created);
+  });
 });

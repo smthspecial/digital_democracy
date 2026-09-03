@@ -12,7 +12,7 @@ apps/
   web/                 Next.js citizen-facing web client (ADR-022)
   mobile/              Expo (React Native) mobile client (ADR-022)
 services/
-  ts/                  13 TypeScript services -- CRUD/orchestration (ADR-019)
+  ts/                  14 TypeScript services -- CRUD/orchestration (ADR-019)
   go/                  4 Go services -- concurrency/crypto-critical path (ADR-019)
 packages/
   tsconfig/            shared base tsconfig for every TS package
@@ -46,6 +46,7 @@ infra/
 | notification-service | TS | 4012 | `/notifications` | SRV-015 |
 | ai-synthesis-service | TS | 4013 | `/ai-synthesis` | SRV-016 |
 | auth-service | **Go** | 5004 | `/auth` | SRV-017 |
+| iam-service | TS | 4014 | `/iam` | SRV-018 |
 
 Every service exposes `GET /healthz` (liveness) and `GET /readyz` (readiness), and documents
 its API in its own `openapi.yaml`. See ADR-019 (language split), ADR-020 (monorepo tooling),
@@ -70,6 +71,25 @@ Go services run independently of the pnpm/turbo dev loop:
 ```bash
 cd services/go/voting-service && go run .
 ```
+
+### Running everything together
+
+`pnpm --filter <service> dev` / `go run .` above start one service at a time
+against its in-memory store, with any peer-service URL simply unset. To run
+every currently-implemented service at once, on its real port, wired to a
+real NATS (JetStream) and to each other, use the root
+[`docker-compose.yml`](docker-compose.yml) instead (ADR-026, ARCH-025 §4):
+
+```bash
+docker compose up --build
+```
+
+This is the fast local inner-loop alternative to the k3s target ARCH-025
+describes — no cluster required. It also starts a shared local Postgres
+with one database per service that already has a migration
+(`infra/compose/postgres-init.sql`); no service connects to it yet (every
+service still runs in-memory), so this is forward-compatible scaffolding,
+not something exercised today.
 
 ## Common commands
 

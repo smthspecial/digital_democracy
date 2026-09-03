@@ -1,4 +1,5 @@
-import { createHmac, randomBytes } from "node:crypto";
+import { createHmac, randomBytes, randomUUID } from "node:crypto";
+import { publish, type EventBus } from "@dd/event-bus";
 import type { Citizen } from "./domain/types.js";
 
 // SRV-001 depends on governance-role-service's multi-approval workflow
@@ -6,8 +7,14 @@ import type { Citizen } from "./domain/types.js";
 // which exists as a callable service yet. Both are modeled as small
 // injectable seams with fakes wired in by buildServer()'s defaults, so real
 // implementations can be swapped in later without touching call sites.
+//
+// actionType is threaded through (ARCH-010 EC-7) so a real backing check can
+// scope its answer to the specific action -- without it, a fully-approved
+// suspend would also read as an approved revoke for the same citizen. The
+// return type allows a plain boolean (the permissive default, and every
+// existing sync test double) alongside a real async HTTP call.
 export interface ApprovalGate {
-  hasRequiredApprovals(citizenId: string): boolean;
+  hasRequiredApprovals(citizenId: string, actionType: "suspend" | "revoke"): boolean | Promise<boolean>;
 }
 
 export interface AuditEvent {
@@ -62,8 +69,68 @@ export function createDefaultApprovalGate(): ApprovalGate {
   return { hasRequiredApprovals: () => true };
 }
 
+// createHttpApprovalGate calls governance-role-service's real DP-035 status
+// endpoint (SRV-011, GET /governance-roles/actions/:actionRef/status),
+// scoping the check with this doc's identity:{suspend|revoke}:{citizenId}
+// action_ref convention (ARCH-010 EC-7) so a suspend approval can never
+// satisfy a revoke check on the same citizen or vice versa.
+//
+// Fails closed (ARCH-010 EC-16): an unreachable governance-role-service, a
+// non-2xx response, or a malformed body all return `false` rather than
+// defaulting to approved -- a fail-open default here would silently defeat
+// FR-007's no-unilateral-disable guarantee.
+export function createHttpApprovalGate(baseUrl: string): ApprovalGate {
+  return {
+    async hasRequiredApprovals(citizenId, actionType) {
+      const actionRef = `identity:${actionType}:${citizenId}`;
+      try {
+        const res = await fetch(`${baseUrl}/governance-roles/actions/${encodeURIComponent(actionRef)}/status`);
+        if (!res.ok) return false;
+        const body = (await res.json()) as { fully_approved?: boolean };
+        return body.fully_approved === true;
+      } catch {
+        return false;
+      }
+    },
+  };
+}
+
 export function createNoopAuditEmitter(): AuditEmitter {
   return { append: () => {} };
+}
+
+// The audit.append queue's subject and stream name (DP-036, ADR-023).
+// audit-service's own consumer (services/go/audit-service/nats.go) binds
+// to this same stream/subject pair.
+export const AUDIT_APPEND_STREAM = "AUDIT";
+export const AUDIT_APPEND_SUBJECT = "audit.append";
+
+// createNatsAuditEmitter publishes to the real audit.append queue (ADR-023).
+// Every citizen-lifecycle event this service emits (registered, verified,
+// activated, suspended, revoked) maps to TBL-034's `identity_event`
+// action_type -- the bucket that enum reserves for exactly this service's
+// events. Fire-and-forget per the AuditEmitter contract, same as every
+// other cross-service notification in this codebase: a downed
+// NATS/audit-service must never block the status change or verification
+// that triggered it.
+export function createNatsAuditEmitter(bus: EventBus): AuditEmitter {
+  return {
+    append(event) {
+      void publish(bus, AUDIT_APPEND_SUBJECT, {
+        action_type: "identity_event",
+        actor_ref: "identity-service",
+        payload: {
+          entity: event.entity,
+          entityId: event.entityId,
+          action: event.action,
+          occurredAt: event.occurredAt.toISOString(),
+        },
+        idempotency_key: randomUUID(),
+      }).catch(() => {
+        // Intentionally swallowed -- see contract note above.
+      });
+    },
+  };
 }
 
 function normalizeHandle(handle: string): string {

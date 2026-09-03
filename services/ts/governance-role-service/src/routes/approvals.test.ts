@@ -88,6 +88,30 @@ describe("governance approvals routes", () => {
     expect(res.statusCode).toBe(409);
   });
 
+  // ARCH-010 EC-2.
+  it("IT-010-EC-2: rejects an approval_type outside the enum with 400 and never satisfies fully_approved for it", async () => {
+    const roleId = await createActiveRole(app, "citizen-1");
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/governance-roles/approvals",
+      payload: {
+        action_ref: "identity:suspend:citizen-9",
+        approver_role_id: roleId,
+        approval_type: "not_a_real_type",
+        decision: "approved",
+      },
+    });
+    expect(res.statusCode).toBe(400);
+
+    const status = await app.inject({
+      method: "GET",
+      url: "/governance-roles/actions/identity:suspend:citizen-9/status",
+    });
+    expect(status.json().fully_approved).toBe(false);
+    expect(status.json().satisfied_approval_types).toEqual([]);
+  });
+
   it("rejects a COI-conflicted citizen's approval with 403", async () => {
     const conflictedStore = createStore();
     const conflictedApp = buildServer({
@@ -200,3 +224,16 @@ describe("governance approvals routes", () => {
     await localApp.close();
   });
 });
+
+// ARCH-010 EC-12: no Authorization header handling exists in this route at
+// all today -- any caller who knows an active approver_role_id can submit an
+// approval with no session token whatsoever, despite AUTH-010 requiring T3
+// for approval:submit:operator/approval:submit:council. This is a real gap,
+// not a stub with a permissive default to test against: closing it means
+// adding session/MFA-tier enforcement to this route (calling auth-service's
+// POST /auth/internal/validate and reading assurance_tier/last_mfa_at), which
+// doesn't exist in any form yet. Documented per ARCH-009 §2 rather than
+// tested against fabricated behavior.
+it.todo(
+  "IT-010-EC-12 [blocked on: session/MFA-tier enforcement not implemented on POST /governance-roles/approvals] -- an approval submitted without a T3 session (or more than 5 minutes past last_mfa_at) is rejected",
+);

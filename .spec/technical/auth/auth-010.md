@@ -143,6 +143,8 @@ Additive over AUTH-001. Scoped to the assigned project.
 
 Independent layer — not additive over citizen. Operator credentials are organizational, not civic.
 
+Enforcement of this section (and AUTH-011 below) is via iam-service's policy engine (ADR-025, ARCH-024), not a hardcoded per-service check — the rows below are the seed/default policy set, editable through iam-service's dual-control propose/endorse flow rather than only through a spec edit + redeploy. AUTH-001–005/007/008 (citizen and citizen-derived governance-role permissions) are unaffected and remain the fixed, spec-governed catalog.
+
 | Permission ID | Action | Scope | Conditions | MFA tier |
 |--------------|--------|-------|------------|----------|
 | `ledger_entry:record` | Record a ledger entry | any | — | T3 |
@@ -177,6 +179,8 @@ Additive over AUTH-001. Scoped to the assigned dispute or review case.
 ---
 
 ## AUTH-011 — Platform-operator permissions
+
+Enforced via iam-service (ADR-025, ARCH-024) — see the note under AUTH-006 above.
 
 | Permission ID | Action | Scope | Conditions | MFA tier |
 |--------------|--------|-------|------------|----------|

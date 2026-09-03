@@ -57,7 +57,7 @@ export function registerApprovalRoutes(app: FastifyInstance, deps: Deps) {
     "/governance-roles/approvals",
     { schema: { body: submitApprovalBodySchema } },
     async (req, reply) => {
-      const approval = submitApproval(deps.store, deps.coiChecker, deps.auditEmitter, {
+      const approval = await submitApproval(deps.store, deps.coiChecker, deps.auditEmitter, {
         actionRef: req.body.action_ref,
         approverRoleId: req.body.approver_role_id,
         approvalType: req.body.approval_type,

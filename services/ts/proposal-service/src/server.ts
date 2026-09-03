@@ -7,11 +7,15 @@ import {
   defaultAssignmentChecker,
   defaultAuditEmitter,
   defaultConstitutionalReviewer,
+  defaultJurisdictionClient,
+  defaultProblemStatusNotifier,
   defaultScopeEscalationRequester,
   defaultVoteSessionRequester,
   type AssignmentChecker,
   type AuditEmitter,
   type ConstitutionalReviewer,
+  type JurisdictionClient,
+  type ProblemStatusNotifier,
   type ScopeEscalationRequester,
   type VoteSessionRequester,
 } from "./integrations.js";
@@ -24,6 +28,8 @@ export interface Deps {
   auditEmitter: AuditEmitter;
   assignmentChecker: AssignmentChecker;
   scopeEscalationRequester: ScopeEscalationRequester;
+  jurisdictionClient: JurisdictionClient;
+  problemStatusNotifier: ProblemStatusNotifier;
 }
 
 export function buildServer(deps: Partial<Deps> = {}) {
@@ -39,6 +45,9 @@ export function buildServer(deps: Partial<Deps> = {}) {
     assignmentChecker: deps.assignmentChecker ?? defaultAssignmentChecker,
     scopeEscalationRequester:
       deps.scopeEscalationRequester ?? defaultScopeEscalationRequester,
+    jurisdictionClient: deps.jurisdictionClient ?? defaultJurisdictionClient,
+    problemStatusNotifier:
+      deps.problemStatusNotifier ?? defaultProblemStatusNotifier,
   };
 
   const proposalService = createProposalService(resolvedDeps);

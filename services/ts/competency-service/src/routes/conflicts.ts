@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Store } from "../store.js";
-import { declareConflict } from "../services/conflicts.js";
+import { declareConflict, listConflictDomainsForCitizen } from "../services/conflicts.js";
 import { serializeConflict } from "../serializers.js";
 import type { ExclusionEnforcer, ReputationEmitter } from "../integrations.js";
 
@@ -34,6 +34,30 @@ export function registerConflictRoutes(
       });
       reply.code(201);
       return serializeConflict(coi);
+    },
+  );
+
+  app.get<{ Querystring: { citizen_id: string } }>(
+    "/competency/conflicts",
+    {
+      schema: {
+        querystring: {
+          type: "object",
+          required: ["citizen_id"],
+          additionalProperties: false,
+          properties: {
+            citizen_id: { type: "string", minLength: 1 },
+          },
+        },
+      },
+    },
+    async (request) => {
+      const domainIds = listConflictDomainsForCitizen(store, request.query.citizen_id);
+      return {
+        citizen_id: request.query.citizen_id,
+        has_conflict: domainIds.length > 0,
+        domain_ids: domainIds,
+      };
     },
   );
 }

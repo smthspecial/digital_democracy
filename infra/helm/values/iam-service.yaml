@@ -1,0 +1,9 @@
+name: iam-service
+lang: ts
+image:
+  repository: ghcr.io/digital-democracy/iam-service
+port: 8080
+route:
+  prefix: /iam
+allowedEgress:
+  - governance-role-service

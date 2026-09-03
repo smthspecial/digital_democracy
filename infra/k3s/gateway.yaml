@@ -1,0 +1,35 @@
+# GatewayClass + Gateway satisfying the parentRef every service's HTTPRoute
+# already declares (infra/helm/service/templates/httproute.yaml -> dd-gateway),
+# per ADR-026 / ARCH-025 §1. Controller is k3s's bundled Traefik -- its
+# Gateway API provider must be enabled first (README step 3) or this
+# GatewayClass never reaches Accepted.
+#
+# GatewayClass is cluster-scoped: apply once. Gateway is namespaced, and
+# every HTTPRoute's parentRef names "dd-gateway" with no namespace, which
+# Gateway API resolves to the *local* namespace of the route (core spec
+# behavior, apis/v1/shared_types.go ParentReference.Namespace: "When
+# unspecified, this refers to the local namespace of the Route"). Since
+# infra/argocd/applicationset.yaml gives every service its own namespace,
+# this file gets applied once per service namespace, not once cluster-wide
+# -- see README step 4.
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: dd-gateway
+spec:
+  controllerName: traefik.io/gateway-controller
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: dd-gateway
+  # no namespace here -- set at apply time with `kubectl apply -n <ns>`
+spec:
+  gatewayClassName: dd-gateway
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: Same

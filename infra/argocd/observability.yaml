@@ -1,0 +1,140 @@
+# Single ArgoCD Application (not an ApplicationSet -- this is one specific
+# thing to deploy, not N near-identical services like applicationset.yaml
+# iterates) for the current-stage observability slice: ADR-026 / ARCH-025 §2.
+#
+# Deploys the upstream `kube-prometheus-stack` chart (Prometheus Community,
+# Apache-2.0) -- Prometheus + Grafana + Alertmanager, plus the
+# ServiceMonitor/PodMonitor CRDs -- the same way every backend service in
+# this repo is deployed (a Helm chart + a self-healing ArgoCD resource),
+# just as its own Application instead of one more values file under
+# infra/helm/values/ (that directory/ApplicationSet is for this repo's own
+# services against the generic infra/helm/service chart; this is a
+# third-party chart with its own values shape, so it gets its own resource).
+#
+# NOT deployed here, per ADR-026/ARCH-025 §2 (deliberately deferred):
+# Loki (logs), an OpenTelemetry collector + tracing backend (traces), and
+# any application-level /metrics scraping -- no service in this repo
+# exposes a /metrics endpoint yet, so see the `values` block below for what
+# that means for what this stack can actually show today.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: observability
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-prometheus-stack
+    # Pinned against the live chart index (https://prometheus-community.github.io/helm-charts/index.yaml)
+    # on 2026-09-03 -- the newest published version at that time, appVersion
+    # v0.93.1 (the Prometheus Operator's own version, not Prometheus's).
+    # Bump this deliberately (re-check the index, read the chart's release
+    # notes for breaking values changes) -- never chase `*`/latest here.
+    targetRevision: 88.6.3
+    helm:
+      # Pinned explicitly: ArgoCD otherwise defaults the Helm release name to
+      # this Application's metadata.name ("observability"), which would
+      # rename every object the chart creates (svc/observability-grafana
+      # instead of the conventional svc/kube-prometheus-stack-grafana) and
+      # make this repo's docs/dashboards diverge from every upstream guide.
+      releaseName: kube-prometheus-stack
+      values: |
+        # Scaled down from the chart's defaults to fit ADR-026's "single
+        # small self-hosted k3s node" framing -- this is one node, not a
+        # fleet, so every component below gets modest requests/limits
+        # instead of the chart's much larger stock sizing.
+
+        prometheusOperator:
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+
+        prometheus:
+          prometheusSpec:
+            # A few days, not the chart's default. Nothing here yet needs
+            # longer-lived history (no SLO burn-rate windows, ARCH-008 §2,
+            # until app-level metrics exist -- see the note below), and a
+            # short retention keeps disk use bounded on a single node.
+            retention: 3d
+            resources:
+              requests:
+                cpu: 100m
+                memory: 256Mi
+              limits:
+                cpu: 500m
+                memory: 512Mi
+            # --- ARCH-025 §2: application-level /metrics is not wired up yet ---
+            # No service in this repo exposes a prom-client/promhttp-style
+            # /metrics endpoint today, so there are no per-service
+            # ServiceMonitors to add here. Out of the box this stack still
+            # surfaces cluster/node/pod-level signals (kube-state-metrics,
+            # node-exporter, and Prometheus/Alertmanager/Grafana's own
+            # self-monitoring below) -- is a pod up, is it restarting, is it
+            # CPU/memory-throttled -- but not yet request-level SLIs
+            # (latency, error rate). Per-service ServiceMonitors land as
+            # separate follow-on work once each service ships that endpoint.
+
+        alertmanager:
+          alertmanagerSpec:
+            resources:
+              requests:
+                cpu: 25m
+                memory: 32Mi
+              limits:
+                cpu: 100m
+                memory: 128Mi
+
+        grafana:
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          persistence:
+            enabled: false # single small k3s node for now; dashboards reload from the chart's ConfigMaps on restart, nothing custom to lose yet
+          admin:
+            # Credentials come from a pre-created Secret -- never a plaintext
+            # value in this file. Create the Secret once per cluster before
+            # this Application syncs (see infra/argocd/README.md):
+            #   kubectl create secret generic grafana-admin-credentials \
+            #     -n monitoring \
+            #     --from-literal=admin-user=admin \
+            #     --from-literal=admin-password='<generate one>'
+            # This is a deliberate manual step for this build stage -- the
+            # External Secrets Operator + KMS-backed vault path (ARCH-006 §9)
+            # is target state, not deployed yet per ADR-026.
+            existingSecret: grafana-admin-credentials
+            userKey: admin-user
+            passwordKey: admin-password
+
+        # k3s runs the control plane (scheduler, controller-manager, etcd) as
+        # part of its single binary, not as separately scrapeable components
+        # on the ports/paths kubeadm-style clusters expose -- left enabled,
+        # the chart's default ServiceMonitors for these just fail to find a
+        # target forever. Disabled rather than guessed at k3s's internal
+        # endpoints; kube-state-metrics + node-exporter above already cover
+        # node/pod-level signals.
+        kubeControllerManager:
+          enabled: false
+        kubeScheduler:
+          enabled: false
+        kubeEtcd:
+          enabled: false
+        kubeProxy:
+          enabled: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

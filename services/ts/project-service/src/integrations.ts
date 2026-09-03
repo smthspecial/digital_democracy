@@ -1,3 +1,6 @@
+import { randomUUID } from "node:crypto";
+import { publish, type EventBus } from "@dd/event-bus";
+
 // audit-service (DP-036) and civic-duty-service (DP-053's assignment queue)
 // are separate processes not implemented in this codebase yet. Both calls
 // are modeled as injectable seams with no-op default implementations, per
@@ -16,6 +19,39 @@ export interface AuditEmitter {
 export const noopAuditEmitter: AuditEmitter = {
   emit: () => {},
 };
+
+// The audit.append queue's subject and stream name (DP-036, ADR-023).
+// audit-service's own consumer (services/go/audit-service/nats.go) binds
+// to this same stream/subject pair.
+export const AUDIT_APPEND_STREAM = "AUDIT";
+export const AUDIT_APPEND_SUBJECT = "audit.append";
+
+// createNatsAuditEmitter publishes to the real audit.append queue
+// (ADR-023). project_milestone.completed/project.completed have no
+// dedicated TBL-034 bucket, so both map to the generic system_update
+// bucket, with the original local event type folded into the payload.
+// Fire-and-forget per the AuditEmitter contract: a downed
+// NATS/audit-service must never block the milestone/project completion
+// that triggered it.
+export function createNatsAuditEmitter(bus: EventBus): AuditEmitter {
+  return {
+    emit(event) {
+      void publish(bus, AUDIT_APPEND_SUBJECT, {
+        action_type: "system_update",
+        actor_ref: "project-service",
+        payload: {
+          event_type: event.type,
+          projectId: event.projectId,
+          at: event.at.toISOString(),
+          ...(event.details ? { details: event.details } : {}),
+        },
+        idempotency_key: randomUUID(),
+      }).catch(() => {
+        // Intentionally swallowed -- see contract note above.
+      });
+    },
+  };
+}
 
 export interface AssignmentRequester {
   request(projectId: string): void;

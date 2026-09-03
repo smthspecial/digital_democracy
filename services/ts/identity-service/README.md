@@ -27,20 +27,33 @@ Health contract (`/healthz`, `/readyz`) plus the civic identity lifecycle
   citizen.
 - `POST /identity/citizens/:id/suspend`, `POST /identity/citizens/:id/revoke`
   -- both gated by an injectable `ApprovalGate` modeling the DP-023 -> DP-035
-  multi-approval workflow (`403` without approval), and both terminate the
-  citizen's active sessions via an injectable `SessionRevoker` (DP-042's
-  cascade into auth-service's `revoke_all_sessions`) so a suspension or
-  revocation takes effect immediately rather than only once the session's
-  own TTL lapses. `SessionRevoker` has a real HTTP-calling implementation
-  (`createHttpSessionRevoker`, calling `POST
+  multi-approval workflow (`403` without approval), both reject an illegal
+  status transition with `409` (double-suspend, re-suspending a revoked
+  citizen, or re-revoking an already-revoked one -- ARCH-010 EC-4), and both
+  terminate the citizen's active sessions via an injectable `SessionRevoker`
+  (DP-042's cascade into auth-service's `revoke_all_sessions`) so a
+  suspension or revocation takes effect immediately rather than only once
+  the session's own TTL lapses. `SessionRevoker` has a real HTTP-calling
+  implementation (`createHttpSessionRevoker`, calling `POST
   /auth/internal/revoke-all/:citizenId`), wired in by `index.ts` whenever
-  `AUTH_SERVICE_URL` is set, falling back to a no-op otherwise. The rest of
-  DP-042's cascade (delegations, assignments, tokens, governance roles) is
-  owned by other services and out of scope here.
+  `AUTH_SERVICE_URL` is set, falling back to a no-op otherwise. `ApprovalGate`
+  has a real HTTP-calling implementation (`createHttpApprovalGate`, calling
+  `GET /governance-roles/actions/identity:{suspend|revoke}:{citizenId}/status`
+  -- the action-type-scoped `action_ref` convention ARCH-010 §2 defines, so a
+  suspend approval can never satisfy a revoke check on the same citizen),
+  wired in by `index.ts` whenever `GOVERNANCE_ROLE_SERVICE_URL` is set,
+  falling back to the permissive default otherwise, and failing closed (not
+  approved) on any lookup failure. The rest of DP-042's cascade (delegations,
+  assignments, tokens, governance roles) is owned by other services and out
+  of scope here.
 - `POST /identity/duplicates/scan` -- runs the DP-024/DP-056 duplicate
   detector (exact `legal_identity_hash` matches plus an injectable
   `DuplicateSignal` heuristic) across all citizens.
 
 Every status change is emitted through an injectable `AuditEmitter`
-(DP-036), defaulting to a no-op. Persistence is in-memory only, behind a
-`Store` abstraction.
+(DP-036), defaulting to a no-op. `AuditEmitter` has a real queue-backed
+implementation, `createNatsAuditEmitter` (ADR-023): when `NATS_URL` is set
+it publishes to the `audit.append` JetStream stream (every citizen event --
+registered, verified, activated, suspended, revoked -- maps to TBL-034's
+`identity_event` action_type) instead of doing nothing. Persistence is
+in-memory only, behind a `Store` abstraction.

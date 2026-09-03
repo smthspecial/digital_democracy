@@ -35,10 +35,35 @@ jobs:
         with:
           go-version: "1.22"
           cache-dependency-path: services/go/${{ matrix.service }}/go.sum
+      # audit-service's nats.go tests (ADR-023) spawn a real nats-server;
+      # go-install is needed since it's not preinstalled on the runner image.
+      - if: matrix.service == 'audit-service'
+        run: go install github.com/nats-io/nats-server/v2@latest
       - working-directory: services/go/${{ matrix.service }}
         run: |
           go vet ./...
           go test ./...
+          go build ./...
+
+  go-packages:
+    name: Go packages (vet, test, build)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        package: [eventbus]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: packages/go/${{ matrix.package }}/go.sum
+      # eventbus_test.go (ADR-023) spawns a real nats-server.
+      - run: go install github.com/nats-io/nats-server/v2@latest
+      - working-directory: packages/go/${{ matrix.package }}
+        run: |
+          go vet ./...
+          go test ./...
+          go build ./...
           go build ./...
 
   docker:

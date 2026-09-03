@@ -49,16 +49,16 @@ export function getJurisdictionTree(store: Store, id: string): JurisdictionTreeN
   return buildNode(store, root);
 }
 
-export function changeScopeLevel(
+export async function changeScopeLevel(
   store: Store,
   approvalGate: ApprovalGate,
   audit: AuditEmitter,
   id: string,
   scopeLevel: ScopeLevel,
-): Jurisdiction {
+): Promise<Jurisdiction> {
   const jurisdiction = store.jurisdictions.getById(id);
   if (!jurisdiction) throw notFound("jurisdiction not found");
-  if (!approvalGate(id)) throw forbidden("scope-level change requires protocol-layer approval");
+  if (!(await approvalGate(id))) throw forbidden("scope-level change requires protocol-layer approval");
   const updated: Jurisdiction = { ...jurisdiction, scope_level: scopeLevel };
   store.jurisdictions.update(updated);
   audit("jurisdiction.scope_level_changed", { jurisdiction_id: id, scope_level: scopeLevel });

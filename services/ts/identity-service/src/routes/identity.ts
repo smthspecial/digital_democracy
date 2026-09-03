@@ -115,13 +115,13 @@ export function registerIdentityRoutes(app: FastifyInstance, deps: IdentityServi
   app.post<{ Params: CitizenParams }>(
     "/identity/citizens/:id/suspend",
     { schema: { params: citizenParamsSchema } },
-    async (request) => serializeCitizen(suspendCitizen(deps, request.params.id)),
+    async (request) => serializeCitizen(await suspendCitizen(deps, request.params.id)),
   );
 
   app.post<{ Params: CitizenParams }>(
     "/identity/citizens/:id/revoke",
     { schema: { params: citizenParamsSchema } },
-    async (request) => serializeCitizen(revokeCitizen(deps, request.params.id)),
+    async (request) => serializeCitizen(await revokeCitizen(deps, request.params.id)),
   );
 
   app.post("/identity/duplicates/scan", async () => {

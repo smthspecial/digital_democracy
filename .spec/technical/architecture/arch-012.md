@@ -143,47 +143,57 @@ End state: proposal `status: "approved"`, budget complete, scope assigned, one a
 
 | Scenario | FR/DP/NFR ids | Level | Automated test id |
 |---|---|---|---|
-| HP-1 | FR-015,FR-016,FR-018,DP-003,DP-004,DP-005 | integration | IT-012-HP1 |
-| HP-2 | FR-008,FR-017,FR-019,FR-037,DP-005,DP-006,DP-007,DP-029 | e2e | E2E-012-HP2 |
-| EC-1 | FR-015 | integration | IT-012-EC1 |
-| EC-2 | DP-005 | integration | IT-012-EC2 |
-| EC-3 | SRV-003 | integration | IT-012-EC3 |
-| EC-4 | DP-007,FR-037 | e2e | E2E-012-EC4 |
-| EC-5 | FR-008 | e2e | E2E-012-EC5 |
-| EC-6 | SRV-003 | integration | IT-012-EC6 |
-| EC-7 | DP-006 | e2e | E2E-012-EC7 |
-| EC-8 | FR-017 | e2e | E2E-012-EC8 |
-| EC-9 | SRV-004 | e2e | E2E-012-EC9 |
-| EC-10 | SRV-004 | e2e | E2E-012-EC10 |
-| EC-11 | SRV-004 | e2e | E2E-012-EC11 |
-| EC-12 | FR-034 | e2e | E2E-012-EC12 |
-| EC-13 | FR-034 | e2e | E2E-012-EC13 |
-| EC-14 | FR-034 | e2e | E2E-012-EC14 |
-| EC-15 | FR-034 | e2e | E2E-012-EC15 |
-| EC-16 | FR-034 | e2e | E2E-012-EC16 |
-| EC-17 | FR-034 | e2e | E2E-012-EC17 |
-| EC-18 | FR-034 | e2e | E2E-012-EC18 |
-| EC-19 | FR-034 | e2e | E2E-012-EC19 |
-| EC-20 | FR-034 | e2e | E2E-012-EC20 |
-| EC-21 | FR-016,FR-017 | blocked | TBD |
-| EC-22 | FR-017 | e2e | E2E-012-EC22 |
-| EC-23 | FR-017 | e2e | E2E-012-EC23 |
-| EC-24 | FR-017 | e2e | E2E-012-EC24 |
-| EC-25 | FR-017 | e2e | E2E-012-EC25 |
-| EC-26 | FR-037,FR-008 | e2e | E2E-012-EC26 |
-| EC-27 | FR-016 | integration | IT-012-EC27 |
-| EC-28 | DP-004 | integration | IT-012-EC28 |
-| EC-29 | SRV-004 | e2e | E2E-012-EC29 |
-| EC-30 | DP-020 | e2e | E2E-012-EC30 |
-| EC-31 | DP-028 | blocked | TBD |
-| EC-32 | DP-028,FR-017 | blocked | TBD |
-| EC-33 | SRV-003 | blocked | TBD |
-| EC-34 | DP-005 | integration | IT-012-EC34 |
-| EC-35 | DP-034 | blocked | TBD |
-| EC-36 | DP-036 | blocked | TBD |
-| EC-37 | DP-036 | e2e | E2E-012-EC37 |
-| EC-38 | DP-036 | integration | IT-012-EC38 |
-| EC-39 | FR-034 | e2e | E2E-012-EC39 |
+| HP-1 | FR-015,FR-016,FR-018,DP-003,DP-004,DP-005 | integration | `arch012-problem-proposal.e2e.test.ts::HP-1` |
+| HP-2 | FR-008,FR-017,FR-019,FR-037,DP-005,DP-006,DP-007,DP-029 | e2e | `proposals.test.ts::"HP-2: runs the full happy-path lifecycle..."` |
+| EC-1 | FR-015 | integration | `problems.test.ts::"rejects a submission missing required fields..."` |
+| EC-2 | DP-005 | integration | `proposals.test.ts::"rejects a body missing required fields"` |
+| EC-3 | SRV-003 | integration | `status.test.ts::"rejects an unrecognized status value with 400"` |
+| EC-4 | DP-007,FR-037 | e2e | `proposals.test.ts::IT-012-EC-4` |
+| EC-5 | FR-008 | e2e | `proposals.test.ts::IT-011-EC-4` |
+| EC-6 | SRV-003 | integration | `status.test.ts::"rejects the illegal transition..."` (×7) |
+| EC-7 | DP-006 | e2e | `proposals.test.ts::"rejects adding a constraint while status is %s"` |
+| EC-8 | FR-017 | e2e | `proposals.test.ts::"gathering_support -> development is blocked below the support threshold"` |
+| EC-9 | SRV-004 | e2e | `proposals.test.ts::"rejects advance from terminal-ish status %s"` |
+| EC-10 | SRV-004 | e2e | `proposals.test.ts::"rejects resolving to approved from %s"` + `IT-012-EC-10` |
+| EC-11 | SRV-004 | e2e | `proposals.test.ts::"rejects archiving from terminal status %s"` |
+| EC-12 | FR-034 | e2e | `proposals.test.ts::IT-012-EC-12` |
+| EC-13 | FR-034 | e2e | `proposals.test.ts::"rejects entering deadlock twice"` |
+| EC-14 | FR-034 | e2e | `proposals.test.ts::"rejects advancing the deadlock track before it has been entered"` |
+| EC-15 | FR-034 | e2e | `proposals.test.ts::"blocks the normal /advance endpoint..."` |
+| EC-16 | FR-034 | e2e | `proposals.test.ts::"blocks the normal /resolve endpoint..."` |
+| EC-17 | FR-034 | e2e | `proposals.test.ts::"rejects reaching final_decision without an outcome"` |
+| EC-18 | FR-034 | e2e | `proposals.test.ts::"resolves the proposal when an outcome is provided at final_decision..."` |
+| EC-19 | FR-034 | e2e | `proposals.test.ts::"runs the full 8-stage deadlock happy path end-to-end"` |
+| EC-20 | FR-034 | e2e | `proposals.test.ts::"rejects advancing when the reviewer is not assigned..."` |
+| EC-21 | FR-016,FR-017 | integration | `proposals.test.ts::IT-012-EC-21` |
+| EC-22 | FR-017 | e2e | `proposals.test.ts::IT-011-EC-22` |
+| EC-23 | FR-017 | e2e | `proposals.test.ts::IT-011-EC-22` |
+| EC-24 | FR-017 | e2e | `proposals.test.ts::IT-012-EC-24` |
+| EC-25 | FR-017 | e2e | `proposals.test.ts::"computes the ceil(population * 0.05) threshold..."` |
+| EC-26 | FR-037,FR-008 | e2e | `proposals.test.ts::"...missing budget fields"` + `IT-012-EC-26` (×4) |
+| EC-27 | FR-016 | integration | `problems.test.ts::IT-012-EC-27` |
+| EC-28 | DP-004 | integration | `support.test.ts` (×2) |
+| EC-29 | SRV-004 | e2e | `proposals.test.ts::"rejects duplicate support from the same citizen"` |
+| EC-30 | DP-020 | e2e | `proposals.test.ts::IT-011-EC-9` |
+| EC-31 | DP-028 | blocked | `it.todo` in `proposals.test.ts` — blocked, see below |
+| EC-32 | DP-028,FR-017 | blocked | `it.todo` in `proposals.test.ts` — blocked, see below |
+| EC-33 | SRV-003 | integration | `integrations.test.ts::IT-012-EC-33` + `proposals.test.ts::IT-012-EC-33` (×3) + `arch012-problem-proposal.e2e.test.ts::IT-012-EC-33` (×2) |
+| EC-34 | DP-005 | integration | `proposals.test.ts::IT-012-EC-34` |
+| EC-35 | DP-034 | blocked | `it.todo` in `proposals.test.ts` — blocked, see below |
+| EC-36 | DP-036 | blocked | `it.todo` in `proposals.test.ts` — blocked, see below |
+| EC-37 | DP-036 | e2e | `proposals.test.ts::IT-012-EC-37` (×2) |
+| EC-38 | DP-036 | integration | `audit.test.ts` (×2) |
+| EC-39 | FR-034 | e2e | `proposals.test.ts::"resolves the proposal when an outcome is provided at final_decision..."` (EC-39 addendum) |
+
+All automated tests live under `services/ts/problem-service/src/routes/*.test.ts` and `services/ts/proposal-service/src/` (`routes/proposals.test.ts`, `integrations.test.ts`, `e2e/arch012-problem-proposal.e2e.test.ts`). The e2e suite boots problem-service and proposal-service as real processes (`e2e/harness.ts`, the same one ARCH-011 built) reached over real HTTP, per §2.
+
+---
+
+## Status update (2026-08-28)
+
+`proposal-service` now has a real `ProblemStatusNotifier` HTTP seam, closing EC-33. `createHttpProblemStatusNotifier` (`integrations.ts`) calls problem-service's already-existing `POST /problems/:id/status`, wired in by `index.ts` when `PROBLEM_SERVICE_URL` is set, no-op by default otherwise. It fires `proposing` when a proposal reaches `development` and `closed` once every proposal linked to a problem is in a terminal status (`approved`, `rejected`, or `archived` — SRV-003's "approved or all rejected/archived" rule collapses into one check, since a single approved proposal already satisfies "every proposal for this problem is terminal" on its own). Fire-and-forget, matching every other cross-service notification in this codebase. Confirmed end-to-end against a real problem-service in the e2e suite, both trigger paths, including the multi-proposal case where a competing proposal being rejected doesn't close the problem until every proposal for it is terminal.
+
+`EC-31`/`EC-32` (the `ThresholdChecker`/DP-028 half of this doc's central gap) remain deliberately blocked, unlike EC-33: DP-028's description specifies the threshold source as the *problem's* endorsement count, which conflicts with proposal-service's actual, heavily-tested implementation where `support_count` is proposal-service's own independent counter with no connection to problem-level endorsements. Building the seam would mean guessing whether DP-028 replaces, feeds into, or runs alongside that existing mechanism — a real architecture decision with no clear enough answer in the spec, unlike EC-33's unambiguous existing receiving endpoint and semantics. Documented per ARCH-009 §2 rather than guessed at.
 
 ---
 

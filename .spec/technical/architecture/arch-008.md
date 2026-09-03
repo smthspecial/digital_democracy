@@ -16,7 +16,7 @@ This document defines how the platform-operator role (AUTH-011, once it exists) 
 
 Every service (SRV-001 through SRV-017, per ARCH-006) is instrumented with OpenTelemetry: traces, metrics, and structured logs share a common `trace_id`/`span_id` context, covering sync request handling, async queue workers, and cron jobs alike. Prometheus scrapes per-service metrics; Grafana renders per-service and cross-service dashboards from them. Logs are shipped to a centralized structured-logging backend (e.g. Loki) and are queryable by `trace_id`, so a log line, a metric spike, and a trace for the same request correlate directly.
 
-Distributed tracing follows a request across the sync-call / async-Kafka-queue boundary (ADR-016): OpenTelemetry trace context (`traceparent`, `tracestate`) is propagated as Kafka message headers on every produce, and every consumer resumes the existing trace on read rather than starting a new one. A single ballot cast is therefore traceable end to end as one trace: the sync `ballot:cast` request into voting-service (DP-016), the `voting.tally` queue hop into the tally worker (DP-026), and the `audit.append` queue hop into audit-service (DP-036) — the same pipeline shown in ARCH-005 diagram 4.
+Distributed tracing follows a request across the sync-call / async-queue boundary (ADR-023 — NATS JetStream, which superseded ADR-016's Kafka backbone): OpenTelemetry trace context (`traceparent`, `tracestate`) is propagated as NATS message headers on every publish, and every consumer resumes the existing trace on read rather than starting a new one. A single ballot cast is therefore traceable end to end as one trace: the sync `ballot:cast` request into voting-service (DP-016), the `voting.tally` queue hop into the tally worker (DP-026), and the `audit.append` queue hop into audit-service (DP-036) — the same pipeline shown in ARCH-005 diagram 4. (This tracing pipeline itself — the OpenTelemetry collector and a trace-storage backend — is target state, not yet deployed; the current build stage runs a metrics-only slice of this stack, ARCH-025 §2.)
 
 | Signal | Tool | Notes |
 |--------|------|-------|
@@ -24,6 +24,8 @@ Distributed tracing follows a request across the sync-call / async-Kafka-queue b
 | Metrics | Prometheus | scraped per service; feeds Grafana and the SLO burn-rate alerts in Section 2 |
 | Logs | Structured logging, centralized (e.g. Loki) | correlated to `trace_id` |
 | Dashboards | Grafana | per-service and cross-service; the SLO health dashboard (Section 2) is also exposed outside the platform-operator team |
+
+This is the target stack. ARCH-025 covers what's actually deployed at the current build stage (Prometheus + Grafana + Alertmanager only, on a single self-hosted k3s cluster, no cloud vendor per ADR-026) — traces and centralized logs are not live yet.
 
 ---
 

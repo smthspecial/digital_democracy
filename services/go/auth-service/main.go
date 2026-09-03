@@ -27,7 +27,20 @@ func main() {
 		logger.Error("failed to initialize encryption key", "error", err)
 		os.Exit(1)
 	}
-	svc := NewService(newStore(), enc, noopAuditEmitter{})
+	var audit AuditEmitter
+	// NATS_URL (ADR-023) is the only AuditEmitter wiring this service has --
+	// there is no HTTP fallback here, unlike voting-service's
+	// AUDIT_SERVICE_URL. Unset -> falls back to the no-op default so the
+	// service still runs standalone with zero configuration.
+	if url := os.Getenv("NATS_URL"); url != "" {
+		natsAudit, err := newNATSAuditEmitter(context.Background(), url)
+		if err != nil {
+			logger.Error("failed to connect NATS audit emitter", "error", err)
+			os.Exit(1)
+		}
+		audit = natsAudit
+	}
+	svc := NewService(newStore(), enc, audit)
 
 	var identity IdentityChecker
 	if url := os.Getenv("IDENTITY_SERVICE_URL"); url != "" {

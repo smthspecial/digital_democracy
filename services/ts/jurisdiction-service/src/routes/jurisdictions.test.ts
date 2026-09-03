@@ -1,5 +1,6 @@
 import { describe, expect, it, afterAll } from "vitest";
 import { buildServer } from "../server.js";
+import { createHttpApprovalGate } from "../services/interfaces.js";
 
 describe("jurisdiction routes", () => {
   const app = buildServer();
@@ -155,5 +156,76 @@ describe("jurisdiction routes", () => {
     });
     expect(events).toEqual(["jurisdiction.created", "jurisdiction.scope_level_changed"]);
     await auditApp.close();
+  });
+
+  // ARCH-011 EC-29: no version/optimistic-lock field exists on jurisdictions
+  // either -- store.jurisdictions.update unconditionally overwrites.
+  it("IT-011-EC-29: two concurrent scope-level calls are last-write-wins with no conflict signaled", async () => {
+    const concurrentApp = buildServer({ approvalGate: () => true });
+    const jurisdiction = (await concurrentApp.inject({
+      method: "POST",
+      url: "/jurisdiction/jurisdictions",
+      payload: { parent_id: null, name: "Concurrent", scope_level: "municipality", boundary_ref: "ref" },
+    })).json();
+
+    const [a, b] = await Promise.all([
+      concurrentApp.inject({
+        method: "POST",
+        url: `/jurisdiction/jurisdictions/${jurisdiction.id}/scope-level`,
+        payload: { scope_level: "regional" },
+      }),
+      concurrentApp.inject({
+        method: "POST",
+        url: `/jurisdiction/jurisdictions/${jurisdiction.id}/scope-level`,
+        payload: { scope_level: "national" },
+      }),
+    ]);
+    expect(a.statusCode).toBe(200);
+    expect(b.statusCode).toBe(200);
+
+    const tree = await concurrentApp.inject({
+      method: "GET",
+      url: `/jurisdiction/jurisdictions/${jurisdiction.id}/tree`,
+    });
+    expect(["regional", "national"]).toContain(tree.json().scope_level);
+    await concurrentApp.close();
+  });
+
+  // ARCH-011 EC-38: boundary_ref is stored as an opaque pointer and never
+  // dereferenced or validated (ADR-004) -- documents the intentional
+  // non-check, not a gap to close.
+  it("IT-011-EC-38: accepts any boundary_ref string with no existence or reachability check", async () => {
+    const res = await createJurisdiction({
+      parent_id: null,
+      name: "Dangling boundary",
+      scope_level: "municipality",
+      boundary_ref: "https://boundaries.example/does-not-actually-resolve-anywhere",
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().boundary_ref).toBe("https://boundaries.example/does-not-actually-resolve-anywhere");
+  });
+
+  // ARCH-011 EC-31: scope-level change approval is now backed by a real
+  // HTTP-calling ApprovalGate once governance-role-service is wired in --
+  // the fail-closed-on-unreachable half of that contract, tested here
+  // without needing a real governance-role-service (see
+  // services/interfaces.test.ts for the full seam-level coverage, and
+  // arch011-jurisdiction-scope.e2e.test.ts under proposal-service for the
+  // real cross-service confirmation).
+  it("IT-011-EC-31: scope-level change fails closed when the real ApprovalGate's target is unreachable", async () => {
+    const unreachableApp = buildServer({ approvalGate: createHttpApprovalGate("http://127.0.0.1:1") });
+    const jurisdiction = (await unreachableApp.inject({
+      method: "POST",
+      url: "/jurisdiction/jurisdictions",
+      payload: { parent_id: null, name: "Unreachable-gate", scope_level: "municipality", boundary_ref: "ref" },
+    })).json();
+
+    const res = await unreachableApp.inject({
+      method: "POST",
+      url: `/jurisdiction/jurisdictions/${jurisdiction.id}/scope-level`,
+      payload: { scope_level: "regional" },
+    });
+    expect(res.statusCode).toBe(403);
+    await unreachableApp.close();
   });
 });

@@ -28,7 +28,7 @@ export function registerMembershipRoutes(app: FastifyInstance, deps: Deps) {
       },
     },
     async (request, reply) => {
-      const membership = createMembership(deps.store, request.body);
+      const membership = createMembership(deps.store, deps.auditEmitter, request.body);
       reply.status(201).send({ ...membership, created_at: membership.created_at.toISOString() });
     },
   );

@@ -97,9 +97,15 @@ export function submitVerification(
   return verification;
 }
 
-export function suspendCitizen(deps: IdentityServiceDeps, citizenId: string): Citizen {
-  getCitizen(deps, citizenId);
-  if (!deps.approvalGate.hasRequiredApprovals(citizenId)) {
+export async function suspendCitizen(deps: IdentityServiceDeps, citizenId: string): Promise<Citizen> {
+  const current = getCitizen(deps, citizenId);
+  // ARCH-010 EC-4: a fully-approved re-suspend of an already-suspended or
+  // already-revoked citizen must not silently overwrite the stronger
+  // `revoked` status back to `suspended` (or no-op-reapply `suspended`).
+  if (current.status === "suspended" || current.status === "revoked") {
+    throw conflict(`cannot suspend a citizen with status ${current.status}`);
+  }
+  if (!(await deps.approvalGate.hasRequiredApprovals(citizenId, "suspend"))) {
     throw forbidden("Suspension requires multi-approval");
   }
   const citizen = deps.store.updateCitizenStatus(citizenId, "suspended");
@@ -111,9 +117,15 @@ export function suspendCitizen(deps: IdentityServiceDeps, citizenId: string): Ci
   return citizen;
 }
 
-export function revokeCitizen(deps: IdentityServiceDeps, citizenId: string): Citizen {
-  getCitizen(deps, citizenId);
-  if (!deps.approvalGate.hasRequiredApprovals(citizenId)) {
+export async function revokeCitizen(deps: IdentityServiceDeps, citizenId: string): Promise<Citizen> {
+  const current = getCitizen(deps, citizenId);
+  // ARCH-010 EC-4: revocation is terminal -- a replayed or re-approved
+  // revoke against an already-revoked citizen must reject, not re-fire the
+  // audit trail and session cascade for a transition that already happened.
+  if (current.status === "revoked") {
+    throw conflict("citizen is already revoked");
+  }
+  if (!(await deps.approvalGate.hasRequiredApprovals(citizenId, "revoke"))) {
     throw forbidden("Revocation requires multi-approval");
   }
   const citizen = deps.store.updateCitizenStatus(citizenId, "revoked");

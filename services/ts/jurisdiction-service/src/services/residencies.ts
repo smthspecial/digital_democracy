@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Store } from "../store.js";
 import type { Residency } from "../domain/types.js";
 import { validation } from "../errors.js";
+import type { AuditEmitter } from "./interfaces.js";
 
 export interface CreateResidencyInput {
   citizen_id: string;
@@ -10,7 +11,11 @@ export interface CreateResidencyInput {
   end_date: Date | null;
 }
 
-export function createResidency(store: Store, input: CreateResidencyInput): Residency {
+// ARCH-011 EC-36: residency creation is a structural change per SRV-002's
+// "emits to audit-service on any structural change" rule, same as
+// jurisdiction creation/scope-level changes -- it just didn't call the
+// AuditEmitter seam at all until now.
+export function createResidency(store: Store, audit: AuditEmitter, input: CreateResidencyInput): Residency {
   if (!store.jurisdictions.getById(input.jurisdiction_id)) {
     throw validation("jurisdiction not found");
   }
@@ -27,6 +32,7 @@ export function createResidency(store: Store, input: CreateResidencyInput): Resi
     status: input.end_date !== null ? "ended" : "active",
   };
   store.residencies.insert(residency);
+  audit("residency.created", { residency_id: residency.id, jurisdiction_id: residency.jurisdiction_id });
   return residency;
 }
 

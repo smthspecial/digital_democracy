@@ -1,3 +1,6 @@
+import { randomUUID } from "node:crypto";
+import { publish, type EventBus } from "@dd/event-bus";
+
 export interface AuditEmitter {
   emit(eventType: string, payload: Record<string, unknown>): void;
 }
@@ -7,6 +10,33 @@ export interface AuditEmitter {
 export const noopAuditEmitter: AuditEmitter = {
   emit: () => {},
 };
+
+// The audit.append queue's subject and stream name (DP-036, ADR-023).
+// audit-service's own consumer (services/go/audit-service/nats.go) binds
+// to this same stream/subject pair.
+export const AUDIT_APPEND_STREAM = "AUDIT";
+export const AUDIT_APPEND_SUBJECT = "audit.append";
+
+// createNatsAuditEmitter publishes to the real audit.append queue
+// (ADR-023). deliberation.argument.posted has no dedicated TBL-034 bucket,
+// so it maps to the generic system_update bucket, with the original local
+// event name folded into the payload. Fire-and-forget per the
+// AuditEmitter contract: a downed NATS/audit-service must never block the
+// argument post that triggered it.
+export function createNatsAuditEmitter(bus: EventBus): AuditEmitter {
+  return {
+    emit(eventType, payload) {
+      void publish(bus, AUDIT_APPEND_SUBJECT, {
+        action_type: "system_update",
+        actor_ref: "deliberation-service",
+        payload: { event_type: eventType, ...payload },
+        idempotency_key: randomUUID(),
+      }).catch(() => {
+        // Intentionally swallowed -- see contract note above.
+      });
+    },
+  };
+}
 
 export interface SynthesisTrigger {
   trigger(subjectId: string): void;

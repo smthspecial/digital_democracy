@@ -43,7 +43,7 @@ export function registerResidencyRoutes(app: FastifyInstance, deps: Deps) {
       },
     },
     async (request, reply) => {
-      const residency = createResidency(deps.store, {
+      const residency = createResidency(deps.store, deps.auditEmitter, {
         citizen_id: request.body.citizen_id,
         jurisdiction_id: request.body.jurisdiction_id,
         start_date: parseDate(request.body.start_date, "start_date"),

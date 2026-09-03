@@ -52,7 +52,13 @@ Two integration seams -- delegation-service's DP-041 chain resolution
 implementations (`httpDelegationResolver`, `httpAuditEmitter`); `main.go`
 wires them in when `DELEGATION_SERVICE_URL` / `AUDIT_SERVICE_URL` are set,
 falling back to the no-op default when unset so the service still runs
-standalone with zero configuration.
+standalone with zero configuration. `AuditEmitter` also has a real
+queue-backed implementation, `natsAuditEmitter` (`nats.go`, ADR-023): when
+`NATS_URL` is set it publishes to the `audit.append` JetStream stream
+instead of calling audit-service's HTTP endpoint, taking priority over
+`AUDIT_SERVICE_URL` when both are configured (`vote_certified` is already
+the exact TBL-034 action_type this service's only `Emit` call site passes,
+so no event-name mapping is needed here).
 
 `CastBallot` resolves delegators synchronously right after the ballot
 commits (fire-and-forget: a resolver failure never undoes the ballot) and

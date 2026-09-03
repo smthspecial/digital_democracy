@@ -17,7 +17,11 @@ Besides the health contract (`/healthz`, `/readyz`):
 - `POST /jurisdiction/jurisdictions` -- create a jurisdiction (nests via `parent_id`).
 - `GET /jurisdiction/jurisdictions/:id/tree` -- the jurisdiction and all descendants, nested.
 - `POST /jurisdiction/jurisdictions/:id/scope-level` -- change `scope_level`; gated by an
-  injected `ApprovalGate` (DP-035, 403 when not approved; fake defaults to always-approved).
+  injected `ApprovalGate` (DP-035, 403 when not approved; permissive default of always-approved).
+  `ApprovalGate` has a real HTTP-calling implementation (`createHttpApprovalGate`, calling
+  `GET /governance-roles/actions/jurisdiction:scope-level:{id}/status`), wired in by `index.ts`
+  whenever `GOVERNANCE_ROLE_SERVICE_URL` is set, and failing closed (not approved) on any
+  lookup failure (ARCH-011 EC-31).
 - `POST /jurisdiction/residencies` -- record a residency period.
 - `POST /jurisdiction/memberships` -- record a citizen's membership in a jurisdiction; unique
   on `(citizen_id, jurisdiction_id)`, but a citizen may hold simultaneous memberships across
@@ -30,6 +34,13 @@ Besides the health contract (`/healthz`, `/readyz`):
 - `GET /jurisdiction/residency/verify?citizen_id=&jurisdiction_id=&at=` -- whether the citizen
   had current residency there at the given instant (defaults to now).
 
-All state is in-memory (`src/store.ts`), reset per process. `scope_level` changes and
-jurisdiction creation emit to `audit.append` (DP-036) via an injected `AuditEmitter`
-(no-op by default). See `src/deps.ts` for how these seams are wired and overridden in tests.
+All state is in-memory (`src/store.ts`), reset per process. Jurisdiction creation,
+scope-level changes, residency creation, and membership creation all emit to
+`audit.append` (DP-036) via an injected `AuditEmitter` (no-op by default). See
+`src/deps.ts` for how these seams are wired and overridden in tests.
+`AuditEmitter` has a real queue-backed implementation,
+`createNatsAuditEmitter` (ADR-023): when `NATS_URL` is set it publishes to
+the `audit.append` JetStream stream instead of doing nothing (every event
+here maps to TBL-034's `admin_action`, with the original local event name
+folded into the payload's `event_type` field since none of them have a more
+specific TBL-034 bucket of their own).

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { publish, type EventBus } from "@dd/event-bus";
 
 // ConstitutionalReviewer models DP-034 (constitutional review), owned by
 // SRV-012/audit-service. There is no constitutional.review queue here, so
@@ -91,6 +92,108 @@ export function createHttpAuditEmitter(baseUrl: string): AuditEmitter {
           payload,
           idempotency_key: randomUUID(),
         }),
+      }).catch(() => {
+        // Intentionally swallowed -- see contract note above.
+      });
+    },
+  };
+}
+
+// The audit.append queue's subject and stream name (DP-036, ADR-023).
+// audit-service's own consumer (services/go/audit-service/nats.go) binds
+// to this same stream/subject pair.
+export const AUDIT_APPEND_STREAM = "AUDIT";
+export const AUDIT_APPEND_SUBJECT = "audit.append";
+
+// createNatsAuditEmitter publishes to the real audit.append queue (ADR-023)
+// instead of calling audit-service's HTTP endpoint directly -- the same
+// event shape createHttpAuditEmitter posts, just durably queued instead of
+// requiring a live synchronous round trip. Fire-and-forget per the
+// AuditEmitter contract, same as the HTTP implementation: a downed
+// NATS/audit-service must never block the governance action that
+// triggered it (and with a real queue behind it, "downed audit-service"
+// no longer means "lost event" the way the HTTP call's silent catch did --
+// JetStream retains the message until a consumer is back up).
+export function createNatsAuditEmitter(bus: EventBus): AuditEmitter {
+  return {
+    emit(eventType, payload) {
+      void publish(bus, AUDIT_APPEND_SUBJECT, {
+        action_type: AUDIT_ACTION_TYPE_BY_EVENT[eventType] ?? "system_update",
+        actor_ref: "proposal-service",
+        payload,
+        idempotency_key: randomUUID(),
+      }).catch(() => {
+        // Intentionally swallowed -- see contract note above.
+      });
+    },
+  };
+}
+
+// JurisdictionClient models jurisdiction-service's existence check for
+// scope-assignment (ARCH-011 Overview -- assignScope trusted
+// scope_jurisdiction_id as client input with no cross-service check at
+// all, the central gap that test plan exists to expose). Permissive by
+// default so the service still runs standalone with zero configuration.
+export interface JurisdictionClient {
+  exists(jurisdictionId: string): Promise<boolean>;
+}
+
+export const defaultJurisdictionClient: JurisdictionClient = {
+  exists: async () => true,
+};
+
+// createHttpJurisdictionClient calls jurisdiction-service's real
+// GET /jurisdiction/jurisdictions/:id/tree (SRV-002) -- there is no
+// single-jurisdiction lookup endpoint, but the tree endpoint 404s for an
+// unknown id and 200s for a real one, which is exactly the existence
+// signal this seam needs.
+//
+// Fails closed (ARCH-011 EC-30, symmetric with ARCH-010 EC-16): an
+// unreachable jurisdiction-service is treated as "does not exist" rather
+// than silently accepting the caller's assertion.
+export function createHttpJurisdictionClient(baseUrl: string): JurisdictionClient {
+  return {
+    async exists(jurisdictionId) {
+      try {
+        const res = await fetch(
+          `${baseUrl}/jurisdiction/jurisdictions/${encodeURIComponent(jurisdictionId)}/tree`,
+        );
+        return res.ok;
+      } catch {
+        return false;
+      }
+    },
+  };
+}
+
+// ProblemStatusNotifier models SRV-003's documented rule that proposal
+// lifecycle events drive problem.status: open->proposing when a linked
+// proposal reaches development, proposing->closed when a proposal is
+// approved or all of a problem's proposals end up rejected/archived
+// (ARCH-012 EC-33). The receiving endpoint (POST /problems/:id/status)
+// already exists on problem-service; only this caller-side seam was
+// missing. Fire-and-forget, matching every other cross-service call in
+// this codebase: a downed problem-service must not block the proposal
+// transition that triggered it, and an already-transitioned or unknown
+// problem_id (proposal-service performs no existence check at creation,
+// ARCH-012 EC-34) simply 409s/404s silently on problem-service's side.
+export interface ProblemStatusNotifier {
+  notify(problemId: string, status: "proposing" | "closed"): void;
+}
+
+export const defaultProblemStatusNotifier: ProblemStatusNotifier = {
+  notify: () => {},
+};
+
+// createHttpProblemStatusNotifier calls problem-service's real
+// POST /problems/:id/status (SRV-003).
+export function createHttpProblemStatusNotifier(baseUrl: string): ProblemStatusNotifier {
+  return {
+    notify(problemId, status) {
+      fetch(`${baseUrl}/problems/${encodeURIComponent(problemId)}/status`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status }),
       }).catch(() => {
         // Intentionally swallowed -- see contract note above.
       });

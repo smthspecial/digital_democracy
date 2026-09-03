@@ -28,3 +28,10 @@ Every returned output carries the mandatory, non-removable label
 hardcoded model-provenance block (there is no real model in this phase).
 The service has no write access to any governance table -- outputs live
 only in this service's own in-memory advisory store.
+
+Each synthesis run emits an `AuditEmitter` event (DP-036), no-op by
+default. `AuditEmitter` has a real queue-backed implementation,
+`createNatsAuditEmitter` (ADR-023): when `NATS_URL` is set it publishes to
+the `audit.append` JetStream stream instead of doing nothing
+(`ai_synthesis.executed` has no dedicated TBL-034 bucket, so it maps to
+`system_update`).

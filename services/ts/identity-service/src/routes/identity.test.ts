@@ -45,6 +45,68 @@ afterEach(async () => {
 });
 
 describe("POST /identity/citizens", () => {
+  // ARCH-010 EC-1: schema validation rejects before any handler code runs,
+  // so no downstream approval-gate or session-revoker call is a possible
+  // side effect of a malformed registration request.
+  it("IT-010-EC-1: rejects a missing raw_legal_identifier with 400 and calls no downstream collaborator", async () => {
+    const approvalGateSpy = { hasRequiredApprovals: () => true };
+    const sessionRevokerSpy = { revokeAllSessions: () => {} };
+    const approvalCalls: unknown[] = [];
+    const revokeCalls: unknown[] = [];
+    const app = (currentApp = buildTestServer({
+      approvalGate: {
+        hasRequiredApprovals: (...args) => {
+          approvalCalls.push(args);
+          return approvalGateSpy.hasRequiredApprovals();
+        },
+      },
+      sessionRevoker: {
+        revokeAllSessions: (...args) => {
+          revokeCalls.push(args);
+          sessionRevokerSpy.revokeAllSessions();
+        },
+      },
+    }));
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/identity/citizens",
+      payload: { public_handle: "alice" },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(approvalCalls).toEqual([]);
+    expect(revokeCalls).toEqual([]);
+  });
+
+  it("IT-010-EC-1: rejects an empty public_handle with 400", async () => {
+    const app = (currentApp = buildTestServer());
+    const res = await app.inject({
+      method: "POST",
+      url: "/identity/citizens",
+      payload: { public_handle: "", raw_legal_identifier: "raw-id-1" },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  // ARCH-010 EC-13: registerCitizen's check-then-write has no await between
+  // the duplicate-hash check and the insert, so two "concurrent" requests
+  // (fired without awaiting the first) still serialize on Node's single
+  // event loop turn -- this is a regression guard for that invariant, not a
+  // guarantee that would survive a real async/DB-backed store.
+  it("IT-010-EC-13: two concurrent registrations with the same legal identifier admit only one citizen", async () => {
+    const app = (currentApp = buildTestServer());
+    const [first, second] = await Promise.all([
+      registerCitizen(app, { public_handle: "alice", raw_legal_identifier: "concurrent-id" }),
+      registerCitizen(app, { public_handle: "bob", raw_legal_identifier: "concurrent-id" }),
+    ]);
+    const statuses = [first.statusCode, second.statusCode].sort();
+    expect(statuses).toEqual([201, 409]);
+
+    const list = await app.inject({ method: "GET", url: "/identity/citizens" });
+    expect(list.json()).toHaveLength(1);
+  });
+
   it("registers a new citizen with status pending", async () => {
     const app = (currentApp = buildTestServer());
     const res = await registerCitizen(app, { public_handle: "alice" });
@@ -243,6 +305,66 @@ describe.each([
   });
 });
 
+// ARCH-010 EC-4: a fully-approved re-suspend of an already-suspended or
+// already-revoked citizen, or a re-revoke of an already-revoked one, must
+// reject with 409 rather than silently overwriting a stronger status or
+// double-processing an already-completed transition.
+describe("ARCH-010 EC-4: illegal status transitions on suspend/revoke", () => {
+  it("IT-010-EC-4: rejects double-suspending an already-suspended citizen", async () => {
+    const app = (currentApp = buildTestServer({ approvalGate: { hasRequiredApprovals: () => true } }));
+    const created = await registerCitizen(app);
+    const id = created.json().id as string;
+
+    const first = await app.inject({ method: "POST", url: `/identity/citizens/${id}/suspend` });
+    expect(first.statusCode).toBe(200);
+
+    const second = await app.inject({ method: "POST", url: `/identity/citizens/${id}/suspend` });
+    expect(second.statusCode).toBe(409);
+  });
+
+  it("IT-010-EC-4: rejects re-suspending an already-revoked citizen (does not overwrite revoked back to suspended)", async () => {
+    const app = (currentApp = buildTestServer({ approvalGate: { hasRequiredApprovals: () => true } }));
+    const created = await registerCitizen(app);
+    const id = created.json().id as string;
+
+    await app.inject({ method: "POST", url: `/identity/citizens/${id}/revoke` });
+    const res = await app.inject({ method: "POST", url: `/identity/citizens/${id}/suspend` });
+    expect(res.statusCode).toBe(409);
+
+    const citizen = await app.inject({ method: "GET", url: `/identity/citizens/${id}` });
+    expect(citizen.json().status).toBe("revoked");
+  });
+
+  it("IT-010-EC-4: rejects re-revoking an already-revoked citizen", async () => {
+    const app = (currentApp = buildTestServer({ approvalGate: { hasRequiredApprovals: () => true } }));
+    const created = await registerCitizen(app);
+    const id = created.json().id as string;
+
+    const first = await app.inject({ method: "POST", url: `/identity/citizens/${id}/revoke` });
+    expect(first.statusCode).toBe(200);
+
+    const second = await app.inject({ method: "POST", url: `/identity/citizens/${id}/revoke` });
+    expect(second.statusCode).toBe(409);
+  });
+
+  // ARCH-010 EC-15: this state-machine guard also closes the double-audit gap
+  // EC-15 originally described -- a retried suspend/revoke call now rejects
+  // cleanly with 409 instead of re-applying the same status update and
+  // re-emitting a second audit event for one logical transition.
+  it("IT-010-EC-15: a replayed suspend call (client retry after a dropped response) does not double-process or double-audit", async () => {
+    const { audit, events } = createSpyAudit();
+    const app = (currentApp = buildTestServer({ approvalGate: { hasRequiredApprovals: () => true }, audit }));
+    const created = await registerCitizen(app);
+    const id = created.json().id as string;
+
+    await app.inject({ method: "POST", url: `/identity/citizens/${id}/suspend` });
+    const replay = await app.inject({ method: "POST", url: `/identity/citizens/${id}/suspend` });
+
+    expect(replay.statusCode).toBe(409);
+    expect(events.filter((e) => e.action === "suspended")).toHaveLength(1);
+  });
+});
+
 describe("POST /identity/duplicates/scan", () => {
   it("flags citizens sharing the same legal_identity_hash", async () => {
     const store = createStore();
@@ -282,4 +404,27 @@ describe("POST /identity/duplicates/scan", () => {
     expect(body.hash_matches).toHaveLength(0);
     expect(body.signal_matches).toHaveLength(0);
   });
+
+  // ARCH-010 EC-11: zero/empty-population boundary.
+  it("IT-010-EC-11: against zero registered citizens, returns 200 with empty matches and emits no duplicates_flagged event", async () => {
+    const { audit, events } = createSpyAudit();
+    const app = (currentApp = buildTestServer({ audit }));
+
+    const res = await app.inject({ method: "POST", url: "/identity/duplicates/scan" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.hash_matches).toEqual([]);
+    expect(body.signal_matches).toEqual([]);
+    expect(events.filter((e) => e.action === "duplicates_flagged")).toHaveLength(0);
+  });
 });
+
+// ARCH-010 EC-19: every AuditEmitter in this flow (identity-service,
+// auth-service, governance-role-service) is a no-op today, so "does the
+// citizen-facing action still complete if the audit call fails" is moot --
+// a no-op cannot fail. This is intentionally left undecided rather than
+// tested against fabricated behavior; it becomes answerable once a real
+// audit-service HTTP integration exists to fail against (ARCH-009 §2).
+it.todo(
+  "IT-010-EC-19 [blocked on: real audit-service integration in identity-service, auth-service, governance-role-service] -- does a citizen-facing action still complete when the audit call fails?",
+);

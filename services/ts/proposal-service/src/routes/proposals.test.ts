@@ -82,6 +82,16 @@ describe("proposal routes", () => {
       expect(first.json().problem_id).toBe(second.json().problem_id);
       expect(first.json().id).not.toBe(second.json().id);
     });
+
+    // ARCH-012 EC-34: proposal-service performs no existence check against
+    // problem-service -- any string is accepted as problem_id, documented
+    // current behavior (mirrors EC-32's gap running the other direction).
+    it("IT-012-EC-34: accepts a problem_id that does not exist anywhere, with no existence check", async () => {
+      app = build();
+      const res = await createProposal(app, { problem_id: "00000000-0000-0000-0000-000000000000" });
+      expect(res.statusCode).toBe(201);
+      expect(res.json().problem_id).toBe("00000000-0000-0000-0000-000000000000");
+    });
   });
 
   describe("GET /proposals and GET /proposals/:id", () => {
@@ -183,6 +193,21 @@ describe("proposal routes", () => {
         expected_benefits: "fewer potholes",
       });
     });
+
+    // ARCH-012 EC-4.
+    it.each(["cost", "maintenance_cost"] as const)(
+      "IT-012-EC-4: rejects a negative %s with 400",
+      async (field) => {
+        app = build();
+        const created = (await createProposal(app)).json();
+        const res = await app.inject({
+          method: "PUT",
+          url: `/proposals/${created.id}/budget`,
+          payload: { [field]: -1 },
+        });
+        expect(res.statusCode).toBe(400);
+      },
+    );
   });
 
   describe("POST /proposals/:id/scope-assignment", () => {
@@ -201,6 +226,154 @@ describe("proposal routes", () => {
       expect(res.statusCode).toBe(200);
       expect(res.json().support_threshold).toBe(expected);
       expect(res.json().scope_jurisdiction_id).toBe("jurisdiction-1");
+    });
+
+    // ARCH-011 EC-20: a zero-population jurisdiction never actually gates.
+    it("IT-011-EC-20: population 0 yields support_threshold 0", async () => {
+      app = build();
+      const created = (await createProposal(app)).json();
+      const res = await app.inject({
+        method: "POST",
+        url: `/proposals/${created.id}/scope-assignment`,
+        payload: { scope_jurisdiction_id: "jurisdiction-1", population: 0 },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().support_threshold).toBe(0);
+    });
+
+    // ARCH-012 EC-24: the full consequence of a zero-population threshold --
+    // gathering_support -> development advances immediately with zero supporters.
+    it("IT-012-EC-24: gathering_support -> development advances immediately when population is 0", async () => {
+      app = build();
+      const proposal = await advanceTo(app, "gathering_support");
+      await app.inject({
+        method: "POST",
+        url: `/proposals/${proposal.id}/scope-assignment`,
+        payload: { scope_jurisdiction_id: "jurisdiction-1", population: 0 },
+      });
+      const res = await app.inject({
+        method: "POST",
+        url: `/proposals/${proposal.id}/advance`,
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().status).toBe("development");
+    });
+
+    it.each([
+      [-1, "negative population"],
+      [undefined, "missing population"],
+    ])("IT-011-EC-4: rejects scope-assignment with %s (400)", async (population, _label) => {
+      app = build();
+      const created = (await createProposal(app)).json();
+      const res = await app.inject({
+        method: "POST",
+        url: `/proposals/${created.id}/scope-assignment`,
+        payload:
+          population === undefined
+            ? { scope_jurisdiction_id: "jurisdiction-1" }
+            : { scope_jurisdiction_id: "jurisdiction-1", population },
+      });
+      expect(res.statusCode).toBe(400);
+    });
+
+    // ARCH-011 EC-5: scope_jurisdiction_id is now validated against
+    // jurisdiction-service via the injected JurisdictionClient.
+    it("IT-011-EC-5: rejects a scope_jurisdiction_id the JurisdictionClient reports as nonexistent", async () => {
+      app = build({ jurisdictionClient: { exists: async () => false } });
+      const created = (await createProposal(app)).json();
+      const res = await app.inject({
+        method: "POST",
+        url: `/proposals/${created.id}/scope-assignment`,
+        payload: { scope_jurisdiction_id: "ghost-jurisdiction", population: 100 },
+      });
+      expect(res.statusCode).toBe(400);
+      const read = await app.inject({ method: "GET", url: `/proposals/${created.id}` });
+      expect(read.json().scope_jurisdiction_id).toBeNull();
+    });
+
+    // ARCH-011 EC-7: assignScope isn't gated on proposal status today --
+    // documented current behavior, not a fix.
+    it.each(["draft", "voting", "approved", "archived"] as const)(
+      "IT-011-EC-7: succeeds regardless of proposal status (status %s)",
+      async (status) => {
+        app = build();
+        const proposal = await advanceTo(app, status);
+        const res = await app.inject({
+          method: "POST",
+          url: `/proposals/${proposal.id}/scope-assignment`,
+          payload: { scope_jurisdiction_id: "jurisdiction-2", population: 40 },
+        });
+        expect(res.statusCode).toBe(200);
+        expect(res.json().scope_jurisdiction_id).toBe("jurisdiction-2");
+      },
+    );
+
+    // ARCH-011 EC-23: re-assigning scope after support has already been
+    // gathered recomputes the threshold with nothing re-validating prior
+    // support against it -- documented current behavior.
+    it("IT-011-EC-23: re-assigning scope after support is gathered does not re-validate prior support", async () => {
+      app = build();
+      const proposal = await advanceTo(app, "gathering_support");
+      await app.inject({
+        method: "POST",
+        url: `/proposals/${proposal.id}/scope-assignment`,
+        payload: { scope_jurisdiction_id: "jurisdiction-1", population: 20 },
+      });
+      await app.inject({
+        method: "POST",
+        url: `/proposals/${proposal.id}/support`,
+        payload: { citizen_id: "citizen-a" },
+      });
+      // Now supportCount (1) == threshold (1). Re-assign scope to a much
+      // larger population, raising the threshold above already-gathered support.
+      const reassigned = await app.inject({
+        method: "POST",
+        url: `/proposals/${proposal.id}/scope-assignment`,
+        payload: { scope_jurisdiction_id: "jurisdiction-2", population: 1000 },
+      });
+      expect(reassigned.json().support_threshold).toBe(50);
+      expect(reassigned.json().support_count).toBe(1);
+
+      const blocked = await app.inject({
+        method: "POST",
+        url: `/proposals/${proposal.id}/advance`,
+      });
+      expect(blocked.statusCode).toBe(409);
+    });
+
+    // ARCH-011 EC-28: no version/optimistic-lock field exists -- last write wins.
+    it("IT-011-EC-28: two concurrent scope-assignment calls are last-write-wins with no conflict signaled", async () => {
+      app = build();
+      const created = (await createProposal(app)).json();
+      const [a, b] = await Promise.all([
+        app.inject({
+          method: "POST",
+          url: `/proposals/${created.id}/scope-assignment`,
+          payload: { scope_jurisdiction_id: "jurisdiction-a", population: 100 },
+        }),
+        app.inject({
+          method: "POST",
+          url: `/proposals/${created.id}/scope-assignment`,
+          payload: { scope_jurisdiction_id: "jurisdiction-b", population: 200 },
+        }),
+      ]);
+      expect(a.statusCode).toBe(200);
+      expect(b.statusCode).toBe(200);
+
+      const read = await app.inject({ method: "GET", url: `/proposals/${created.id}` });
+      expect(["jurisdiction-a", "jurisdiction-b"]).toContain(read.json().scope_jurisdiction_id);
+    });
+
+    it("IT-011-EC-37: emits an audit event for scope assignment", async () => {
+      const events: string[] = [];
+      app = build({ auditEmitter: { emit: (eventType) => events.push(eventType) } });
+      const created = (await createProposal(app)).json();
+      await app.inject({
+        method: "POST",
+        url: `/proposals/${created.id}/scope-assignment`,
+        payload: { scope_jurisdiction_id: "jurisdiction-1", population: 100 },
+      });
+      expect(events).toContain("proposal.scope_assigned");
     });
   });
 
@@ -244,6 +417,20 @@ describe("proposal routes", () => {
         url: `/proposals/${created.id}`,
       });
       expect(read.json().support_count).toBe(1);
+    });
+
+    // ARCH-012 EC-21 (blocked on: missing eligibility check) -- no
+    // jurisdiction/eligibility check on citizen_id exists; this documents
+    // the current, permissive behavior rather than a passing scenario.
+    it("IT-012-EC-21: accepts support from any citizen_id with no scope/eligibility check", async () => {
+      app = build();
+      const created = (await createProposal(app)).json();
+      const res = await app.inject({
+        method: "POST",
+        url: `/proposals/${created.id}/support`,
+        payload: { citizen_id: "citizen-outside-any-jurisdiction" },
+      });
+      expect(res.statusCode).toBe(201);
     });
   });
 
@@ -294,6 +481,168 @@ describe("proposal routes", () => {
 
       expect(requestReviewBody).toHaveBeenCalledTimes(1);
       expect(requestReviewBody).toHaveBeenCalledWith(created.id, challengeId);
+    });
+
+    // ARCH-011 EC-8: fileScopeChallenge isn't gated on proposal status --
+    // documented current behavior, not a fix.
+    it.each(["draft", "voting", "approved", "archived"] as const)(
+      "IT-011-EC-8: filing succeeds regardless of proposal status (status %s)",
+      async (status) => {
+        app = build();
+        const proposal = await advanceTo(app, status);
+        const res = await app.inject({
+          method: "POST",
+          url: `/proposals/${proposal.id}/scope-challenges`,
+          payload: { citizen_id: "citizen-a", reason: "dispute" },
+        });
+        expect(res.statusCode).toBe(201);
+      },
+    );
+
+    it("IT-011-EC-9: rejects resolving an already-resolved challenge with 409", async () => {
+      app = build();
+      const created = (await createProposal(app)).json();
+      const filed = await app.inject({
+        method: "POST",
+        url: `/proposals/${created.id}/scope-challenges`,
+        payload: { citizen_id: "citizen-a", reason: "wrong jurisdiction" },
+      });
+      const challengeId = filed.json().scope_challenges[0].id;
+
+      const first = await app.inject({
+        method: "POST",
+        url: `/proposals/${created.id}/scope-challenges/${challengeId}/resolve`,
+      });
+      expect(first.statusCode).toBe(200);
+
+      const second = await app.inject({
+        method: "POST",
+        url: `/proposals/${created.id}/scope-challenges/${challengeId}/resolve`,
+      });
+      expect(second.statusCode).toBe(409);
+    });
+
+    // ARCH-011 EC-11: scope_challenge_pending is a single flag over all
+    // challenges -- resolving just the first clears it for the proposal as
+    // a whole even though the second challenge's own `resolved` stays false.
+    it("IT-011-EC-11: resolving one of two open challenges clears scope_challenge_pending for the whole proposal", async () => {
+      app = build();
+      const created = (await createProposal(app)).json();
+      const firstFiled = await app.inject({
+        method: "POST",
+        url: `/proposals/${created.id}/scope-challenges`,
+        payload: { citizen_id: "citizen-a", reason: "first dispute" },
+      });
+      const secondFiled = await app.inject({
+        method: "POST",
+        url: `/proposals/${created.id}/scope-challenges`,
+        payload: { citizen_id: "citizen-b", reason: "second dispute" },
+      });
+      expect(firstFiled.statusCode).toBe(201);
+      expect(secondFiled.statusCode).toBe(201);
+      const firstId = firstFiled.json().scope_challenges[0].id;
+
+      const resolved = await app.inject({
+        method: "POST",
+        url: `/proposals/${created.id}/scope-challenges/${firstId}/resolve`,
+      });
+      expect(resolved.json().scope_challenge_pending).toBe(false);
+      const secondChallenge = resolved
+        .json()
+        .scope_challenges.find((c: { id: string }) => c.id !== firstId);
+      expect(secondChallenge.resolved).toBe(false);
+    });
+
+    // ARCH-011 EC-19: no check that citizen_id refers to a real/active citizen.
+    it("IT-011-EC-19: accepts any citizen_id string with no validity check", async () => {
+      app = build();
+      const created = (await createProposal(app)).json();
+      const res = await app.inject({
+        method: "POST",
+        url: `/proposals/${created.id}/scope-challenges`,
+        payload: { citizen_id: "not-a-real-citizen-id", reason: "dispute" },
+      });
+      expect(res.statusCode).toBe(201);
+    });
+
+    // ARCH-011 EC-27: two concurrent resolve calls racing on the same
+    // challenge -- exactly one succeeds, the other observes it already resolved.
+    it("IT-011-EC-27: two concurrent resolve calls on the same challenge: one 200, one 409", async () => {
+      app = build();
+      const created = (await createProposal(app)).json();
+      const filed = await app.inject({
+        method: "POST",
+        url: `/proposals/${created.id}/scope-challenges`,
+        payload: { citizen_id: "citizen-a", reason: "dispute" },
+      });
+      const challengeId = filed.json().scope_challenges[0].id;
+
+      const [a, b] = await Promise.all([
+        app.inject({
+          method: "POST",
+          url: `/proposals/${created.id}/scope-challenges/${challengeId}/resolve`,
+        }),
+        app.inject({
+          method: "POST",
+          url: `/proposals/${created.id}/scope-challenges/${challengeId}/resolve`,
+        }),
+      ]);
+      const statuses = [a.statusCode, b.statusCode].sort();
+      expect(statuses).toEqual([200, 409]);
+    });
+
+    it("IT-011-EC-37: emits audit events for filing and resolving a scope challenge", async () => {
+      const events: string[] = [];
+      app = build({ auditEmitter: { emit: (eventType) => events.push(eventType) } });
+      const created = (await createProposal(app)).json();
+      const filed = await app.inject({
+        method: "POST",
+        url: `/proposals/${created.id}/scope-challenges`,
+        payload: { citizen_id: "citizen-a", reason: "dispute" },
+      });
+      const challengeId = filed.json().scope_challenges[0].id;
+      await app.inject({
+        method: "POST",
+        url: `/proposals/${created.id}/scope-challenges/${challengeId}/resolve`,
+      });
+
+      expect(events).toContain("proposal.scope_challenge_filed");
+      expect(events).toContain("proposal.scope_challenge_resolved");
+    });
+
+    // ARCH-011 HP-6: full challenge-blocks-then-unblocks-voting journey.
+    it("HP-6: a scope challenge blocks development -> voting until resolved", async () => {
+      app = build();
+      const proposal = await advanceTo(app, "development", { completeBudget: true });
+
+      const filed = await app.inject({
+        method: "POST",
+        url: `/proposals/${proposal.id}/scope-challenges`,
+        payload: { citizen_id: "citizen-a", reason: "wrong jurisdiction" },
+      });
+      expect(filed.statusCode).toBe(201);
+      expect(filed.json().scope_challenge_pending).toBe(true);
+      const challengeId = filed.json().scope_challenges[0].id;
+
+      const blocked = await app.inject({
+        method: "POST",
+        url: `/proposals/${proposal.id}/advance`,
+      });
+      expect(blocked.statusCode).toBe(409);
+
+      const resolved = await app.inject({
+        method: "POST",
+        url: `/proposals/${proposal.id}/scope-challenges/${challengeId}/resolve`,
+      });
+      expect(resolved.statusCode).toBe(200);
+      expect(resolved.json().scope_challenge_pending).toBe(false);
+
+      const advanced = await app.inject({
+        method: "POST",
+        url: `/proposals/${proposal.id}/advance`,
+      });
+      expect(advanced.statusCode).toBe(200);
+      expect(advanced.json().status).toBe("voting");
     });
   });
 
@@ -350,6 +699,40 @@ describe("proposal routes", () => {
       expect(res.json().status).toBe("development");
     });
 
+    // ARCH-011 EC-22: exactly-at-threshold advances; one-under is rejected.
+    it("IT-011-EC-22: support count exactly at threshold advances; one under is rejected", async () => {
+      app = build();
+      const proposal = await advanceTo(app, "gathering_support");
+      // population 40 -> threshold ceil(40*0.05) = 2
+      await app.inject({
+        method: "POST",
+        url: `/proposals/${proposal.id}/scope-assignment`,
+        payload: { scope_jurisdiction_id: "jurisdiction-1", population: 40 },
+      });
+      await app.inject({
+        method: "POST",
+        url: `/proposals/${proposal.id}/support`,
+        payload: { citizen_id: "citizen-a" },
+      });
+      const oneUnder = await app.inject({
+        method: "POST",
+        url: `/proposals/${proposal.id}/advance`,
+      });
+      expect(oneUnder.statusCode).toBe(409);
+
+      await app.inject({
+        method: "POST",
+        url: `/proposals/${proposal.id}/support`,
+        payload: { citizen_id: "citizen-b" },
+      });
+      const atThreshold = await app.inject({
+        method: "POST",
+        url: `/proposals/${proposal.id}/advance`,
+      });
+      expect(atThreshold.statusCode).toBe(200);
+      expect(atThreshold.json().status).toBe("development");
+    });
+
     it("development -> voting is blocked with the list of missing budget fields", async () => {
       app = build();
       // Reaching development requires scope-assignment to have run already
@@ -366,6 +749,31 @@ describe("proposal routes", () => {
       expect(res.json().error).toContain("maintenance_cost");
       expect(res.json().error).toContain("expected_benefits");
       expect(res.json().error).not.toContain("scope_jurisdiction_id");
+    });
+
+    // ARCH-012 EC-26: each budget field named singly, not just all-at-once.
+    it.each([
+      ["cost", { funding_source: "general fund", maintenance_cost: 50, expected_benefits: "fewer potholes" }],
+      ["funding_source", { cost: 1000, maintenance_cost: 50, expected_benefits: "fewer potholes" }],
+      ["maintenance_cost", { cost: 1000, funding_source: "general fund", expected_benefits: "fewer potholes" }],
+      ["expected_benefits", { cost: 1000, funding_source: "general fund", maintenance_cost: 50 }],
+    ] as const)("IT-012-EC-26: names only %s when it alone is missing", async (missingField, partialBudget) => {
+      app = build();
+      const proposal = await advanceTo(app, "development");
+      await app.inject({
+        method: "PUT",
+        url: `/proposals/${proposal.id}/budget`,
+        payload: partialBudget,
+      });
+      const res = await app.inject({
+        method: "POST",
+        url: `/proposals/${proposal.id}/advance`,
+      });
+      expect(res.statusCode).toBe(409);
+      const namedFields = (res.json().error as string)
+        .replace("missing required fields: ", "")
+        .split(", ");
+      expect(namedFields).toEqual([missingField]);
     });
 
     it("development -> voting is blocked in isolation when scope is missing", async () => {
@@ -511,6 +919,21 @@ describe("proposal routes", () => {
       },
     );
 
+    // ARCH-012 EC-10: the same non-voting-status gate applies to "rejected", not just "approved".
+    it.each(["draft", "gathering_support", "development"] as const)(
+      "IT-012-EC-10: rejects resolving to rejected from %s",
+      async (status) => {
+        app = build();
+        const proposal = await advanceTo(app, status);
+        const res = await app.inject({
+          method: "POST",
+          url: `/proposals/${proposal.id}/resolve`,
+          payload: { outcome: "rejected" },
+        });
+        expect(res.statusCode).toBe(409);
+      },
+    );
+
     it.each(["draft", "gathering_support", "development", "voting"] as const)(
       "allows archiving from non-terminal status %s",
       async (status) => {
@@ -561,8 +984,8 @@ describe("proposal routes", () => {
       });
     }
 
-    it.each(["draft", "gathering_support", "approved"] as const)(
-      "rejects entering deadlock from ineligible status %s",
+    it.each(["draft", "gathering_support", "approved", "rejected", "archived"] as const)(
+      "IT-012-EC-12: rejects entering deadlock from ineligible status %s",
       async (status) => {
         app = build();
         const proposal = await advanceTo(app, status);
@@ -716,6 +1139,16 @@ describe("proposal routes", () => {
         url: `/proposals/${proposal.id}`,
       });
       expect(read.json().status).toBe("approved");
+
+      // ARCH-012 EC-39: the dedicated deadlock endpoint still returns the
+      // full history after resolution, not cleared.
+      const deadlockRead = await app.inject({
+        method: "GET",
+        url: `/proposals/${proposal.id}/deadlock`,
+      });
+      expect(deadlockRead.json().active).toBe(false);
+      expect(deadlockRead.json().resolved_at).toBeTypeOf("string");
+      expect(deadlockRead.json().history).toHaveLength(STAGES.length);
     });
 
     it("GET /proposals/:id/deadlock reads stage, active flag, and full history", async () => {
@@ -797,7 +1230,9 @@ describe("proposal routes", () => {
     });
   });
 
-  it("runs the full happy-path lifecycle for one proposal", async () => {
+  // ARCH-012 HP-2: a single proposal's fully-eligible, uncontested lifecycle
+  // from draft to approved.
+  it("HP-2: runs the full happy-path lifecycle for one proposal", async () => {
     const requestSession = vi.fn();
     app = build({
       constitutionalReviewer: defaultConstitutionalReviewer,
@@ -862,8 +1297,250 @@ describe("proposal routes", () => {
     });
     expect(resolved.statusCode).toBe(200);
     expect(resolved.json().status).toBe("approved");
+    // End state per ARCH-012 HP-2: budget complete, scope assigned, one
+    // agreed-pending constraint, support_count === support_threshold.
+    expect(resolved.json().budget).toMatchObject({
+      cost: 1000,
+      funding_source: "general fund",
+      maintenance_cost: 50,
+      expected_benefits: "fewer potholes",
+    });
+    expect(resolved.json().scope_jurisdiction_id).toBe("jurisdiction-1");
+    expect(resolved.json().constraints).toHaveLength(1);
+    expect(resolved.json().constraints[0].agreed).toBe(false);
+    expect(resolved.json().support_count).toBe(resolved.json().support_threshold);
+  });
+
+  // ARCH-012 EC-37: every proposal status transition, including both
+  // deadlock-track entry and exit, invokes AuditEmitter.emit exactly once.
+  it("IT-012-EC-37: emits proposal.status_changed exactly once per transition across the full lifecycle", async () => {
+    const events: Array<{ eventType: string; payload: unknown }> = [];
+    app = build({
+      auditEmitter: { emit: (eventType, payload) => events.push({ eventType, payload }) },
+    });
+
+    const created = (await createProposal(app)).json();
+    await app.inject({ method: "POST", url: `/proposals/${created.id}/advance` }); // -> gathering_support
+    await app.inject({
+      method: "POST",
+      url: `/proposals/${created.id}/scope-assignment`,
+      payload: { scope_jurisdiction_id: "jurisdiction-1", population: 20 },
+    });
+    await app.inject({
+      method: "POST",
+      url: `/proposals/${created.id}/support`,
+      payload: { citizen_id: "citizen-a" },
+    });
+    await app.inject({ method: "POST", url: `/proposals/${created.id}/advance` }); // -> development
+    await app.inject({
+      method: "PUT",
+      url: `/proposals/${created.id}/budget`,
+      payload: { cost: 1, funding_source: "f", maintenance_cost: 1, expected_benefits: "b" },
+    });
+    await app.inject({ method: "POST", url: `/proposals/${created.id}/advance` }); // -> voting
+    await app.inject({
+      method: "POST",
+      url: `/proposals/${created.id}/resolve`,
+      payload: { outcome: "approved" },
+    }); // -> approved
+
+    const statusChanges = events.filter((e) => e.eventType === "proposal.status_changed");
+    expect(statusChanges).toHaveLength(4);
+    expect(statusChanges.map((e) => e.payload)).toEqual([
+      { proposalId: created.id, from: "draft", to: "gathering_support" },
+      { proposalId: created.id, from: "gathering_support", to: "development" },
+      { proposalId: created.id, from: "development", to: "voting" },
+      { proposalId: created.id, from: "voting", to: "approved" },
+    ]);
+  });
+
+  it("IT-012-EC-37: emits proposal.status_changed exactly once for both deadlock entry and its final resolution", async () => {
+    const events: Array<{ eventType: string; payload: unknown }> = [];
+    app = build({
+      auditEmitter: { emit: (eventType, payload) => events.push({ eventType, payload }) },
+    });
+    const proposal = await advanceTo(app, "development");
+    events.length = 0;
+
+    await app.inject({
+      method: "POST",
+      url: `/proposals/${proposal.id}/deadlock/enter`,
+      payload: { reason: "stuck" },
+    });
+    const deadlockEvents = events.filter((e) => e.eventType === "proposal.deadlock_entered");
+    expect(deadlockEvents).toHaveLength(1);
+
+    // 7 calls walk from constraint_analysis (index 0) to final_decision
+    // (index 7); an 8th call at final_decision, with an outcome, concludes it.
+    for (let i = 0; i < 7; i++) {
+      await app.inject({
+        method: "POST",
+        url: `/proposals/${proposal.id}/deadlock/advance`,
+        payload: { reviewer_id: "reviewer-1", notes: "advancing" },
+      });
+    }
+    await app.inject({
+      method: "POST",
+      url: `/proposals/${proposal.id}/deadlock/advance`,
+      payload: { reviewer_id: "reviewer-1", notes: "final", outcome: "rejected" },
+    });
+
+    const statusChanges = events.filter((e) => e.eventType === "proposal.status_changed");
+    expect(statusChanges).toHaveLength(1);
+    expect(statusChanges[0]?.payload).toEqual({
+      proposalId: proposal.id,
+      from: "development",
+      to: "rejected",
+    });
+  });
+
+  // ARCH-012 EC-33: ProblemStatusNotifier wiring -- see integrations.test.ts
+  // for the seam's own wire-contract tests, and
+  // e2e/arch012-problem-proposal.e2e.test.ts for the real cross-service
+  // confirmation against a live problem-service.
+  describe("ProblemStatusNotifier wiring", () => {
+    it("IT-012-EC-33: notifies problem-service 'proposing' exactly once when a proposal reaches development", async () => {
+      const notify = vi.fn();
+      app = build({ problemStatusNotifier: { notify } });
+      const proposal = await advanceTo(app, "development");
+
+      expect(notify).toHaveBeenCalledTimes(1);
+      expect(notify).toHaveBeenCalledWith(proposal.problem_id, "proposing");
+    });
+
+    it("IT-012-EC-33: notifies problem-service 'closed' when the sole proposal for a problem is approved", async () => {
+      const notify = vi.fn();
+      app = build({ problemStatusNotifier: { notify } });
+      const proposal = await advanceTo(app, "voting");
+      notify.mockClear();
+
+      await app.inject({
+        method: "POST",
+        url: `/proposals/${proposal.id}/resolve`,
+        payload: { outcome: "approved" },
+      });
+
+      expect(notify).toHaveBeenCalledWith(proposal.problem_id, "closed");
+    });
+
+    it("IT-012-EC-33: does not notify 'closed' while a competing proposal for the same problem is still active", async () => {
+      const notify = vi.fn();
+      const store = createStore();
+      app = build({ store, problemStatusNotifier: { notify } });
+
+      const problemId = "shared-problem-1";
+      const proposalA = (await createProposal(app, { problem_id: problemId, title: "Option A" })).json();
+      const proposalB = (await createProposal(app, { problem_id: problemId, title: "Option B" })).json();
+      notify.mockClear();
+
+      // "archived" is legal from draft (unlike "rejected", which requires
+      // status voting) -- both count toward TERMINAL_STATUSES either way.
+      await app.inject({
+        method: "POST",
+        url: `/proposals/${proposalA.id}/resolve`,
+        payload: { outcome: "archived" },
+      });
+      expect(notify).not.toHaveBeenCalledWith(problemId, "closed");
+
+      await app.inject({
+        method: "POST",
+        url: `/proposals/${proposalB.id}/resolve`,
+        payload: { outcome: "archived" },
+      });
+      expect(notify).toHaveBeenCalledWith(problemId, "closed");
+    });
   });
 });
+
+// ARCH-011 EC-18: POST /proposals/:id/scope-challenges/:challengeId/resolve
+// performs no actor/role check whatsoever -- any caller can resolve any
+// proposal's challenge with no verification that the caller is (or
+// represents) an "independent review body" separate from the proposal's
+// authors. Closing this means adding a real session/actor-identity concept
+// to proposal-service (there is none today, unlike identity-service/
+// auth-service's session model) plus a governance-role-service call to
+// confirm review-body standing -- neither exists in any form yet.
+// Documented per ARCH-009 §2 rather than tested against fabricated behavior.
+it.todo(
+  "IT-011-EC-18 [blocked on: no actor/session identity concept or governance-role-service review-body check exists on this endpoint] -- resolving a scope challenge requires the caller to be an independent review body",
+);
+
+// ARCH-011 EC-32: voting-service deriving eligible_citizen_ids by calling
+// jurisdiction-service's eligibility endpoint belongs to ARCH-016 (the
+// voting lifecycle flow doc), not here -- noted in this doc only as the
+// other side of the same "nothing calls jurisdiction-service's eligibility
+// endpoint yet" gap ARCH-011's Overview opens with.
+it.todo(
+  "IT-011-EC-32 [out of scope: owned by ARCH-016] -- voting-service should derive eligible_citizen_ids via jurisdiction-service and degrade predictably if that call fails",
+);
+
+// ARCH-011 EC-33: DP-030's "review body" routing/confirmation step for
+// scope assignment and scope-challenge resolution doesn't exist as a
+// service call at all -- assignScope/resolveScopeChallenge apply caller
+// input directly. Unlike EC-31 (a crisp single governance-role-service
+// approval check this doc's implementation pass could close), DP-030's
+// routing step has no defined action_ref/approval-type shape anywhere in
+// this codebase to build against.
+it.todo(
+  "IT-011-EC-33 [blocked on: DP-030 routing target/shape does not exist] -- scope assignment and scope-challenge resolution route through an independent review body confirmation step",
+);
+
+// ARCH-011 EC-34: DP-058's daily cron escalating scope disputes that have
+// exceeded their SLA without resolution has no implementation anywhere --
+// ScopeChallenge carries no SLA/deadline field, and no scheduled-job
+// infrastructure exists in this codebase at all. Closing this means adding
+// both a new domain field and a new kind of infrastructure this service
+// doesn't have yet, not just wiring an existing seam.
+it.todo(
+  "IT-011-EC-34 [blocked on: DP-058 cron and an SLA/deadline field do not exist in proposal-service] -- a scope challenge unresolved past its SLA is escalated, not left indefinitely pending",
+);
+
+// ARCH-012 EC-31: DP-028's documented idempotency claim ("multiple
+// concurrent DP-004 events safely collapse") can't be exercised because the
+// worker behind it is a no-op seam, not real code -- see EC-32 below for
+// why that worker isn't built here.
+it.todo(
+  "IT-012-EC-31 [blocked on: ThresholdChecker/DP-028 has no real implementation to exercise concurrency against] -- concurrent endorsement events safely collapse to one threshold check",
+);
+
+// ARCH-012 EC-32: DP-028's description ("reads the current problem_support
+// count for each proposal linked to the endorsed problem; if any proposal's
+// count meets or exceeds support_threshold, enqueues DP-029") specifies a
+// threshold source -- the PROBLEM's endorsement count -- that conflicts
+// with proposal-service's actual, heavily-tested implementation, where
+// support_count is proposal-service's own independent counter driven by
+// POST /proposals/:id/support and has no connection to problem-level
+// endorsements at all. Building HttpThresholdChecker plus a receiving
+// endpoint would mean deciding whether DP-028's endorsement-count check
+// replaces, feeds into, or runs alongside that existing mechanism -- a real
+// product/architecture decision with no clear enough answer in the spec to
+// implement confidently, unlike EC-33 (ProblemStatusNotifier), whose
+// receiving endpoint and semantics were already unambiguous. Left blocked
+// rather than guessed at, per ARCH-009 §2.
+it.todo(
+  "IT-012-EC-32 [blocked on: HttpThresholdChecker + receiving endpoint -- DP-028's threshold source is ambiguous against the existing support_count mechanism, see comment above] -- endorsing a problem recomputes whether any linked proposal has crossed its support_threshold",
+);
+
+// ARCH-012 EC-35: DP-034's constitutional review is fully synchronous and
+// in-process (defaultConstitutionalReviewer) rather than a real call to an
+// audit-service constitutional-review authority that doesn't exist as a
+// running service in this codebase -- a downstream-down/slow/erroring
+// scenario has nothing live to exercise it against yet (createHttpConstitutionalReviewer's
+// own fail-closed behavior is already covered directly in integrations.test.ts).
+it.todo(
+  "IT-012-EC-35 [blocked on: SRV-012/audit-service is not a running service in this codebase] -- constitutional review degrades predictably when audit-service is down, slow, or erroring",
+);
+
+// ARCH-012 EC-36: VoteSessionRequester.requestSession and both services'
+// AuditEmitter.emit are fire-and-forget no-ops with no live target service
+// in a real deployment sense -- voting-service doesn't exist as a running
+// service at all, so no failure/degradation behavior can be observed for
+// it (AuditEmitter's own real HTTP implementation is already covered
+// directly in integrations.test.ts, but there is still no live
+// audit-service process to degrade against here).
+it.todo(
+  "IT-012-EC-36 [blocked on: SRV-007/voting-service is not a running service in this codebase] -- VoteSessionRequester degrades predictably when voting-service is down, slow, or erroring",
+);
 
 async function advanceTo(
   app: FastifyInstance,

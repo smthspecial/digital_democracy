@@ -24,9 +24,11 @@ func main() {
 		port = "5003"
 	}
 
+	svc := NewService(NewStore())
+
 	srv := &http.Server{
 		Addr:         ":" + port,
-		Handler:      newRouter(logger),
+		Handler:      newRouterWithService(logger, svc),
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}
@@ -41,6 +43,18 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	// Optional: real cross-service wiring for the audit.append queue (ADR-023).
+	// Unset -> the service still runs with only the synchronous POST /audit/log
+	// endpoint, same as before this queue consumer existed.
+	if natsURL := os.Getenv("NATS_URL"); natsURL != "" {
+		if err := startAuditAppendConsumer(ctx, logger, natsURL, svc); err != nil {
+			logger.Error("failed to start audit.append consumer", "error", err)
+			os.Exit(1)
+		}
+		logger.Info("consuming audit.append", "nats_url", natsURL)
+	}
+
 	<-ctx.Done()
 
 	logger.Info("shutting down audit-service")

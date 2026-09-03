@@ -1,12 +1,28 @@
+import { connectEventBus, ensureStream } from "@dd/event-bus";
 import { buildServer } from "./server.js";
 import { config } from "./config.js";
-import { createHttpSessionRevoker } from "./collaborators.js";
+import {
+  AUDIT_APPEND_STREAM,
+  AUDIT_APPEND_SUBJECT,
+  createHttpApprovalGate,
+  createHttpSessionRevoker,
+  createNatsAuditEmitter,
+} from "./collaborators.js";
 
-const app = buildServer(
-  config.authServiceUrl
-    ? { sessionRevoker: createHttpSessionRevoker(config.authServiceUrl) }
-    : {},
-);
+let natsAuditOverride = {};
+if (config.natsUrl) {
+  const bus = await connectEventBus(config.natsUrl);
+  await ensureStream(bus, { name: AUDIT_APPEND_STREAM, subjects: [AUDIT_APPEND_SUBJECT] });
+  natsAuditOverride = { audit: createNatsAuditEmitter(bus) };
+}
+
+const app = buildServer({
+  ...(config.authServiceUrl ? { sessionRevoker: createHttpSessionRevoker(config.authServiceUrl) } : {}),
+  ...(config.governanceRoleServiceUrl
+    ? { approvalGate: createHttpApprovalGate(config.governanceRoleServiceUrl) }
+    : {}),
+  ...natsAuditOverride,
+});
 
 app
   .listen({ port: config.port, host: "0.0.0.0" })

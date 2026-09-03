@@ -142,41 +142,55 @@ Blocked on: `HttpApprovalGate`, `SessionRevoker` (does not exist in any form tod
 
 | Scenario | FR/DP/NFR ids | Level | Automated test id |
 |---|---|---|---|
-| HP-1 | FR-001,FR-002,DP-001,DP-002,DP-059,DP-060 | e2e | TBD |
-| HP-2 | FR-002,DP-060,DP-061,ADR-014 | e2e | TBD |
-| HP-3 | FR-001,FR-005,FR-007,DP-024,DP-056,DP-023,DP-035,DP-042 | e2e | TBD |
-| HP-4 | FR-005,FR-006,FR-007,DP-023,DP-035,DP-042,DP-059 | e2e | TBD |
-| EC-1 | FR-001,FR-002 | integration | TBD |
-| EC-2 | FR-007 | integration | TBD |
-| EC-3 | FR-002,DP-059 | e2e | TBD |
-| EC-4 | FR-006 | integration | TBD |
-| EC-5 | FR-006,DP-042 | e2e | TBD |
-| EC-6 | FR-006,ADR-014 | e2e | TBD |
-| EC-7 | FR-007 | integration | TBD |
-| EC-8 | FR-007 | integration | TBD |
-| EC-9 | FR-007,ADR-011 | integration | TBD |
-| EC-10 | FR-007 | integration | TBD |
-| EC-11 | FR-001 | integration | TBD |
-| EC-12 | FR-007,ADR-014,AUTH-010 | integration | TBD |
-| EC-13 | FR-001 | integration | TBD |
-| EC-14 | FR-006,DP-042 | e2e | TBD |
-| EC-15 | FR-005,FR-006 | integration | TBD |
-| EC-16 | FR-007 | integration | TBD |
-| EC-17 | FR-001,FR-002 | integration | TBD |
-| EC-18 | FR-006 | integration | TBD |
-| EC-19 | FR-005 | integration | TBD |
-| EC-20 | FR-005,FR-007 | integration | TBD |
-| EC-21 | FR-003,FR-004 | integration | TBD |
-| EC-22 | FR-006 | integration | TBD |
-| EC-23 | FR-006,FR-007,ADR-014 | integration | TBD |
+| HP-1 | FR-001,FR-002,DP-001,DP-002,DP-059,DP-060 | e2e | `arch010-identity-lifecycle.e2e.test.ts::HP-1` |
+| HP-2 | FR-002,DP-060,DP-061,ADR-014 | e2e | `arch010-identity-lifecycle.e2e.test.ts::HP-2` |
+| HP-3 | FR-001,FR-005,FR-007,DP-024,DP-056,DP-023,DP-035,DP-042 | e2e | `arch010-identity-lifecycle.e2e.test.ts::HP-3` |
+| HP-4 | FR-005,FR-006,FR-007,DP-023,DP-035,DP-042,DP-059 | e2e | `arch010-identity-lifecycle.e2e.test.ts::HP-4` |
+| EC-1 | FR-001,FR-002 | integration | `identity.test.ts::IT-010-EC-1` (×2) |
+| EC-2 | FR-007 | integration | `approvals.test.ts::IT-010-EC-2` |
+| EC-3 | FR-002,DP-059 | e2e | `arch010-identity-lifecycle.e2e.test.ts::EC-3` |
+| EC-4 | FR-006 | integration | `identity.test.ts::IT-010-EC-4` (×3) |
+| EC-5 | FR-006,DP-042 | e2e | `arch010-identity-lifecycle.e2e.test.ts::EC-5` |
+| EC-6 | FR-006,ADR-014 | e2e | `arch010-identity-lifecycle.e2e.test.ts::EC-6` |
+| EC-7 | FR-007 | integration | `collaborators.test.ts::IT-010-EC-7` + `arch010-identity-lifecycle.e2e.test.ts::EC-7` |
+| EC-8 | FR-007 | integration | `collaborators.test.ts::IT-010-EC-8` + `arch010-identity-lifecycle.e2e.test.ts::EC-8` |
+| EC-9 | FR-007,ADR-011 | integration | `approvals.test.ts::"stops counting an approval once its approver role's term has since expired"` |
+| EC-10 | FR-007 | integration | `arch010-identity-lifecycle.e2e.test.ts::EC-10` |
+| EC-11 | FR-001 | integration | `identity.test.ts::IT-010-EC-11` |
+| EC-12 | FR-007,ADR-014,AUTH-010 | integration | `it.todo` in `approvals.test.ts` — blocked, see below |
+| EC-13 | FR-001 | integration | `identity.test.ts::IT-010-EC-13` |
+| EC-14 | FR-006,DP-042 | e2e | `arch010-identity-lifecycle.e2e.test.ts::EC-14` |
+| EC-15 | FR-005,FR-006 | integration | `identity.test.ts::IT-010-EC-15` |
+| EC-16 | FR-007 | integration | `collaborators.test.ts::IT-010-EC-16` + `arch010-identity-lifecycle.e2e.test.ts::"EC-16: ..."` |
+| EC-17 | FR-001,FR-002 | integration | `remote_test.go::TestHttpIdentityCheckerErrorsWhenUnreachable` + `arch010-identity-lifecycle.e2e.test.ts::"EC-17: ..."` |
+| EC-18 | FR-006 | integration | `arch010-identity-lifecycle.e2e.test.ts::"EC-18: ..."` (partial — see below) |
+| EC-19 | FR-005 | integration | `it.todo` in `identity.test.ts` — blocked, see below |
+| EC-20 | FR-005,FR-007 | integration | `arch010-identity-lifecycle.e2e.test.ts::EC-20` (partial — see below) |
+| EC-21 | FR-003,FR-004 | integration | `arch010-identity-lifecycle.e2e.test.ts::EC-21` |
+| EC-22 | FR-006 | integration | `arch010-identity-lifecycle.e2e.test.ts::EC-22` |
+| EC-23 | FR-006,FR-007,ADR-014 | integration | `arch010-identity-lifecycle.e2e.test.ts::EC-23` |
+
+All automated tests live under `services/ts/identity-service/src/` (`routes/identity.test.ts`, `collaborators.test.ts`, `e2e/arch010-identity-lifecycle.e2e.test.ts`), `services/ts/governance-role-service/src/` (`routes/approvals.test.ts`, `services/approvals.test.ts`, `collaborators.test.ts`), `services/ts/competency-service/src/routes/conflicts.test.ts`, and `services/go/auth-service/remote_test.go`. The e2e suite boots every service in this flow as its own real process (`e2e/harness.ts`: `tsx` for the three TS services, a compiled binary for auth-service) reached over real HTTP, per §2 — no in-process imports across package boundaries and no mocked business logic on any side.
 
 ---
 
-## Status update (2026-08-27)
+## Status update (2026-08-28)
 
-Two of the four seams this doc's Overview flagged as needed are now real:
+All four seams this doc's Overview flagged as needed are now real, and the full scenario set above is implemented:
 
-1. **`auth-service` no longer trusts caller-supplied `citizen_status`.** `POST /auth/login` resolves it itself via a new `IdentityChecker` interface (`service.go`), with a real HTTP-calling implementation (`httpIdentityChecker` in `remote.go`, calling `GET /identity/citizens/:id`) wired in by `main.go` when `IDENTITY_SERVICE_URL` is set. The default, unconfigured checker **fails closed** — an unresolved status denies login rather than defaulting to active — so a client can no longer spoof `citizen_status: "active"` for a suspended or revoked citizen (regression-tested directly: `TestHandleLoginIgnoresClientSuppliedStatus`, `TestHandleLoginNoIdentityConfiguredFailsClosed`). `credential_valid` remains caller-supplied, unchanged: no credential-verification system exists anywhere in this codebase to call instead, so that half of the Overview's gap is still `blocked on: no credential verification system exists`, as originally noted.
-2. **`identity-service`'s missing `SessionRevoker` seam now exists.** `suspendCitizen` and `revokeCitizen` (`services/identity.ts`) both call it after their status flip and audit emit; the real implementation (`createHttpSessionRevoker` in `collaborators.ts`) calls `POST /auth/internal/revoke-all/:citizenId`, wired in by `index.ts` when `AUTH_SERVICE_URL` is set. A suspension or revocation now actually terminates the citizen's live sessions instead of leaving them valid until their own TTL lapses. EC-5/EC-14 (the DP-042 session-cascade scenarios) can now be written for real.
+1. **`auth-service` no longer trusts caller-supplied `citizen_status`** (unchanged from the prior update). `credential_valid` remains caller-supplied: no credential-verification system exists anywhere in this codebase to call instead, so that half of the Overview's gap is still `blocked on: no credential verification system exists`.
+2. **`identity-service`'s `SessionRevoker` seam** (unchanged from the prior update) — `createHttpSessionRevoker` calling `POST /auth/internal/revoke-all/:citizenId`.
+3. **`identity-service`'s `ApprovalGate` is now real.** `createHttpApprovalGate` (`collaborators.ts`) calls governance-role-service's `GET /governance-roles/actions/:actionRef/status`, wired in by `index.ts` when `GOVERNANCE_ROLE_SERVICE_URL` is set, and closes EC-7's action-type gap by scoping every check to `identity:{suspend|revoke}:{citizenId}` (threaded through `suspendCitizen`/`revokeCitizen`, which are now async). Fails closed on any lookup failure (EC-16).
+4. **`governance-role-service`'s `COIChecker` is now real.** `createHttpCOIChecker` calls a new competency-service endpoint, `GET /competency/conflicts?citizen_id=...`, added specifically because identity actions (unlike protocol changes) have no domain of their own to scope a conflict check against — see the comment on `createHttpCOIChecker` for the full reasoning. Fails closed (treated as a conflict) on any lookup failure. `submitApproval` is now async to support this.
 
-Still open: `identity-service`'s `ApprovalGate` is still an always-`true` stub (governance-role-service isn't called), so EC-7's action-type gap and the multi-approval scenarios remain as originally described.
+Two real bugs this doc identified while it was still a plan are now fixed, not just documented:
+
+- **EC-4**: `suspendCitizen`/`revokeCitizen` now reject an illegal status transition (double-suspend, re-suspending a revoked citizen, re-revoking a revoked one) with `409` instead of silently overwriting status. This also closes **EC-15**'s double-audit concern as a side effect: a replayed suspend/revoke call now rejects cleanly instead of reapplying the transition and re-emitting its audit event.
+- **EC-9**: `getActionStatus` now re-validates each counted approval's role against the current term at read time (`now`), not only at `submitApproval`'s write time, so an approval from a since-expired role stops satisfying its type.
+
+Still genuinely blocked, documented per §2 rather than tested against fabricated behavior:
+
+- **EC-12**: governance-role-service's approval endpoints still have no session/MFA-tier enforcement at all (no `Authorization` header handling exists). Closing this means adding real auth-service-backed session validation to that route, which doesn't exist in any form yet.
+- **EC-19**: every `AuditEmitter` in this flow is still a no-op, so "does the action still complete when the audit call fails" has nothing to fail against yet.
+- **EC-18** (partial): the citizen-status-write half is tested and passes (revoke succeeds even when the cascade's target is unreachable); the "retried or durably logged" half of the requirement remains blocked on EC-19's real audit-service integration — there is nowhere durable to log the cascade failure to yet.
+- **EC-20** (partial): tested for what's checkable today — the real API responses across identity-service and governance-role-service never leak the raw legal identifier. The audit-trail-correlation half (matching entries by shared `action_ref`/`citizenId` once emitted to a real audit-service) is blocked on the same EC-19 gap.

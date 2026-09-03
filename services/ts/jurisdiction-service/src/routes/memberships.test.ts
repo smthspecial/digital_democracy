@@ -87,6 +87,27 @@ describe("membership routes", () => {
     expect(jurisdictionIds.sort()).toEqual([nation.id, city.id].sort());
   });
 
+  // ARCH-011 EC-36: membership creation is a structural change that had no
+  // audit emission at all until now.
+  it("IT-011-EC-36: emits an audit event on membership creation", async () => {
+    const events: string[] = [];
+    const auditApp = buildServer({ auditEmitter: (eventType) => events.push(eventType) });
+    const jurisdiction = (await auditApp.inject({
+      method: "POST",
+      url: "/jurisdiction/jurisdictions",
+      payload: { parent_id: null, name: "Audit-Membership-City", scope_level: "municipality", boundary_ref: "ref" },
+    })).json();
+
+    const res = await auditApp.inject({
+      method: "POST",
+      url: "/jurisdiction/memberships",
+      payload: { citizen_id: "11111111-1111-1111-1111-111111111111", jurisdiction_id: jurisdiction.id },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(events).toEqual(["jurisdiction.created", "membership.created"]);
+    await auditApp.close();
+  });
+
   it("GET /jurisdiction/memberships returns an empty list for a citizen with none", async () => {
     const res = await app.inject({
       method: "GET",

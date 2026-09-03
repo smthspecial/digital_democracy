@@ -203,7 +203,7 @@ export function registerProposalRoutes(
       },
     },
     async (request) => {
-      const proposal = service.assignScope(request.params.id, {
+      const proposal = await service.assignScope(request.params.id, {
         scopeJurisdictionId: request.body.scope_jurisdiction_id,
         population: request.body.population,
       });

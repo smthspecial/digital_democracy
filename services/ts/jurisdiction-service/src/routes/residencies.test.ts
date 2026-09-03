@@ -78,6 +78,31 @@ describe("residency routes", () => {
     expect(res.statusCode).toBe(400);
   });
 
+  // ARCH-011 EC-36: residency creation is a structural change that had no
+  // audit emission at all until now.
+  it("IT-011-EC-36: emits an audit event on residency creation", async () => {
+    const events: string[] = [];
+    const auditApp = buildServer({ auditEmitter: (eventType) => events.push(eventType) });
+    const jurisdiction = (await auditApp.inject({
+      method: "POST",
+      url: "/jurisdiction/jurisdictions",
+      payload: { parent_id: null, name: "Audit-City", scope_level: "municipality", boundary_ref: "ref" },
+    })).json();
+
+    const res = await auditApp.inject({
+      method: "POST",
+      url: "/jurisdiction/residencies",
+      payload: {
+        citizen_id: "11111111-1111-1111-1111-111111111111",
+        jurisdiction_id: jurisdiction.id,
+        start_date: "2020-01-01",
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(events).toEqual(["jurisdiction.created", "residency.created"]);
+    await auditApp.close();
+  });
+
   describe("GET /jurisdiction/residency/verify", () => {
     it("is true at an instant within the residency period", async () => {
       const jurisdiction = await createJurisdiction();

@@ -30,6 +30,16 @@ func main() {
 	if url := os.Getenv("AUDIT_SERVICE_URL"); url != "" {
 		audit = newHTTPAuditEmitter(url)
 	}
+	// NATS_URL (ADR-023) takes priority over AUDIT_SERVICE_URL when both are
+	// set, same convention every other service's AuditEmitter migration uses.
+	if url := os.Getenv("NATS_URL"); url != "" {
+		natsAudit, err := newNATSAuditEmitter(context.Background(), url)
+		if err != nil {
+			logger.Error("failed to connect NATS audit emitter", "error", err)
+			os.Exit(1)
+		}
+		audit = natsAudit
+	}
 
 	srv := &http.Server{
 		Addr:         ":" + port,

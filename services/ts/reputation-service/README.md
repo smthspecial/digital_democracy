@@ -22,8 +22,11 @@ reputation event log (DP-038, in-memory):
   authoritative decision that produced it). On a significant delta
   (`abs(delta) >= 10`) a `NotificationEmitter` fires; an `AuditEmitter`
   always fires. Both are injectable seams with no-op defaults, since
-  notification-service and audit-service aren't called over the network
-  here.
+  notification-service isn't called over the network here. `AuditEmitter`
+  has a real queue-backed implementation, `createNatsAuditEmitter`
+  (ADR-023): when `NATS_URL` is set it publishes to the `audit.append`
+  JetStream stream instead of doing nothing (`reputation.record_created`
+  has no dedicated TBL-034 bucket, so it maps to `system_update`).
 - `GET /reputation/citizens/:id` -- `{ citizen_id, total, records }`,
   where `total` is the sum of all `delta`s for that citizen.
 - `GET /reputation/citizens/:id/records` -- the full event log for that

@@ -36,3 +36,16 @@ export function hasConflictOfInterest(store: Store, citizenId: string, domainId:
   }
   return false;
 }
+
+// ARCH-010 EC-8: governance-role-service's COIChecker seam needs to ask
+// whether a citizen has any declared conflict at all for actions (like
+// identity-service's suspend/revoke) that have no domain of their own to
+// scope a check against -- see createHttpCOIChecker's comment on the
+// consuming side for the full reasoning.
+export function listConflictDomainsForCitizen(store: Store, citizenId: string): string[] {
+  const domainIds: string[] = [];
+  for (const coi of store.conflicts.values()) {
+    if (coi.citizenId === citizenId) domainIds.push(coi.domainId);
+  }
+  return domainIds;
+}

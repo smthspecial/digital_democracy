@@ -24,7 +24,19 @@ func main() {
 		port = "5002"
 	}
 
-	svc := NewService(NewStore(), nil, nil)
+	var audit AuditEmitter
+	// NATS_URL (ADR-023) is the only AuditEmitter wiring this service has.
+	// Unset -> falls back to the no-op default so the service still runs
+	// standalone with zero configuration.
+	if url := os.Getenv("NATS_URL"); url != "" {
+		natsAudit, err := newNATSAuditEmitter(context.Background(), url)
+		if err != nil {
+			logger.Error("failed to connect NATS audit emitter", "error", err)
+			os.Exit(1)
+		}
+		audit = natsAudit
+	}
+	svc := NewService(NewStore(), nil, audit)
 
 	srv := &http.Server{
 		Addr:         ":" + port,

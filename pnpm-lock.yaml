@@ -117,10 +117,41 @@ importers:
         specifier: ^8.5.0
         version: 8.67.0(eslint@9.39.5)(typescript@5.9.3)
 
+  packages/event-bus:
+    dependencies:
+      '@nats-io/jetstream':
+        specifier: ^3.4.0
+        version: 3.4.0
+      '@nats-io/nats-core':
+        specifier: ^3.4.0
+        version: 3.4.0
+      '@nats-io/transport-node':
+        specifier: ^3.4.0
+        version: 3.4.0
+    devDependencies:
+      '@dd/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
+      '@dd/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      '@types/node':
+        specifier: ^20.14.0
+        version: 20.19.43
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@20.19.43)(terser@5.50.0)
+
   packages/tsconfig: {}
 
   services/ts/ai-synthesis-service:
     dependencies:
+      '@dd/event-bus':
+        specifier: workspace:*
+        version: link:../../../packages/event-bus
       fastify:
         specifier: ^4.28.0
         version: 4.29.1
@@ -221,6 +252,9 @@ importers:
 
   services/ts/deliberation-service:
     dependencies:
+      '@dd/event-bus':
+        specifier: workspace:*
+        version: link:../../../packages/event-bus
       fastify:
         specifier: ^4.28.0
         version: 4.29.1
@@ -246,6 +280,37 @@ importers:
 
   services/ts/governance-role-service:
     dependencies:
+      '@dd/event-bus':
+        specifier: workspace:*
+        version: link:../../../packages/event-bus
+      fastify:
+        specifier: ^4.28.0
+        version: 4.29.1
+    devDependencies:
+      '@dd/eslint-config':
+        specifier: workspace:*
+        version: link:../../../packages/eslint-config
+      '@dd/tsconfig':
+        specifier: workspace:*
+        version: link:../../../packages/tsconfig
+      '@types/node':
+        specifier: ^20.14.0
+        version: 20.19.43
+      tsx:
+        specifier: ^4.19.0
+        version: 4.23.12
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@20.19.43)(terser@5.50.0)
+
+  services/ts/iam-service:
+    dependencies:
+      '@dd/event-bus':
+        specifier: workspace:*
+        version: link:../../../packages/event-bus
       fastify:
         specifier: ^4.28.0
         version: 4.29.1
@@ -271,6 +336,9 @@ importers:
 
   services/ts/identity-service:
     dependencies:
+      '@dd/event-bus':
+        specifier: workspace:*
+        version: link:../../../packages/event-bus
       fastify:
         specifier: ^4.28.0
         version: 4.29.1
@@ -296,6 +364,9 @@ importers:
 
   services/ts/jurisdiction-service:
     dependencies:
+      '@dd/event-bus':
+        specifier: workspace:*
+        version: link:../../../packages/event-bus
       fastify:
         specifier: ^4.28.0
         version: 4.29.1
@@ -346,6 +417,9 @@ importers:
 
   services/ts/problem-service:
     dependencies:
+      '@dd/event-bus':
+        specifier: workspace:*
+        version: link:../../../packages/event-bus
       fastify:
         specifier: ^4.28.0
         version: 4.29.1
@@ -371,6 +445,9 @@ importers:
 
   services/ts/project-service:
     dependencies:
+      '@dd/event-bus':
+        specifier: workspace:*
+        version: link:../../../packages/event-bus
       fastify:
         specifier: ^4.28.0
         version: 4.29.1
@@ -396,6 +473,9 @@ importers:
 
   services/ts/proposal-service:
     dependencies:
+      '@dd/event-bus':
+        specifier: workspace:*
+        version: link:../../../packages/event-bus
       fastify:
         specifier: ^4.28.0
         version: 4.29.1
@@ -421,6 +501,9 @@ importers:
 
   services/ts/reputation-service:
     dependencies:
+      '@dd/event-bus':
+        specifier: workspace:*
+        version: link:../../../packages/event-bus
       fastify:
         specifier: ^4.28.0
         version: 4.29.1
@@ -1691,6 +1774,24 @@ packages:
     cpu: [x64]
     os: [linux]
     libc: [glibc]
+
+  '@nats-io/jetstream@3.4.0':
+    resolution: {integrity: sha512-GzHQodNJ942+R5LRb8PuZ5ugVWVWMRiufxUYLLVWkXKfwDXYN+Owo0d7L/b9O7BPyrbYD7jQWAC6+ZVuXa9Gyw==}
+
+  '@nats-io/nats-core@3.4.0':
+    resolution: {integrity: sha512-QMDM86EUNm+wudlKC67HLar/KHHQUvJGLfb4jbahje3pUk3K9afeck9fwsxBZF0eUFox6T/TA6m/t+lQqf+QsQ==}
+
+  '@nats-io/nkeys@2.0.3':
+    resolution: {integrity: sha512-JVt56GuE6Z89KUkI4TXUbSI9fmIfAmk6PMPknijmuL72GcD+UgIomTcRWiNvvJKxA01sBbmIPStqJs5cMRBC3A==}
+    engines: {node: '>=18.0.0'}
+
+  '@nats-io/nuid@3.0.0':
+    resolution: {integrity: sha512-QbXZDrxmYlrn5AD06gYcUTmEHwxn96HBQMIk7XTjDlEcx6FPzVBBPjp4AMRh1lEv6B4iJ6Xb/Uz61JugPXFRQg==}
+    engines: {node: '>= 22.x'}
+
+  '@nats-io/transport-node@3.4.0':
+    resolution: {integrity: sha512-hH7u7ejIBTFEJIZ8rIcMrHJI6wl+HhpO5sVFs1+ppmXa8RuB2+Lh1+UwTzZ5xTNNm1TKcRkYy+2qCV56qp8RxA==}
+    engines: {node: '>= 18.0.0'}
 
   '@next/env@14.2.35':
     resolution: {integrity: sha512-DuhvCtj4t9Gwrx80dmz2F4t/zKQ4ktN8WrMwOuVzkJfBilwAwGr6v16M5eI8yCuZ63H9TTuEU09Iu2HqkzFPVQ==}
@@ -5248,6 +5349,9 @@ packages:
     resolution: {integrity: sha512-yQfwQVoRXwOuyX1LxiJFBFNg6VfuYh+/RyZLd82+isgyLkBXw3S5XRRzvcck1FAjSCG5sVyLd+O1eDMvYa3J7g==}
     hasBin: true
 
+  tweetnacl@1.0.3:
+    resolution: {integrity: sha512-6rt+RN7aOi1nGMyC4Xa5DdYiukl2UWCbcJft7YhxReBGQD7OAM8Pbxw6YMo4r2diNEA8FEmu32YOn9rhaiE5yw==}
+
   type-check@0.4.0:
     resolution: {integrity: sha512-XleUoc9uwGXqjWwXaUTZAmzMcFZ5858QA2vvx1Ur5xIcixXIP+8LnFDgRplU30us6teqdlskFfu+ae4K79Ooew==}
     engines: {node: '>= 0.8.0'}
@@ -7191,6 +7295,27 @@ snapshots:
 
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     optional: true
+
+  '@nats-io/jetstream@3.4.0':
+    dependencies:
+      '@nats-io/nats-core': 3.4.0
+
+  '@nats-io/nats-core@3.4.0':
+    dependencies:
+      '@nats-io/nkeys': 2.0.3
+      '@nats-io/nuid': 3.0.0
+
+  '@nats-io/nkeys@2.0.3':
+    dependencies:
+      tweetnacl: 1.0.3
+
+  '@nats-io/nuid@3.0.0': {}
+
+  '@nats-io/transport-node@3.4.0':
+    dependencies:
+      '@nats-io/nats-core': 3.4.0
+      '@nats-io/nkeys': 2.0.3
+      '@nats-io/nuid': 3.0.0
 
   '@next/env@14.2.35': {}
 
@@ -11294,6 +11419,8 @@ snapshots:
       '@turbo/linux-arm64': 2.10.11
       '@turbo/windows-64': 2.10.11
       '@turbo/windows-arm64': 2.10.11
+
+  tweetnacl@1.0.3: {}
 
   type-check@0.4.0:
     dependencies:

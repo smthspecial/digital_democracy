@@ -79,7 +79,7 @@ export function registerJurisdictionRoutes(app: FastifyInstance, deps: Deps) {
       },
     },
     async (request) =>
-      changeScopeLevel(
+      await changeScopeLevel(
         deps.store,
         deps.approvalGate,
         deps.auditEmitter,

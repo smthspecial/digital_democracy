@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@dd/event-bus": "workspace:*",
     "fastify": "^4.28.0"
   },
   "devDependencies": {

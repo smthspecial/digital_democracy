@@ -1,10 +1,21 @@
+import { connectEventBus, ensureStream } from "@dd/event-bus";
 import { buildServer } from "./server.js";
 import { config } from "./config.js";
 import {
+  AUDIT_APPEND_STREAM,
+  AUDIT_APPEND_SUBJECT,
   createHttpLedgerRecorder,
   createHttpProposalAuthorLookup,
   createHttpReputationEmitter,
+  createNatsAuditEmitter,
 } from "./integrations.js";
+
+let natsAuditOverride = {};
+if (config.natsUrl) {
+  const bus = await connectEventBus(config.natsUrl);
+  await ensureStream(bus, { name: AUDIT_APPEND_STREAM, subjects: [AUDIT_APPEND_SUBJECT] });
+  natsAuditOverride = { auditEmitter: createNatsAuditEmitter(bus) };
+}
 
 const app = buildServer({
   ...(config.proposalServiceUrl
@@ -16,6 +27,7 @@ const app = buildServer({
   ...(config.budgetServiceUrl
     ? { ledgerRecorder: createHttpLedgerRecorder(config.budgetServiceUrl) }
     : {}),
+  ...natsAuditOverride,
 });
 
 app

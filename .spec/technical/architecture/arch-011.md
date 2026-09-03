@@ -153,50 +153,69 @@ Cites: FR-008, FR-010, FR-011, DP-020, DP-030. Level: e2e (full challenge-to-vot
 
 | Scenario | FR/DP/NFR ids | Level | Automated test id |
 |---|---|---|---|
-| HP-1 | FR-008,FR-014,DP-030 | integration | TBD |
-| HP-2 | FR-009 | integration | TBD |
-| HP-3 | FR-012 | integration | TBD |
-| HP-4 | FR-013,FR-014 | integration | TBD |
-| HP-5 | FR-008 | e2e | TBD |
-| HP-6 | FR-008,FR-010,FR-011,DP-020,DP-030 | e2e | TBD |
-| EC-1 | FR-014 | integration | TBD |
-| EC-2 | FR-014 | integration | TBD |
-| EC-3 | FR-012 | integration | TBD |
-| EC-4 | FR-008 | integration | TBD |
-| EC-5 | FR-008,FR-014 | integration | TBD |
-| EC-6 | FR-012 | integration | TBD |
-| EC-7 | FR-008 | integration | TBD |
-| EC-8 | FR-010 | integration | TBD |
-| EC-9 | FR-010 | integration | TBD |
-| EC-10 | FR-010 | integration | TBD |
-| EC-11 | FR-010,FR-011 | integration | TBD |
-| EC-12 | FR-008 | integration | TBD |
-| EC-13 | FR-008 | integration | TBD |
-| EC-14 | FR-012 | integration | TBD |
-| EC-15 | FR-012 | integration | TBD |
-| EC-16 | FR-012,FR-013,FR-014 | integration | TBD |
-| EC-17 | FR-013,FR-014 | integration | TBD |
-| EC-18 | FR-011 | integration | TBD |
-| EC-19 | FR-010 | integration | TBD |
-| EC-20 | FR-008 | integration | TBD |
-| EC-21 | FR-008 | integration | TBD |
-| EC-22 | FR-008 | integration | TBD |
-| EC-23 | FR-008,FR-014 | integration | TBD |
-| EC-24 | FR-014 | integration | TBD |
-| EC-25 | FR-013 | integration | TBD |
-| EC-26 | FR-008 | integration | TBD |
-| EC-27 | FR-010 | integration | TBD |
-| EC-28 | FR-008 | integration | TBD |
-| EC-29 | FR-014 | integration | TBD |
-| EC-30 | FR-008,FR-014 | integration | TBD |
-| EC-31 | FR-014,DP-030 | integration | TBD |
-| EC-32 | FR-012 | e2e | TBD |
-| EC-33 | FR-011,DP-030 | integration | TBD |
-| EC-34 | FR-010,FR-011,DP-058 | integration | TBD |
-| EC-35 | FR-014 | integration | TBD |
-| EC-36 | FR-012,FR-013 | integration | TBD |
-| EC-37 | FR-010,FR-011 | integration | TBD |
-| EC-38 | FR-014 | integration | TBD |
+| HP-1 | FR-008,FR-014,DP-030 | integration | `arch011-jurisdiction-scope.e2e.test.ts::HP-1` |
+| HP-2 | FR-009 | integration | `arch011-jurisdiction-scope.e2e.test.ts::HP-2` |
+| HP-3 | FR-012 | integration | `eligibility.test.ts::"is eligible when membership and sufficient residency..."` |
+| HP-4 | FR-013,FR-014 | integration | `arch011-jurisdiction-scope.e2e.test.ts::HP-4` |
+| HP-5 | FR-008 | e2e | `proposals.test.ts::"gathering_support -> development succeeds once the threshold is met"` |
+| HP-6 | FR-008,FR-010,FR-011,DP-020,DP-030 | e2e | `proposals.test.ts::HP-6` |
+| EC-1 | FR-014 | integration | `jurisdictions.test.ts::"rejects an invalid scope_level"` |
+| EC-2 | FR-014 | integration | `jurisdictions.test.ts::"rejects an unknown parent_id"` |
+| EC-3 | FR-012 | integration | `residencies.test.ts` (×3) |
+| EC-4 | FR-008 | integration | `proposals.test.ts::IT-011-EC-4` |
+| EC-5 | FR-008,FR-014 | integration | `integrations.test.ts::IT-011-EC-5` + `proposals.test.ts::IT-011-EC-5` + `arch011-jurisdiction-scope.e2e.test.ts::IT-011-EC-5` |
+| EC-6 | FR-012 | integration | `eligibility.test.ts::"400s when scope_jurisdiction_id does not exist"` |
+| EC-7 | FR-008 | integration | `proposals.test.ts::IT-011-EC-7` |
+| EC-8 | FR-010 | integration | `proposals.test.ts::IT-011-EC-8` |
+| EC-9 | FR-010 | integration | `proposals.test.ts::IT-011-EC-9` |
+| EC-10 | FR-010 | integration | `proposals.test.ts::"404s resolving an unknown challenge"` |
+| EC-11 | FR-010,FR-011 | integration | `proposals.test.ts::IT-011-EC-11` |
+| EC-12 | FR-008 | integration | `proposals.test.ts::"gathering_support -> development is blocked below the support threshold"` |
+| EC-13 | FR-008 | integration | `proposals.test.ts` (×2) |
+| EC-14 | FR-012 | integration | `eligibility.test.ts::"no current residency"` |
+| EC-15 | FR-012 | integration | `eligibility.test.ts::"residency duration below minimum required days"` |
+| EC-16 | FR-012,FR-013,FR-014 | integration | `eligibility.test.ts::"unrelated branch"` |
+| EC-17 | FR-013,FR-014 | integration | `eligibility.test.ts::"descendant jurisdiction satisfies ancestor scope check"` |
+| EC-18 | FR-011 | integration | `it.todo` in `proposals.test.ts` — blocked, see below |
+| EC-19 | FR-010 | integration | `proposals.test.ts::IT-011-EC-19` |
+| EC-20 | FR-008 | integration | `proposals.test.ts::IT-011-EC-20` |
+| EC-21 | FR-008 | integration | `proposals.test.ts::"computes the ceil(population * 0.05) threshold"` |
+| EC-22 | FR-008 | integration | `proposals.test.ts::IT-011-EC-22` |
+| EC-23 | FR-008,FR-014 | integration | `proposals.test.ts::IT-011-EC-23` |
+| EC-24 | FR-014 | integration | `jurisdictions.test.ts::"builds a nested tree across multiple levels"` |
+| EC-25 | FR-013 | integration | `memberships.test.ts::"rejects a duplicate..."` |
+| EC-26 | FR-008 | integration | `proposals.test.ts::"rejects duplicate support..."` |
+| EC-27 | FR-010 | integration | `proposals.test.ts::IT-011-EC-27` |
+| EC-28 | FR-008 | integration | `proposals.test.ts::IT-011-EC-28` |
+| EC-29 | FR-014 | integration | `jurisdictions.test.ts::IT-011-EC-29` |
+| EC-30 | FR-008,FR-014 | integration | `integrations.test.ts::IT-011-EC-30` |
+| EC-31 | FR-014,DP-030 | integration | `interfaces.test.ts::IT-011-EC-31` + `jurisdictions.test.ts::IT-011-EC-31` + `arch011-jurisdiction-scope.e2e.test.ts::IT-011-EC-31` (×2) |
+| EC-32 | FR-012 | e2e | `it.todo` in `proposals.test.ts` — out of scope (ARCH-016), see below |
+| EC-33 | FR-011,DP-030 | integration | `it.todo` in `proposals.test.ts` — blocked, see below |
+| EC-34 | FR-010,FR-011,DP-058 | integration | `it.todo` in `proposals.test.ts` — blocked, see below |
+| EC-35 | FR-014 | integration | `jurisdictions.test.ts::"emits an audit event on jurisdiction creation and scope-level change"` |
+| EC-36 | FR-012,FR-013 | integration | `residencies.test.ts::IT-011-EC-36` + `memberships.test.ts::IT-011-EC-36` |
+| EC-37 | FR-010,FR-011 | integration | `proposals.test.ts::IT-011-EC-37` (×2) |
+| EC-38 | FR-014 | integration | `jurisdictions.test.ts::IT-011-EC-38` |
+
+All automated tests live under `services/ts/jurisdiction-service/src/` (`routes/*.test.ts`, `services/interfaces.test.ts`) and `services/ts/proposal-service/src/` (`routes/proposals.test.ts`, `integrations.test.ts`, `e2e/arch011-jurisdiction-scope.e2e.test.ts`). The e2e suite boots jurisdiction-service, proposal-service, and governance-role-service as real processes (`e2e/harness.ts`, copied from ARCH-010's — same spawn/health-check contract) reached over real HTTP, per §2.
+
+---
+
+## Status update (2026-08-28)
+
+The central gap this doc's Overview opened with is closed: `proposal-service` now has a real `JurisdictionClient` HTTP seam. `createHttpJurisdictionClient` (`integrations.ts`) calls jurisdiction-service's `GET /jurisdiction/jurisdictions/:id/tree` (the only read-by-id endpoint that exists) to check existence, wired in by `index.ts` when `JURISDICTION_SERVICE_URL` is set, permissive by default otherwise, and failing closed (treats "does not exist") on any lookup failure. `assignScope` is now async and rejects an unknown `scope_jurisdiction_id` with `400` (EC-5) instead of silently accepting it (EC-30).
+
+`jurisdiction-service`'s `ApprovalGate` is now real too: `createHttpApprovalGate` (`services/interfaces.ts`) calls governance-role-service's `GET /governance-roles/actions/:actionRef/status`, scoped by a new `jurisdiction:scope-level:{id}` action_ref convention (the same pattern ARCH-010 established for identity actions), wired in by `index.ts` when `GOVERNANCE_ROLE_SERVICE_URL` is set, and failing closed on any lookup failure (EC-31). `changeScopeLevel` is now async.
+
+Two audit gaps this doc identified are closed: `createResidency`/`createMembership` (jurisdiction-service) and `assignScope`/`fileScopeChallenge`/`resolveScopeChallenge` (proposal-service) all now emit through their service's existing `AuditEmitter` seam (EC-36, EC-37) -- they simply weren't calling it before, even though the seam already existed for other mutations in the same services.
+
+Still genuinely blocked, documented per §2 rather than tested against fabricated behavior:
+
+- **EC-18**: no actor/session identity concept exists anywhere in proposal-service, so a review-body check on scope-challenge resolution has no session to authorize against.
+- **EC-32**: out of this doc's scope by design -- owned by ARCH-016 (voting-service's side of the same eligibility-calling gap).
+- **EC-33**: DP-030's review-body routing step has no defined shape (action_ref/approval-type convention) anywhere in this codebase to build against, unlike EC-31's crisp single approval check.
+- **EC-34**: DP-058's escalation cron needs both a new domain field (an SLA/deadline on `ScopeChallenge`) and scheduled-job infrastructure that doesn't exist in this codebase at all.
 
 ---
 

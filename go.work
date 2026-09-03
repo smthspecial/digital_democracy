@@ -5,4 +5,5 @@ use (
 	./services/go/audit-service
 	./services/go/auth-service
 	./services/go/delegation-service
+	./packages/go/eventbus
 )

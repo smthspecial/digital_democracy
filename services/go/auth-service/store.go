@@ -182,7 +182,9 @@ func (s *store) ActiveFactor(citizenID string, ft FactorType) (MFAFactor, bool) 
 func (s *store) ActiveFactorTypes(citizenID string) []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	var out []string
+	// Non-nil so a citizen with no enrolled factors serializes to `[]` on
+	// the wire (ARCH-010 HP-1), not `null`.
+	out := []string{}
 	for _, f := range s.factors {
 		if f.CitizenID == citizenID && f.Status == FactorActive {
 			out = append(out, string(f.FactorType))

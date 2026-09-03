@@ -55,4 +55,9 @@ this codebase, so they're modeled as small injectable interfaces (wired in
   competency-service (delegate must hold active domain competency). Default
   allows every delegate.
 - `AuditEmitter` (`service.go`) — models the async DP-036 audit-log append
-  to audit-service on create/revoke/expiry. Default is a no-op.
+  to audit-service on create/revoke/expiry. Default is a no-op; when
+  `NATS_URL` is set, `natsAuditEmitter` (`nats.go`, ADR-023) publishes each
+  `delegation.created`/`delegation.revoked`/`delegation.expired` event to
+  the `audit.append` JetStream stream instead, mapped to TBL-034's generic
+  `system_update` action_type since delegation events don't have a
+  dedicated bucket of their own.

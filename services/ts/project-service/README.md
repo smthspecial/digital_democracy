@@ -49,3 +49,9 @@ HTTP-calling implementations (`createHttpProposalAuthorLookup`,
 `createHttpReputationEmitter`, `createHttpLedgerRecorder`) wired in by
 `index.ts` when `PROPOSAL_SERVICE_URL`/`REPUTATION_SERVICE_URL`/
 `BUDGET_SERVICE_URL` are set, falling back to no-ops otherwise.
+`AuditEmitter` has a real queue-backed implementation,
+`createNatsAuditEmitter` (ADR-023): when `NATS_URL` is set it publishes to
+the `audit.append` JetStream stream instead of doing nothing
+(`project_milestone.completed`/`project.completed` have no dedicated
+TBL-034 bucket, so both map to `system_update`, with the original local
+event type folded into the payload).

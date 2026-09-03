@@ -55,6 +55,14 @@ anyone in. `credential_valid` has no identity-service equivalent to look
 up (no credential store exists anywhere in this codebase) and remains an
 explicit, caller-trusted request field.
 
-There is no live KMS or audit-service integration yet for the rest of this
-service — `AuditEmitter` (`service.go`) and the encryption-key handling
-(`crypto.go`) are still no-op/local-only seams.
+There is no live KMS integration yet for this service — the encryption-key
+handling (`crypto.go`) is still a local-only seam. `AuditEmitter`
+(`service.go`) does have a real queue-backed implementation,
+`natsAuditEmitter` (`nats.go`, ADR-023): when `NATS_URL` is set it publishes
+every recorded `AuthEvent` (login, MFA, step-up, anomaly, session, factor
+lifecycle) to the `audit.append` JetStream stream, mapped to TBL-034's
+generic `system_update` action_type since none of this service's events has
+a dedicated bucket of its own. Unlike voting-service there is no
+`AUDIT_SERVICE_URL` HTTP fallback — `NATS_URL` unset falls straight back to
+the no-op default so the service still runs standalone with zero
+configuration.

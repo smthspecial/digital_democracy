@@ -31,5 +31,12 @@ State is in-memory only, behind a store abstraction (`src/store.ts`) so a
 real persistence layer can replace it later without changing callers.
 Audit events (DP-036) on creation and status change, and the DP-028
 threshold check, are modeled as injectable collaborator interfaces
-(`src/collaborators.ts`) with no-op defaults, since audit-service and
-proposal-service integration aren't implemented here.
+(`src/collaborators.ts`) with no-op defaults. `AuditEmitter` has a real
+queue-backed implementation, `createNatsAuditEmitter` (ADR-023): when
+`NATS_URL` is set it publishes to the `audit.append` JetStream stream
+instead of doing nothing (`problem.created`/`problem.status_changed` have
+no dedicated TBL-034 bucket, so both map to `system_update`, with the
+original local event name folded into the payload's `event_type` field).
+`ThresholdChecker` remains no-op-only -- see ARCH-012's status notes for
+why that one stays deliberately unbuilt (DP-028's threshold source
+conflicts with proposal-service's actual support_count mechanism).
