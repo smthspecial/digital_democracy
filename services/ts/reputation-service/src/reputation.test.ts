@@ -216,3 +216,50 @@ describe("GET /reputation/citizens/:id/records", () => {
     expect(body.every((r: { citizen_id: string }) => r.citizen_id === "c1")).toBe(true);
   });
 });
+
+// ABUSE-REP-1/2 (testing/e2e-api-test-plan.md): POST /reputation/records has
+// no caller authentication of any kind -- every test above already posts
+// directly with no credential, which is itself the first half of this
+// finding (DP-038 says records should only originate from an authorized
+// upstream service after a real event; the route enforces none of that).
+// The second half, proven here, is that delta also has no magnitude cap: a
+// citizen's whole standing can be set in one call, in either direction, by
+// anyone who can reach this endpoint -- self-boosting and defaming a rival
+// are the same one-line request. source_ref is required for negative
+// deltas (tested elsewhere in this file) but is never checked for
+// authenticity, only non-emptiness, so it doesn't close this gap either.
+describe("ABUSE-REP-1/2: unauthenticated, unbounded reputation writes", () => {
+  let app: FastifyInstance;
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  it("a single unauthenticated call can set an enormous positive delta for any citizen (self-boosting)", async () => {
+    ({ app } = buildTestServer());
+    const res = await postRecord(app, {
+      citizen_id: "attacker-controlled-citizen",
+      factor_type: "successful_proposal",
+      delta: 1_000_000,
+      source_ref: "",
+    });
+    expect(res.statusCode).toBe(201);
+
+    const total = await app.inject({ method: "GET", url: "/reputation/citizens/attacker-controlled-citizen" });
+    expect(total.json().total).toBe(1_000_000);
+  });
+
+  it("a single unauthenticated call can set an enormous negative delta against a named rival (defamation), with only a non-empty (not authentic) source_ref", async () => {
+    ({ app } = buildTestServer());
+    const res = await postRecord(app, {
+      citizen_id: "a-political-rival",
+      factor_type: "fraud",
+      delta: -1_000_000,
+      source_ref: "trust me",
+    });
+    expect(res.statusCode).toBe(201);
+
+    const total = await app.inject({ method: "GET", url: "/reputation/citizens/a-political-rival" });
+    expect(total.json().total).toBe(-1_000_000);
+  });
+});

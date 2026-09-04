@@ -113,4 +113,45 @@ describe("budget ledger routes", () => {
       expect([404, 405]).toContain(res.statusCode);
     },
   );
+
+  // ABUSE-FIN-2 (testing/e2e-api-test-plan.md): the request schema types
+  // `amount` as a bare number with no minimum/sign constraint, and nothing
+  // in the service layer derives or checks a sign from `type` either -- a
+  // negative amount is accepted for both inflow and outflow, corrupting the
+  // public ledger and any reconciliation built on top of it (a negative
+  // outflow nets as money appearing rather than leaving, and vice versa).
+  // recorded_by is also never verified as belonging to an authorized
+  // operator (srv-007.md's stated intent), so this is fully reachable by
+  // any caller. These two prove the gap directly rather than by assumption.
+  it("ABUSE-FIN-2: accepts a negative amount on an outflow (nets as money appearing, not leaving)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/budget/ledger",
+      payload: {
+        category_id: null,
+        type: "outflow",
+        amount: -50000,
+        description: "fabricated negative outflow",
+        recorded_by: "anyone-claiming-to-be-an-operator",
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().amount).toBe(-50000);
+  });
+
+  it("ABUSE-FIN-2: accepts a negative amount on an inflow (nets as money leaving, not appearing)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/budget/ledger",
+      payload: {
+        category_id: null,
+        type: "inflow",
+        amount: -1,
+        description: "fabricated negative inflow",
+        recorded_by: "anyone-claiming-to-be-an-operator",
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().amount).toBe(-1);
+  });
 });

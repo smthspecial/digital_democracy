@@ -116,10 +116,10 @@ Built entirely through each service's real public API, per ARCH-009 §2 (never b
 
 | Scenario | FR/DP/NFR ids | Level | Automated test id |
 |---|---|---|---|
-| HP-1 | FR-056, DP-014 | integration | TBD (`IT-019-HP1`) |
-| HP-2 | FR-057, DP-015 | integration | TBD (`IT-019-HP2`) |
-| HP-3 | FR-056, DP-016, DP-041 | e2e | TBD (`E2E-019-HP3`) |
-| HP-4 | FR-057, DP-045 | integration | TBD (`IT-019-HP4`) |
+| HP-1 | FR-056, DP-014 | integration | `arch019-delegated-expertise.e2e.test.ts::IT-019-HP1` |
+| HP-2 | FR-057, DP-015 | integration | `arch019-delegated-expertise.e2e.test.ts::IT-019-HP2` |
+| HP-3 | FR-056, DP-016, DP-041 | e2e | `arch019-delegated-expertise.e2e.test.ts::E2E-019-HP3` |
+| HP-4 | FR-057, DP-045 | integration | `arch019-delegated-expertise.e2e.test.ts::IT-019-HP4` |
 | EC-1 | FR-056, DP-014 | integration | TBD (`IT-019-EC1`) |
 | EC-2 | DP-014, DP-015 | integration | TBD (`IT-019-EC2`) |
 | EC-3 | DP-014 | integration | TBD (`IT-019-EC3`) |
@@ -157,3 +157,11 @@ The two code-grounded gaps this doc's Overview flagged are both resolved:
 2. `voting-service`'s production wiring no longer always passes `nil` seams: `main.go` constructs real `httpDelegationResolver`/`httpAuditEmitter` implementations (`remote.go`) when `DELEGATION_SERVICE_URL`/`AUDIT_SERVICE_URL` are set, falling back to the no-op default otherwise.
 
 Still open: the `domain_id=proposal_id` workaround (proposal-service has no dedicated domain field) is unchanged, so chain resolution still only matches by coincidence of ids rather than a real competency domain.
+
+## Status update (2026-09-04)
+
+Section 3's four happy-path scenarios are now implemented as real e2e tests: `testing/e2e-suite/src/e2e/arch019-delegated-expertise.e2e.test.ts` (a new package, not living inside either service, since neither delegation-service nor voting-service has a TS home to put an `src/e2e/` directory in — see that package's README). All four pass against real spawned processes, confirming HP-3's weighted-resolution claim above end-to-end for the first time (`voting-service` really calling delegation-service's real `POST /delegation/resolve` via `DELEGATION_SERVICE_URL`, not a fake).
+
+One more gap found while building the fixture for HP-1, not previously called out in this doc: `delegation-service`'s `CompetencyChecker` seam has no HTTP implementation anywhere in the codebase (confirmed against `service.go`/`main.go`) — there is no `HttpCompetencyChecker` and no env var to wire one, unlike the two seams §Overview already flagged. `main.go` always passes `nil`, which falls back to `defaultCompetencyChecker` (always `true`). So today, `POST /delegation/delegations` accepts a delegate with **no** active competency in the domain just as readily as one with it — the `400 ErrNoCompetency` path (EC-10/EC-11) exists in code and is presumably unit-tested against a fake, but it is not reachable through any real deployment topology available in this codebase yet. HP-1's test builds the real competency-service fixture anyway (grants the delegate active competency, as §2 specifies) so it starts actually proving the gate the moment this seam is wired, but as written today it is not proof of that gate — only of the create/list HTTP surface.
+
+Section 4's 26 edge cases remain unimplemented (`TBD` in the traceability table).

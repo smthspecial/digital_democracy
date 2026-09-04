@@ -250,6 +250,33 @@ describe("POST /:id/budget-spent", () => {
 
     expect(recorded).toEqual([{ projectId: id, amount: 2500, description: "First contractor invoice" }]);
   });
+
+  // ABUSE-FIN-3 (testing/e2e-api-test-plan.md): recordBudgetSpent never
+  // compares the running budget_spent total against budget_allocated -- the
+  // only validation is "amount must be positive" (the test above). A caller
+  // with legitimate access to this endpoint (an "operator", per srv-013.md's
+  // intent, though nothing here actually checks that either) can record
+  // spend arbitrarily far past what was allocated, and each call mirrors
+  // straight into budget-service's public ledger as a seemingly-legitimate
+  // outflow with no warning, no gate, no audit distinction from a normal
+  // spend. This test proves there is no ceiling, not that one is missing by
+  // assumption -- if this starts failing, an overspend guard has been added
+  // and this test (and the finding) should be revisited.
+  it("ABUSE-FIN-3: records spend far beyond budget_allocated with no ceiling check", async () => {
+    app = buildServer({ store: createStore() });
+    const created = await createProject(app, { budget_allocated: 10000 });
+    const { id } = created.json();
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/${id}/budget-spent`,
+      payload: { amount: 500000, description: "wildly exceeds the allocated 10000" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().budget_spent).toBe(500000);
+    expect(res.json().budget_allocated).toBe(10000);
+  });
 });
 
 async function completeAllMilestones(app: FastifyInstance, projectId: string, milestoneIds: string[]) {
