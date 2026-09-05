@@ -217,7 +217,7 @@ describe("GET /reputation/citizens/:id/records", () => {
   });
 });
 
-// ABUSE-REP-1/2 (testing/e2e-api-test-plan.md): POST /reputation/records has
+// ABUSE-REP-1/2 (.spec/technical/test-plans/tp-001.md, ARCH-013 EC-43): POST /reputation/records has
 // no caller authentication of any kind -- every test above already posts
 // directly with no credential, which is itself the first half of this
 // finding (DP-038 says records should only originate from an authorized

@@ -54,6 +54,27 @@ func (f fakeAssessor) Assess(right ConstitutionalRight, changeSummary string) bo
 	return f.blockedRightIDs[right.ID]
 }
 
+// ARCH-020 EC-17: with zero constitutional_right rows registered at all,
+// DP-034 has nothing to check a change_summary against, so review trivially
+// clears with no review rows and no audit-log entry.
+func TestServiceReviewProposalClearedWhenNoRightsExistAtAll(t *testing.T) {
+	svc := NewService(NewStore())
+
+	reviews, blocked, err := svc.ReviewProposal("proposal-1", "increases tax rate")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if blocked {
+		t.Fatalf("expected proposal to clear when no rights are registered")
+	}
+	if len(reviews) != 0 {
+		t.Fatalf("expected zero review rows, got %d", len(reviews))
+	}
+	if logEntries := svc.ListLog(""); len(logEntries) != 0 {
+		t.Fatalf("expected zero audit log entries, got %d", len(logEntries))
+	}
+}
+
 func TestServiceReviewProposalClearedWhenNoRightsAffected(t *testing.T) {
 	svc := NewService(NewStore())
 	svc.assessor = fakeAssessor{blockedRightIDs: map[string]bool{}}

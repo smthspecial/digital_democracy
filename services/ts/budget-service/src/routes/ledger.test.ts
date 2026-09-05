@@ -114,7 +114,7 @@ describe("budget ledger routes", () => {
     },
   );
 
-  // ABUSE-FIN-2 (testing/e2e-api-test-plan.md): the request schema types
+  // ABUSE-FIN-2 (.spec/technical/test-plans/tp-001.md, ARCH-015 EC-39): the request schema types
   // `amount` as a bare number with no minimum/sign constraint, and nothing
   // in the service layer derives or checks a sign from `type` either -- a
   // negative amount is accepted for both inflow and outflow, corrupting the

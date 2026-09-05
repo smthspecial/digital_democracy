@@ -40,6 +40,38 @@ describe("POST /deliberation/arguments/:id/lock", () => {
     expect(res.json().locked).toBe(true);
   });
 
+  // ARCH-014 EC-26: a redundant second lock call on an already-locked
+  // argument is a no-op 200, not an error.
+  it("ARCH-014 EC-26: locking an already-locked argument again is a redundant no-op 200", async () => {
+    app = buildServer();
+    const created = await postArgument(app, { stance: "agreement" });
+    const id = created.json().id;
+
+    const first = await lockArgument(app, id);
+    expect(first.statusCode).toBe(200);
+    const second = await lockArgument(app, id);
+    expect(second.statusCode).toBe(200);
+    expect(second.json().locked).toBe(true);
+  });
+
+  // ARCH-014 EC-20: no actor/role check exists on this route today -- any
+  // caller can lock any agreement-stance argument regardless of identity.
+  // Documents the current (permissive) behavior explicitly so a future
+  // authorization gate is caught by a changed test, not silently missed.
+  it("ARCH-014 EC-20: locks succeed with no actor/role check of any kind", async () => {
+    app = buildServer();
+    const created = await postArgument(app, { stance: "agreement", citizen_id: "author-1" });
+    const id = created.json().id;
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/deliberation/arguments/${id}/lock`,
+      // No caller identity is sent or checked anywhere on this route.
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().locked).toBe(true);
+  });
+
   it("rejects locking a disagreement-stance argument with 400", async () => {
     app = buildServer();
     const created = await postArgument(app, { stance: "disagreement" });

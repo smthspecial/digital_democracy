@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// ABUSE-VOTE-3/4 (testing/e2e-api-test-plan.md): POST /voting/sessions/{id}/open
+// ABUSE-VOTE-3/4 (.spec/technical/test-plans/tp-001.md, ARCH-016 EC-18): POST /voting/sessions/{id}/open
 // takes eligible_citizen_ids directly from the request body and issues one
 // eligibility token per entry, with no independent verification against
 // jurisdiction-service (or any other authority) that those citizens are real,

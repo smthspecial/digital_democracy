@@ -251,7 +251,7 @@ describe("POST /:id/budget-spent", () => {
     expect(recorded).toEqual([{ projectId: id, amount: 2500, description: "First contractor invoice" }]);
   });
 
-  // ABUSE-FIN-3 (testing/e2e-api-test-plan.md): recordBudgetSpent never
+  // ABUSE-FIN-3 (.spec/technical/test-plans/tp-001.md, ARCH-017 EC-16): recordBudgetSpent never
   // compares the running budget_spent total against budget_allocated -- the
   // only validation is "amount must be positive" (the test above). A caller
   // with legitimate access to this endpoint (an "operator", per srv-013.md's

@@ -1030,6 +1030,28 @@ describe("proposal routes", () => {
       expect(res.statusCode).toBe(409);
     });
 
+    // ARCH-014 EC-7: reviewer_id/notes are schema-required on every
+    // deadlock/advance call, checked before any domain logic runs.
+    it("ARCH-014 EC-7: rejects deadlock/advance missing reviewer_id or notes with 400", async () => {
+      app = build();
+      const proposal = await advanceTo(app, "development");
+      await enterDeadlock(app, proposal.id);
+
+      const missingReviewer = await app.inject({
+        method: "POST",
+        url: `/proposals/${proposal.id}/deadlock/advance`,
+        payload: { notes: "n/a" },
+      });
+      expect(missingReviewer.statusCode).toBe(400);
+
+      const missingNotes = await app.inject({
+        method: "POST",
+        url: `/proposals/${proposal.id}/deadlock/advance`,
+        payload: { reviewer_id: "reviewer-1" },
+      });
+      expect(missingNotes.statusCode).toBe(400);
+    });
+
     it("rejects advancing when the reviewer is not assigned, and succeeds when assigned", async () => {
       const isAssignedReviewer = vi.fn().mockReturnValue(false);
       app = build({ assignmentChecker: { isAssignedReviewer } });

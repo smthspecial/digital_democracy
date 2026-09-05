@@ -16,6 +16,16 @@ describe("recordParticipationScores", () => {
     expect(record!.exemptionStatus).toBe("none");
   });
 
+  // ARCH-018 EC-21: all-zero inputs compute to a score of exactly 0, a
+  // valid non-error state distinct from "no record yet at all".
+  it("ARCH-018 EC-21: scores a citizen with zero voting/review/audit counts as exactly 0, not an error", () => {
+    const store = createStore();
+    const [record] = recordParticipationScores(store, "2026-06", [
+      { citizenId: "c1", votingCount: 0, reviewCount: 0, auditCount: 0, quotaTarget: 4 },
+    ]);
+    expect(record!.score).toBe(0);
+  });
+
   it("updates the existing record for the same citizen and period rather than duplicating it", () => {
     const store = createStore();
     recordParticipationScores(store, "2026-06", [

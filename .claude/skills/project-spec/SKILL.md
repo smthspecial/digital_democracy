@@ -20,7 +20,7 @@ Before creating a new item, check whether one already exists: `Grep` for keyword
 
 This applies whether you're creating one item or a whole batch (e.g. an epic with its stories and tasks) — repeat steps 1–4 per file.
 
-## Type registry — the only 17 valid document types
+## Type registry — the only 18 valid document types
 
 | `type` | `id` prefix | Directory under `.spec/` | File name | Valid `status` values |
 |--------|-------------|--------------------------|-----------|----------------------|
@@ -39,6 +39,7 @@ This applies whether you're creating one item or a whole batch (e.g. an epic wit
 | `db-table` | `TBL-NNN` | `technical/database/` | `tbl-NNN.md` | `draft` · `active` · `done` |
 | `cicd` | `CICD-NNN` | `technical/cicd/` | `cicd-NNN.md` | `draft` · `active` · `deprecated` |
 | `auth-spec` | `AUTH-NNN` | `technical/auth/` | `auth-NNN.md` | `draft` · `active` · `deprecated` |
+| `test-plan` | `TP-NNN` | `technical/test-plans/` | `tp-NNN.md` | `draft` · `active` · `deprecated` |
 | `member` | `MBR-NNN` | `team/members/` | `mbr-NNN.md` | `active` · `draft` |
 | `concept` | `CON-NNN` | `concept/{section}/` | `con-NNN.md` | `draft` · `active` · `deprecated` |
 
@@ -46,10 +47,10 @@ This applies whether you're creating one item or a whole batch (e.g. an epic wit
 
 ## Key rules
 
-- `type` is strictly enforced — only the 17 exact strings above are valid. Never invent types (`spec`, `technical-spec`, `service-spec`, `auth`, `tech-spec` are all invalid).
+- `type` is strictly enforced — only the 18 exact strings above are valid. Never invent types (`spec`, `technical-spec`, `service-spec`, `auth`, `tech-spec` are all invalid).
 - Never change an existing `id` — IDs are immutable.
 - `title` must always be in double quotes in the front matter.
 - `epicId` is required on every story; `storyId` is required on every task and bug.
-- `role` is required on every member; `processType` (`sync` | `async` | `cron`) is required on every `data-proc`.
+- `role` is required on every member; `processType` (`sync` | `async` | `cron`) is required on every `data-proc`; `testScope` (`integration` | `e2e`) is required on every `test-plan`.
 - Comma-separated fields (`linkedIds`, `dependsOn`, `relations`) must have no spaces around commas.
 - Dates must be `YYYY-MM-DD` only.

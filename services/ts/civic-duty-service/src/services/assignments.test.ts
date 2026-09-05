@@ -222,4 +222,65 @@ describe("refreshAuditPool", () => {
     expect(created).toHaveLength(1);
     expect(created[0]!.citizenId).toBe("past-auditor");
   });
+
+  // ARCH-018 EC-18: count:0 is schema-valid (minimum:0) and returns an
+  // empty array, not an error -- distinct from EC-20's "every candidate
+  // excluded" empty-array case below.
+  it("ARCH-018 EC-18: count 0 returns an empty array, not an error", () => {
+    const store = createStore();
+    const created = refreshAuditPool(store, fixedRandom(0), ["a", "b"], 0);
+    expect(created).toEqual([]);
+  });
+
+  // ARCH-018 EC-20: every candidate already holds an open audit_review
+  // assignment -- the eligible pool is empty after filtering, so the
+  // endpoint returns an empty array rather than erroring, even though
+  // count > 0 was requested (a governance task effectively goes
+  // temporarily unassigned).
+  it("ARCH-018 EC-20: returns an empty array (not an error) when every candidate is already excluded", () => {
+    const store = createStore();
+    for (const citizenId of ["a", "b"]) {
+      store.createAssignment({
+        citizenId,
+        type: "audit_review",
+        targetRef: `existing-${citizenId}`,
+        assignedAt: new Date(),
+        dueAt: null,
+        status: "assigned",
+      });
+    }
+    const created = refreshAuditPool(store, fixedRandom(0), ["a", "b"], 3);
+    expect(created).toEqual([]);
+  });
+});
+
+// ARCH-018 EC-12: a citizen at inactivityStage 3 ("inactive") is still
+// accepted as a normal candidate and can still be selected by
+// /assignments/generate -- generateAssignment/computeWeight never read
+// participation_record at all, only countOpenAssignments. This documents
+// current (permissive) behavior against FR-054's intent (exclude or
+// down-weight), which is not implemented.
+describe("generateAssignment and inactivityStage (ARCH-018 EC-12)", () => {
+  it("a citizen at inactivityStage 3 is weighted and selectable exactly like any other candidate", async () => {
+    const { recordParticipationScores, sweepInactivity } = await import("./participation.js");
+    const { noopNotificationEmitter } = await import("../notifications.js");
+
+    const store = createStore();
+    recordParticipationScores(store, "2026-06", [
+      { citizenId: "inactive-citizen", votingCount: 0, reviewCount: 0, auditCount: 0, quotaTarget: 4 },
+    ]);
+    for (let i = 0; i < 3; i++) {
+      sweepInactivity(store, noopNotificationEmitter, "2026-06", 5);
+    }
+    const record = store.getParticipationRecord("inactive-citizen", "2026-06");
+    expect(record?.inactivityStage).toBe(3);
+
+    const result = generateAssignment(store, fixedRandom(0), {
+      type: "proposal_review",
+      targetRef: "target-1",
+      candidates: [{ citizenId: "inactive-citizen", sphereRelevant: false, competencyMatch: false }],
+    });
+    expect(result.assignment.citizenId).toBe("inactive-citizen");
+    expect(result.assignment.status).toBe("assigned");
+  });
 });

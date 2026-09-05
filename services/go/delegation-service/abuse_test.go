@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// ABUSE-IDOR-4 (testing/e2e-api-test-plan.md): DELETE /delegation/delegations/{id}
+// ABUSE-IDOR-4 (.spec/technical/test-plans/tp-001.md, ARCH-019 EC-27): DELETE /delegation/delegations/{id}
 // authorizes a revoke by comparing the request body's requesting_citizen_id
 // to the stored delegator_id -- a plain string equality check, not a real
 // credential. delegator_id is not a secret: GET /delegation/delegations is

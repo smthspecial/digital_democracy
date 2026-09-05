@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// ABUSE-AUDIT-1 (testing/e2e-api-test-plan.md): POST /audit/log has no
+// ABUSE-AUDIT-1 (.spec/technical/test-plans/tp-001.md, ARCH-021 EC-52): POST /audit/log has no
 // caller authentication at all -- actor_ref is a self-declared string, never
 // checked against who is actually making the HTTP request. The hash chain
 // (chain.go) proves *sequence* integrity (each entry's prev_hash links to
@@ -74,7 +74,7 @@ func TestAbuseAudit1ForgedActorRefPassesChainVerification(t *testing.T) {
 	}
 }
 
-// ABUSE-AUDIT-3 (testing/e2e-api-test-plan.md): DP-034's constitutional
+// ABUSE-AUDIT-3 (.spec/technical/test-plans/tp-001.md, ARCH-021 EC-47): DP-034's constitutional
 // review (service.go's keywordMatchAssessor) blocks a change only if the
 // protected right's *literal name* (case-insensitive) appears as a substring
 // of change_summary. TestServiceReviewProposalDefaultAssessorKeywordMatch
