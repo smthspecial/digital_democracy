@@ -1,9 +1,6 @@
 go 1.22
 
 use (
-	./services/go/voting-service
-	./services/go/audit-service
-	./services/go/auth-service
-	./services/go/delegation-service
+	./apps/api-go
 	./packages/go/eventbus
 )

@@ -19,30 +19,29 @@ typecheck:
 test:
 	pnpm test
 
-# --- Go workspace (services/go/*), per ADR-020 ---
-GO_SERVICES := voting-service audit-service auth-service delegation-service
+# --- Go workspace (apps/api-go, packages/go/*), per ADR-020/ADR-027 ---
+GO_MODULES := apps/api-go packages/go/eventbus
 
 go-build:
-	@for s in $(GO_SERVICES); do \
-		echo "==> go build services/go/$$s"; \
-		(cd services/go/$$s && go build ./...) || exit 1; \
+	@for m in $(GO_MODULES); do \
+		echo "==> go build $$m"; \
+		(cd $$m && go build ./...) || exit 1; \
 	done
 
 go-test:
-	@for s in $(GO_SERVICES); do \
-		echo "==> go test services/go/$$s"; \
-		(cd services/go/$$s && go test ./...) || exit 1; \
+	@for m in $(GO_MODULES); do \
+		echo "==> go test $$m"; \
+		(cd $$m && go test ./...) || exit 1; \
 	done
 
 go-vet:
-	@for s in $(GO_SERVICES); do \
-		echo "==> go vet services/go/$$s"; \
-		(cd services/go/$$s && go vet ./...) || exit 1; \
+	@for m in $(GO_MODULES); do \
+		echo "==> go vet $$m"; \
+		(cd $$m && go vet ./...) || exit 1; \
 	done
 
 # --- Containers ---
-# Usage: make docker-build SERVICE=voting-service LANG=go
-# Context is the repo root (not the service dir) -- Dockerfiles COPY
-# shared packages/ (TS) or the module's go.mod (Go) from there.
+# Usage: make docker-build SERVICE=api-go (or api-ts)
+# Context is the repo root -- Dockerfiles COPY shared packages/ from there.
 docker-build:
-	docker build -t digital-democracy/$(SERVICE):dev -f services/$(LANG)/$(SERVICE)/Dockerfile .
+	docker build -t digital-democracy/$(SERVICE):dev -f apps/$(SERVICE)/Dockerfile .

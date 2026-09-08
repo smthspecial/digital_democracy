@@ -1,0 +1,53 @@
+openapi: 3.0.3
+info:
+  title: auth-service
+  version: 0.1.0
+  description: SRV-017 — sessions, MFA, step-up, anomaly response. See .spec/technical/services/srv-017.md.
+servers:
+  - url: http://localhost:5000
+paths:
+  /healthz:
+    get: { summary: Liveness probe, responses: { '200': { description: OK } } }
+  /readyz:
+    get: { summary: Readiness probe, responses: { '200': { description: OK } } }
+  /auth/login:
+    post:
+      summary: DP-059 login (credential → status gate → T1 session, step-up optional)
+      responses: { '201': { description: Created }, '401': { description: No detail leak }, '403': { description: Pending identity } }
+  /auth/refresh:
+    post:
+      summary: DP-059 refresh (binding check → rotation → tier re-evaluation)
+      parameters:
+        - { name: X-Device-Fingerprint, in: header, schema: { type: string } }
+        - { name: X-IP-Subnet, in: header, schema: { type: string } }
+      responses: { '200': { description: OK }, '401': { description: Mismatch suspends } }
+  /auth/logout:
+    post:
+      summary: DP-059 logout (revoke, refresh zeroed)
+      responses: { '200': { description: OK } }
+  /auth/validate:
+    get:
+      summary: Internal token validation for all services (TTL + status + tier)
+      responses: { '200': { description: OK }, '401': { description: Invalid } }
+  /auth/factors:
+    post:
+      summary: DP-060 MFA enrollment (totp/passkey/facial; immediate tier upgrade)
+      responses: { '201': { description: Created } }
+  /auth/stepup:
+    post:
+      summary: DP-061 step-up challenge (T3 needs passkey/facial; brute force suspends)
+      responses: { '200': { description: OK } }
+  /auth/revoke-all:
+    post:
+      summary: Internal revoke_all_sessions for identity-service (DP-042 linkage)
+      responses: { '200': { description: OK } }
+  /auth/purge:
+    post:
+      summary: DP-067 purge expired sessions (revoked rows retained)
+      responses: { '200': { description: OK } }
+  /auth/events:
+    get:
+      summary: List auth events, optionally per citizen
+      parameters:
+        - { name: citizen_id, in: query, schema: { type: string } }
+      responses: { '200': { description: OK } }

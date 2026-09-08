@@ -1,0 +1,48 @@
+version: "2"
+# sqlc generates the type-safe Postgres repositories (ADR-029) from the
+# single-app migration (schema) plus one query file per service. Generated
+# code is checked in under internal/sqlc/; regenerate with `sqlc generate`
+# from this directory. The in-memory stores remain the default (no
+# DATABASE_URL); the generated packages back the pgStore implementations
+# used when Postgres is wired.
+sql:
+  - engine: postgresql
+    schema: db/migrations/0001_init.up.sql
+    queries: db/queries/voting.sql
+    gen:
+      go:
+        package: votingdb
+        out: internal/sqlc/voting
+        sql_package: pgx/v5
+        emit_json_tags: true
+        emit_empty_slices: true
+  - engine: postgresql
+    schema: db/migrations/0001_init.up.sql
+    queries: db/queries/delegation.sql
+    gen:
+      go:
+        package: delegationdb
+        out: internal/sqlc/delegation
+        sql_package: pgx/v5
+        emit_json_tags: true
+        emit_empty_slices: true
+  - engine: postgresql
+    schema: db/migrations/0001_init.up.sql
+    queries: db/queries/audit.sql
+    gen:
+      go:
+        package: auditdb
+        out: internal/sqlc/audit
+        sql_package: pgx/v5
+        emit_json_tags: true
+        emit_empty_slices: true
+  - engine: postgresql
+    schema: db/migrations/0001_init.up.sql
+    queries: db/queries/auth.sql
+    gen:
+      go:
+        package: authdb
+        out: internal/sqlc/auth
+        sql_package: pgx/v5
+        emit_json_tags: true
+        emit_empty_slices: true

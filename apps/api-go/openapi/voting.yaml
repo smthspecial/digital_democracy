@@ -1,0 +1,83 @@
+openapi: 3.0.3
+info:
+  title: voting-service
+  version: 0.1.0
+  description: SRV-008 — voting lifecycle. See .spec/technical/services/srv-008.md.
+servers:
+  - url: http://localhost:5000
+paths:
+  /healthz:
+    get:
+      summary: Liveness probe
+      responses: { '200': { description: OK } }
+  /readyz:
+    get:
+      summary: Readiness probe
+      responses: { '200': { description: OK } }
+  /voting/sessions:
+    post:
+      summary: Create a vote session (scheduled)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSession'
+      responses: { '201': { description: Created } }
+    get:
+      summary: List vote sessions
+      responses: { '200': { description: OK } }
+  /voting/sessions/{id}:
+    get:
+      summary: Get a vote session
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses: { '200': { description: OK }, '404': { description: Not found } }
+  /voting/sessions/{id}/options:
+    post:
+      summary: Add a vote option (one per competing proposal, FR-018)
+      responses: { '201': { description: Created } }
+  /voting/sessions/{id}/open:
+    post:
+      summary: DP-046 open trigger (scheduled → open)
+      responses: { '200': { description: OK }, '422': { description: Not ready } }
+  /voting/sessions/{id}/close:
+    post:
+      summary: DP-047 close trigger (open → closed)
+      responses: { '200': { description: OK }, '422': { description: Not ready } }
+  /voting/sessions/{id}/tokens:
+    post:
+      summary: DP-025 eligibility token batch issuance (idempotent)
+      responses: { '201': { description: Created } }
+  /voting/sessions/{id}/tally:
+    post:
+      summary: DP-026 tally computation (exactly-once per session)
+      responses: { '200': { description: OK } }
+  /voting/sessions/{id}/certify:
+    post:
+      summary: DP-027 certification (quorum → certified, else closed)
+      responses: { '200': { description: OK } }
+  /voting/ballots:
+    post:
+      summary: DP-016 cast ballot (single-use blind token, atomic)
+      responses: { '201': { description: Created }, '409': { description: Token already used } }
+  /voting/ballots/verify:
+    get:
+      summary: DP-017 verify inclusion (presence only, no choice disclosure)
+      parameters:
+        - { name: code, in: query, required: true, schema: { type: string } }
+      responses: { '200': { description: OK }, '404': { description: Not found } }
+components:
+  schemas:
+    CreateSession:
+      type: object
+      required: [proposal_id, jurisdiction_id, method, threshold_rule, opens_at, closes_at]
+      properties:
+        proposal_id: { type: string }
+        jurisdiction_id: { type: string }
+        method: { type: string, enum: [ranked_choice, approval, preference_score, comparative] }
+        threshold_rule: { type: string, enum: [simple_majority, majority_plus_quorum, supermajority] }
+        min_participation: { type: number, minimum: 0, maximum: 1 }
+        cooling_off_until: { type: string, format: date-time }
+        opens_at: { type: string, format: date-time }
+        closes_at: { type: string, format: date-time }

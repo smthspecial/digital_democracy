@@ -1,0 +1,12 @@
+{
+  "name": "@dd/api-ts",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Single TypeScript app hosting the 13 I/O-bound services (ADR-027) — shell; service implementations are follow-up work",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "test": "NODE_ENV=test node --test test/shell.test.js"
+  }
+}
