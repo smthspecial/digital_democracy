@@ -1,151 +1,206 @@
 package eventbus
 
+// Test harness convention (ARCH-009 §2): boot the real dependency as its own
+// process, not a mock. This file's spawnNatsServer is the canonical helper
+// every Go service's own nats_test.go copies rather than sharing —
+// duplication is deliberate so each module stays self-contained.
+
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/nats-io/nats.go"
 )
 
-// startNatsServer spawns a real nats-server process with JetStream enabled
-// on an ephemeral port, matching this codebase's "boot the real thing as a
-// process, not a mock" convention (ARCH-009 §2). Requires nats-server on
-// PATH (go install github.com/nats-io/nats-server/v2@latest).
-func startNatsServer(t *testing.T) string {
+// spawnNatsServer starts a real nats-server with JetStream on a free port.
+// Skips the test when the binary is unavailable (CI installs it: see the
+// go-packages job in .github/workflows/ci.yml).
+func spawnNatsServer(t *testing.T) string {
 	t.Helper()
-
-	port, err := freePort()
+	bin, err := exec.LookPath("nats-server")
 	if err != nil {
-		t.Fatalf("find free port: %v", err)
+		t.Skip("nats-server binary not on PATH")
 	}
-	url := fmt.Sprintf("nats://127.0.0.1:%d", port)
-
-	cmd := exec.Command("nats-server", "-p", fmt.Sprint(port), "-js", "-sd", t.TempDir())
+	port := freePort(t)
+	storeDir := t.TempDir()
+	// JetStream needs a writable store dir; TempDir is removed on cleanup.
+	cmd := exec.Command(bin, "-js", "-p", fmt.Sprint(port), "-sd", filepath.Join(storeDir, "js"))
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
-		t.Skipf("nats-server not available on PATH, skipping: %v", err)
+		t.Fatalf("start nats-server: %v", err)
 	}
 	t.Cleanup(func() {
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
 	})
-
-	deadline := time.Now().Add(5 * time.Second)
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
-		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 100*time.Millisecond)
+		conn, err := net.DialTimeout("tcp", addr, 200*time.Millisecond)
 		if err == nil {
 			_ = conn.Close()
-			return url
+			return "nats://" + addr
 		}
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
-	t.Fatal("nats-server did not start listening in time")
+	t.Fatal("nats-server did not become ready")
 	return ""
 }
 
-func freePort() (int, error) {
+func freePort(t *testing.T) int {
+	t.Helper()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		return 0, err
+		t.Fatal(err)
 	}
 	defer l.Close()
-	return l.Addr().(*net.TCPAddr).Port, nil
+	return l.Addr().(*net.TCPAddr).Port
 }
 
-func TestPublishAndConsumeRoundTrip(t *testing.T) {
-	url := startNatsServer(t)
+func TestPublishConsumeRoundTrip(t *testing.T) {
+	url := spawnNatsServer(t)
 	bus, err := Connect(url)
 	if err != nil {
-		t.Fatalf("Connect: %v", err)
+		t.Fatal(err)
 	}
 	defer bus.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	if err := EnsureStream(ctx, bus, StreamConfig{Name: "TEST_STREAM", Subjects: []string{"test.subject"}}); err != nil {
-		t.Fatalf("EnsureStream: %v", err)
+	if err := bus.EnsureStream(QueueAuditAppend); err != nil {
+		t.Fatal(err)
 	}
 
-	type payload struct {
-		Message string `json:"message"`
-	}
-	if err := Publish(ctx, bus, "test.subject", payload{Message: "hello"}); err != nil {
-		t.Fatalf("Publish: %v", err)
-	}
-
-	received := make(chan payload, 1)
-	consumeCtx, consumeCancel := context.WithCancel(context.Background())
-	defer consumeCancel()
-
-	go func() {
-		_ = Consume(consumeCtx, bus, ConsumerConfig{Stream: "TEST_STREAM", Durable: "test-consumer"}, func(_ context.Context, data []byte) error {
-			var p payload
-			if err := json.Unmarshal(data, &p); err != nil {
-				return err
+	const n = 5
+	var mu sync.Mutex
+	var got []string
+	done := make(chan struct{})
+	sub, err := bus.SubscribeOrderedDurable(StreamName(QueueAuditAppend), "test-consumer",
+		QueueAuditAppend, 1, func(_ context.Context, _ string, payload []byte) error {
+			mu.Lock()
+			got = append(got, string(payload))
+			reached := len(got) == n
+			mu.Unlock()
+			if reached {
+				close(done)
 			}
-			received <- p
 			return nil
 		})
-	}()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = sub.Unsubscribe() }()
 
+	for i := 0; i < n; i++ {
+		msg := fmt.Sprintf("event-%d", i)
+		if err := bus.Publish(context.Background(), QueueAuditAppend, []byte(msg), WithMessageID(msg)); err != nil {
+			t.Fatal(err)
+		}
+	}
 	select {
-	case p := <-received:
-		if p.Message != "hello" {
-			t.Fatalf("got message %q, want %q", p.Message, "hello")
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting for messages")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	for i := 0; i < n; i++ {
+		if got[i] != fmt.Sprintf("event-%d", i) {
+			t.Fatalf("ordering violated: got %v", got)
 		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("timed out waiting for consumed message")
 	}
 }
 
-func TestConsumeRedeliversOnHandlerError(t *testing.T) {
-	url := startNatsServer(t)
+// A redelivered publish with the same message id must not produce a
+// duplicate delivery (JetStream server-side dedupe, the at-least-once half
+// of ADR-023's contract; consumer-side idempotency keys are the other half).
+func TestPublishDedupeByMessageID(t *testing.T) {
+	url := spawnNatsServer(t)
 	bus, err := Connect(url)
 	if err != nil {
-		t.Fatalf("Connect: %v", err)
+		t.Fatal(err)
+	}
+	defer bus.Close()
+	if err := bus.EnsureStream(QueueNotificationsDispatch); err != nil {
+		t.Fatal(err)
+	}
+
+	received := make(chan string, 10)
+	sub, err := bus.SubscribeOrderedDurable(StreamName(QueueNotificationsDispatch), "dedupe-consumer",
+		QueueNotificationsDispatch, 16, func(_ context.Context, _ string, payload []byte) error {
+			received <- string(payload)
+			return nil
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = sub.Unsubscribe() }()
+
+	ctx := context.Background()
+	if err := bus.Publish(ctx, QueueNotificationsDispatch, []byte("once"), WithMessageID("dedupe-1")); err != nil {
+		t.Fatal(err)
+	}
+	// Retry of the same logical event reuses the id: the server drops it.
+	if err := bus.Publish(ctx, QueueNotificationsDispatch, []byte("once"), WithMessageID("dedupe-1")); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case m := <-received:
+		if m != "once" {
+			t.Fatalf("unexpected payload %q", m)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("no message received")
+	}
+	select {
+	case m := <-received:
+		t.Fatalf("duplicate delivery: %q", m)
+	case <-time.After(2 * time.Second):
+	}
+}
+
+// On shared infrastructure another deployment may already own a stream
+// covering the subject (e.g. a legacy AUDIT stream). EnsureStream must adopt
+// it instead of failing, and publish/consume keep working by subject.
+func TestEnsureStreamAdoptsOverlapping(t *testing.T) {
+	url := spawnNatsServer(t)
+	bus, err := Connect(url)
+	if err != nil {
+		t.Fatal(err)
 	}
 	defer bus.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := EnsureStream(ctx, bus, StreamConfig{Name: "REDELIVER_STREAM", Subjects: []string{"redeliver.subject"}}); err != nil {
-		t.Fatalf("EnsureStream: %v", err)
+	legacy, err := bus.js.AddStream(&nats.StreamConfig{
+		Name:     "LEGACY",
+		Subjects: []string{"audit.append"},
+		Storage:  nats.MemoryStorage,
+	})
+	_ = legacy
+	if err != nil {
+		t.Fatalf("seed legacy stream: %v", err)
 	}
-	if err := Publish(ctx, bus, "redeliver.subject", map[string]string{"k": "v"}); err != nil {
-		t.Fatalf("Publish: %v", err)
+	if err := bus.EnsureStream(QueueAuditAppend); err != nil {
+		t.Fatalf("EnsureStream with overlapping stream: %v", err)
 	}
-
-	attempts := make(chan int, 5)
-	count := 0
-
-	consumeCtx, consumeCancel := context.WithCancel(context.Background())
-	defer consumeCancel()
-	go func() {
-		_ = Consume(consumeCtx, bus, ConsumerConfig{
-			Stream:  "REDELIVER_STREAM",
-			Durable: "redeliver-consumer",
-		}, func(_ context.Context, _ []byte) error {
-			count++
-			attempts <- count
-			if count < 2 {
-				return fmt.Errorf("simulated processing failure")
-			}
-			return nil
-		})
-	}()
-
-	var last int
-	for i := 0; i < 2; i++ {
-		select {
-		case last = <-attempts:
-		case <-time.After(5 * time.Second):
-			t.Fatalf("timed out waiting for attempt %d", i+1)
-		}
+	ctx := context.Background()
+	if err := bus.Publish(ctx, QueueAuditAppend, []byte("adopted"), WithMessageID("adopt-1")); err != nil {
+		t.Fatalf("publish via adopted stream: %v", err)
 	}
-	if last != 2 {
-		t.Fatalf("expected the message to be redelivered and succeed on attempt 2, got attempt %d", last)
+}
+
+func TestSubjectFor(t *testing.T) {
+	if got := SubjectFor(QueueVotingTally); got != "voting.tally" {
+		t.Fatalf("bare subject = %q", got)
+	}
+	if got := SubjectFor(QueueVotingTally, "jur-1"); got != "voting.tally.jur-1" {
+		t.Fatalf("scoped subject = %q", got)
+	}
+	if got := StreamName(QueueAuditAppend); got != "audit_append" {
+		t.Fatalf("stream name = %q", got)
 	}
 }

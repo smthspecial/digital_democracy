@@ -1,0 +1,979 @@
+// Schema for api_ts (ADR-028: one database per app). Tables/columns here are
+// the Prisma-side mirror of the spec's tbl-NNN.md docs for SRV-001..004
+// (ADR-030) -- field names are camelCase in the client, @map'd back to the
+// spec's snake_case column names so ARCH-023's hand-written RLS policies
+// (see prisma/migrations/*/migration.sql) apply unmodified. `id`/foreign-key
+// columns use native `uuid` (tbl-NNN.md types every id/relation as `uuid`),
+// generated in Postgres via `gen_random_uuid()` (built in since PG13).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Connection URL lives in prisma.config.ts (Prisma 7 removed `url` here);
+// PrismaClient instances get their connection via @prisma/adapter-pg at
+// runtime (src/prisma/prisma.service.ts) so api_app/api_worker can bind to
+// distinct roles against the same schema (ADR-030).
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// identity-service (SRV-001) -- TBL-001, TBL-002
+// ---------------------------------------------------------------------------
+
+// citizenship_status per tbl-001.md; kept distinct from `status` (the
+// platform activation lifecycle DP-001/DP-002 drive).
+enum CitizenshipStatus {
+  citizen
+  revoked
+  suspended
+
+  @@map("citizenship_status")
+}
+
+// tbl-001.md documents `active|inactive|revoked`; DP-001/DP-002 are explicit
+// and normative that registration starts at `pending` and DP-002 activates
+// it, so `pending` is added here (see ADR-030).
+enum CitizenStatus {
+  pending
+  active
+  inactive
+  revoked
+
+  @@map("citizen_status")
+}
+
+model Citizen {
+  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  publicHandle      String            @unique @map("public_handle")
+  citizenshipStatus CitizenshipStatus @default(citizen) @map("citizenship_status")
+  legalIdentityHash String            @map("legal_identity_hash")
+  status            CitizenStatus     @default(pending)
+  createdAt         DateTime          @default(now()) @map("created_at")
+
+  verifications                 IdentityVerification[]
+  residencies                   Residency[]
+  memberships                   JurisdictionMembership[]
+  problemsAuthored              Problem[]                @relation("ProblemAuthor")
+  problemSupports               ProblemSupport[]
+  proposalsAuthored             Proposal[]               @relation("ProposalAuthor")
+  competencies                  Competency[]
+  competencyChallengesFiled     CompetencyChallenge[]    @relation("CompetencyChallengeChallenger")
+  conflictsOfInterestDisclosed  ConflictOfInterest[]
+  expertAssessmentsAuthored     ExpertAssessment[]       @relation("ExpertAssessmentExpert")
+  deliberationArgumentsAuthored DeliberationArgument[]   @relation("DeliberationArgumentAuthor")
+  preferencesDeclared           Preference[]
+  budgetAllocationVotes         BudgetAllocationVote[]
+  governanceRoles               GovernanceRole[]
+  reputationRecords             ReputationRecord[]
+  civicAssignments              CivicAssignment[]
+  participationRecords          ParticipationRecord[]
+
+  @@index([legalIdentityHash])
+  @@map("citizen")
+}
+
+enum VerificationMethod {
+  national_id
+  passport
+  gov_credential
+
+  @@map("verification_method")
+}
+
+enum VerificationStatus {
+  verified
+  rejected
+
+  @@map("verification_status")
+}
+
+model IdentityVerification {
+  id          String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  citizenId   String             @map("citizen_id") @db.Uuid
+  citizen     Citizen            @relation(fields: [citizenId], references: [id])
+  method      VerificationMethod
+  evidenceRef String             @map("evidence_ref")
+  verifiedAt  DateTime?          @map("verified_at")
+  status      VerificationStatus
+
+  @@index([citizenId])
+  @@map("identity_verification")
+}
+
+// ---------------------------------------------------------------------------
+// jurisdiction-service (SRV-002) -- TBL-003, TBL-004, TBL-005
+// Read-only in this pass: no DP creates any row in these three tables
+// (ADR-030) -- seeded via prisma/seed.ts.
+// ---------------------------------------------------------------------------
+
+enum JurisdictionScopeLevel {
+  property
+  street
+  municipality
+  regional
+  national
+  constitutional
+
+  @@map("jurisdiction_scope_level")
+}
+
+enum JurisdictionStatus {
+  active
+  under_review
+
+  @@map("jurisdiction_status")
+}
+
+model Jurisdiction {
+  id          String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  parentId    String?                @map("parent_id") @db.Uuid
+  parent      Jurisdiction?          @relation("JurisdictionHierarchy", fields: [parentId], references: [id])
+  children    Jurisdiction[]         @relation("JurisdictionHierarchy")
+  name        String
+  scopeLevel  JurisdictionScopeLevel @map("scope_level")
+  boundaryRef String                 @map("boundary_ref")
+  status      JurisdictionStatus     @default(active)
+
+  residencies      Residency[]
+  memberships      JurisdictionMembership[]
+  problems         Problem[]
+  proposalScope    Proposal[]
+  budgetCategories BudgetCategory[]
+  ledgerEntries    LedgerEntry[]
+
+  @@map("jurisdiction")
+}
+
+enum ResidencyStatus {
+  active
+  ended
+
+  @@map("residency_status")
+}
+
+model Residency {
+  id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  citizenId      String          @map("citizen_id") @db.Uuid
+  citizen        Citizen         @relation(fields: [citizenId], references: [id])
+  jurisdictionId String          @map("jurisdiction_id") @db.Uuid
+  jurisdiction   Jurisdiction    @relation(fields: [jurisdictionId], references: [id])
+  startDate      DateTime        @map("start_date") @db.Date
+  verified       Boolean         @default(false)
+  status         ResidencyStatus @default(active)
+
+  @@index([citizenId])
+  @@index([jurisdictionId])
+  @@map("residency")
+}
+
+model JurisdictionMembership {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  citizenId      String       @map("citizen_id") @db.Uuid
+  citizen        Citizen      @relation(fields: [citizenId], references: [id])
+  jurisdictionId String       @map("jurisdiction_id") @db.Uuid
+  jurisdiction   Jurisdiction @relation(fields: [jurisdictionId], references: [id])
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  @@unique([citizenId, jurisdictionId])
+  @@map("jurisdiction_membership")
+}
+
+// ---------------------------------------------------------------------------
+// problem-service (SRV-003) -- TBL-006, TBL-007
+// ---------------------------------------------------------------------------
+
+enum ProblemStatus {
+  open
+  proposing
+  closed
+
+  @@map("problem_status")
+}
+
+model Problem {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  authorId       String        @map("author_id") @db.Uuid
+  author         Citizen       @relation("ProblemAuthor", fields: [authorId], references: [id])
+  title          String
+  description    String
+  affectedArea   String        @map("affected_area")
+  jurisdictionId String        @map("jurisdiction_id") @db.Uuid
+  jurisdiction   Jurisdiction  @relation(fields: [jurisdictionId], references: [id])
+  status         ProblemStatus @default(open)
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  supports    ProblemSupport[]
+  proposals   Proposal[]
+  preferences Preference[]
+
+  @@index([jurisdictionId])
+  @@map("problem")
+}
+
+model ProblemSupport {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  problemId String   @map("problem_id") @db.Uuid
+  problem   Problem  @relation(fields: [problemId], references: [id])
+  citizenId String   @map("citizen_id") @db.Uuid
+  citizen   Citizen  @relation(fields: [citizenId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([problemId, citizenId])
+  @@map("problem_support")
+}
+
+// ---------------------------------------------------------------------------
+// proposal-service (SRV-004) -- TBL-008, TBL-009, TBL-010
+// ---------------------------------------------------------------------------
+
+enum ProposalStatus {
+  draft
+  gathering_support
+  development
+  voting
+  approved
+  rejected
+  archived
+
+  @@map("proposal_status")
+}
+
+model Proposal {
+  id                  String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  problemId           String         @map("problem_id") @db.Uuid
+  problem             Problem        @relation(fields: [problemId], references: [id])
+  authorId            String         @map("author_id") @db.Uuid
+  author              Citizen        @relation("ProposalAuthor", fields: [authorId], references: [id])
+  title               String
+  description         String
+  scopeJurisdictionId String?        @map("scope_jurisdiction_id") @db.Uuid
+  scopeJurisdiction   Jurisdiction?  @relation(fields: [scopeJurisdictionId], references: [id])
+  supportCount        Int            @default(0) @map("support_count")
+  supportThreshold    Int            @map("support_threshold")
+  status              ProposalStatus @default(draft)
+  createdAt           DateTime       @default(now()) @map("created_at")
+  // DP-020 ("File scope challenge"): "flags the proposal as having an
+  // active scope dispute." tbl-008.md's column list doesn't name a field
+  // for this even though DP-020 declares its only table as TBL-008 -- a
+  // spec omission, not a missing table (ADR-030 addendum). Non-null while a
+  // challenge is open; DP-030/FR-011 resolution (out of scope, needs
+  // SRV-011/012) is what would clear it.
+  scopeChallengedAt   DateTime?      @map("scope_challenged_at")
+
+  constraints           ProposalConstraint[]
+  budget                ProposalBudget?
+  expertAssessments     ExpertAssessment[]
+  deliberationArguments DeliberationArgument[]
+  // One project per proposal, created when a proposal transitions to
+  // approved (DP-029, out of scope this pass) -- optional here because that
+  // transition isn't implemented yet, so no Proposal row has one.
+  project               Project?
+
+  @@index([problemId])
+  @@map("proposal")
+}
+
+model ProposalConstraint {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  proposalId String   @map("proposal_id") @db.Uuid
+  proposal   Proposal @relation(fields: [proposalId], references: [id])
+  text       String
+  agreed     Boolean  @default(false)
+
+  @@index([proposalId])
+  @@map("proposal_constraint")
+}
+
+model ProposalBudget {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  proposalId        String   @unique @map("proposal_id") @db.Uuid
+  proposal          Proposal @relation(fields: [proposalId], references: [id])
+  cost              Decimal? @db.Decimal(14, 2)
+  fundingSource     String?  @map("funding_source")
+  // Cross-service reference to budget-service's budget_category (TBL-026,
+  // not in this app's database) -- ADR-028/ARCH-023 §5: documented, never a
+  // real FK.
+  fundingCategoryId String?  @map("funding_category_id") @db.Uuid
+  maintenanceCost   Decimal? @map("maintenance_cost") @db.Decimal(14, 2)
+  longTermCost      Decimal? @map("long_term_cost") @db.Decimal(14, 2)
+  expectedBenefits  String?  @map("expected_benefits")
+
+  @@map("proposal_budget")
+}
+
+// ---------------------------------------------------------------------------
+// competency-service (SRV-005) -- TBL-011, TBL-012, TBL-013, TBL-014, TBL-015
+// ---------------------------------------------------------------------------
+
+// Reference data, worker-managed (mirrors Jurisdiction) -- no citizen-facing
+// write in this pass.
+model ExpertDomain {
+  id          String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  description String
+
+  competencies        Competency[]
+  conflictsOfInterest ConflictOfInterest[]
+  expertAssessments   ExpertAssessment[]
+
+  @@map("expert_domain")
+}
+
+enum CompetencyStatus {
+  applied
+  active
+  rejected
+  expired
+  revoked
+
+  @@map("competency_status")
+}
+
+model Competency {
+  id        String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  citizenId String           @map("citizen_id") @db.Uuid
+  citizen   Citizen          @relation(fields: [citizenId], references: [id])
+  domainId  String           @map("domain_id") @db.Uuid
+  domain    ExpertDomain     @relation(fields: [domainId], references: [id])
+  level     Int              @db.SmallInt
+  status    CompetencyStatus @default(applied)
+  grantedAt DateTime?        @map("granted_at")
+  expiresAt DateTime?        @map("expires_at")
+
+  challenges CompetencyChallenge[]
+
+  @@index([citizenId])
+  @@index([domainId])
+  @@map("competency")
+}
+
+enum CompetencyChallengeReason {
+  credentials
+  conflict
+  false_claim
+  misconduct
+
+  @@map("competency_challenge_reason")
+}
+
+enum CompetencyChallengeStatus {
+  open
+  reviewing
+  upheld
+  dismissed
+
+  @@map("competency_challenge_status")
+}
+
+model CompetencyChallenge {
+  id           String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  competencyId String                    @map("competency_id") @db.Uuid
+  competency   Competency                @relation(fields: [competencyId], references: [id])
+  // challenger_id, not citizen_id -- the challenger is not this row's
+  // "subject" (that's the challenged competency's own citizen_id).
+  challengerId String                    @map("challenger_id") @db.Uuid
+  challenger   Citizen                   @relation("CompetencyChallengeChallenger", fields: [challengerId], references: [id])
+  evidenceRef  String                    @map("evidence_ref")
+  reason       CompetencyChallengeReason
+  status       CompetencyChallengeStatus @default(open)
+  decision     String?
+
+  @@index([competencyId])
+  @@map("competency_challenge")
+}
+
+enum ConflictOfInterestType {
+  employer
+  ownership
+  consulting
+  financial
+
+  @@map("conflict_of_interest_type")
+}
+
+// Read visibility: ARCH-023 §6 labels this table plain "OWN", but TBL-014.md's
+// own Notes field ("Public alongside expert analysis") and FR-025's
+// acceptance criteria ("Disclosures are publicly visible alongside expert
+// analysis") both say otherwise -- the migration gives this table PUBLIC
+// read. The "OWN" in ARCH-023 §6 describes only the INSERT restriction
+// (self-disclosure only), not a read restriction.
+model ConflictOfInterest {
+  id          String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  citizenId   String                 @map("citizen_id") @db.Uuid
+  citizen     Citizen                @relation(fields: [citizenId], references: [id])
+  domainId    String                 @map("domain_id") @db.Uuid
+  domain      ExpertDomain           @relation(fields: [domainId], references: [id])
+  type        ConflictOfInterestType
+  description String
+  disclosedAt DateTime               @default(now()) @map("disclosed_at")
+
+  @@index([citizenId])
+  @@index([domainId])
+  @@map("conflict_of_interest")
+}
+
+// AUTH-002's coi.none ("no active conflict_of_interest in the relevant
+// domain") is a runtime business-rule condition (ARCH-023 §5), not an RLS
+// concern -- a row here IS the disclosure, so any existing row for
+// (expert, domain) blocks assessment:publish in application code (next
+// phase), not in this table's INSERT policy. The INSERT policy below only
+// enforces the local, same-database domain:match + competency.active check.
+model ExpertAssessment {
+  id                  String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  proposalId          String       @map("proposal_id") @db.Uuid
+  proposal            Proposal     @relation(fields: [proposalId], references: [id])
+  expertId            String       @map("expert_id") @db.Uuid
+  expert              Citizen      @relation("ExpertAssessmentExpert", fields: [expertId], references: [id])
+  domainId            String       @map("domain_id") @db.Uuid
+  domain              ExpertDomain @relation(fields: [domainId], references: [id])
+  technicalScore      Int          @map("technical_score") @db.SmallInt
+  economicScore       Int          @map("economic_score") @db.SmallInt
+  socialScore         Int          @map("social_score") @db.SmallInt
+  sustainabilityScore Int          @map("sustainability_score") @db.SmallInt
+  body                String
+  createdAt           DateTime     @default(now()) @map("created_at")
+
+  @@index([proposalId])
+  @@index([expertId])
+  @@index([domainId])
+  @@map("expert_assessment")
+}
+
+// ---------------------------------------------------------------------------
+// deliberation-service (SRV-006) -- TBL-017, TBL-018
+// ---------------------------------------------------------------------------
+
+enum DeliberationStance {
+  agreement
+  disagreement
+
+  @@map("deliberation_stance")
+}
+
+model DeliberationArgument {
+  id          String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  proposalId  String                 @map("proposal_id") @db.Uuid
+  proposal    Proposal               @relation(fields: [proposalId], references: [id])
+  authorId    String                 @map("author_id") @db.Uuid
+  author      Citizen                @relation("DeliberationArgumentAuthor", fields: [authorId], references: [id])
+  parentId    String?                @map("parent_id") @db.Uuid
+  parent      DeliberationArgument?  @relation("DeliberationArgumentThread", fields: [parentId], references: [id])
+  replies     DeliberationArgument[] @relation("DeliberationArgumentThread")
+  stance      DeliberationStance
+  body        String
+  evidenceRef String                 @map("evidence_ref")
+  createdAt   DateTime               @default(now()) @map("created_at")
+
+  @@index([proposalId])
+  @@index([authorId])
+  @@index([parentId])
+  @@map("deliberation_argument")
+}
+
+// preference's problem-vs-proposal reference: ARCH-023 §6's table and
+// AUTH-010's "preference:declare...on a proposal" both say "proposal", but
+// TBL-018.md's own front matter (relations: problem_id:TBL-006) and Columns
+// table list problem_id, matching DP-009.md's and SRV-006.md's own prose
+// ("tied to the problem, not a particular proposal") -- TBL-018.md, the
+// authoritative schema source, wins. No uniqueness constraint on
+// (problem_id, citizen_id) either: unlike problem_support/
+// jurisdiction_membership, nothing in TBL-018.md/DP-009.md/FR-030.md states
+// one-preference-per-citizen-per-problem.
+model Preference {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  citizenId      String   @map("citizen_id") @db.Uuid
+  citizen        Citizen  @relation(fields: [citizenId], references: [id])
+  problemId      String   @map("problem_id") @db.Uuid
+  problem        Problem  @relation(fields: [problemId], references: [id])
+  desiredOutcome String   @map("desired_outcome")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([citizenId])
+  @@index([problemId])
+  @@map("preference")
+}
+
+// ---------------------------------------------------------------------------
+// budget-service (SRV-007) -- TBL-026, TBL-027, TBL-028
+// ---------------------------------------------------------------------------
+
+// Reference data, worker-managed (mirrors Jurisdiction/ExpertDomain) -- no
+// citizen-facing write in this pass. allocatedAmount stays null until DP-051
+// (the aggregation cron, out of scope this pass) ever sets it.
+model BudgetCategory {
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jurisdictionId  String           @map("jurisdiction_id") @db.Uuid
+  jurisdiction    Jurisdiction     @relation(fields: [jurisdictionId], references: [id])
+  parentId        String?          @map("parent_id") @db.Uuid
+  parent          BudgetCategory?  @relation("BudgetCategoryHierarchy", fields: [parentId], references: [id])
+  children        BudgetCategory[] @relation("BudgetCategoryHierarchy")
+  name            String
+  allocatedAmount Decimal?         @map("allocated_amount") @db.Decimal(14, 2)
+
+  allocationVotes BudgetAllocationVote[]
+  ledgerEntries   LedgerEntry[]
+
+  @@index([jurisdictionId])
+  @@index([parentId])
+  @@map("budget_category")
+}
+
+// ARCH-023 §6 marks this table OWN for BOTH read and write ("treated as
+// vote-adjacent, defaults private like a ballot rather than public") --
+// unlike every other citizen-write table in this schema, individual
+// allocation votes are NOT public; only the DP-051 aggregate written to
+// budget_category.allocated_amount is. SRV-007.md's own Key Rules: unique
+// per (citizen_id, category_id, period), and totals per citizen per period
+// must sum to 100% -- enforced at write time (a cross-row invariant, so it's
+// the service layer's transactional replace-the-set write, not a CHECK
+// constraint, that enforces it; this @@unique only enforces the per-row
+// uniqueness piece).
+model BudgetAllocationVote {
+  id         String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  citizenId  String         @map("citizen_id") @db.Uuid
+  citizen    Citizen        @relation(fields: [citizenId], references: [id])
+  categoryId String         @map("category_id") @db.Uuid
+  category   BudgetCategory @relation(fields: [categoryId], references: [id])
+  percentage Decimal        @db.Decimal(5, 2)
+  period     String
+
+  @@unique([citizenId, categoryId, period])
+  @@index([categoryId])
+  @@map("budget_allocation_vote")
+}
+
+enum LedgerDirection {
+  inflow
+  outflow
+
+  @@map("ledger_direction")
+}
+
+// The first APPEND_ONLY table (ARCH-023 §4.4) in this schema -- PUBLIC read,
+// api_worker-only INSERT (AUTH-006's ledger_entry:record is an operator
+// permission, not a citizen one), no UPDATE/DELETE for any role (see the
+// hand-augmented migration for the REVOKE + trigger pair).
+model LedgerEntry {
+  id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jurisdictionId String          @map("jurisdiction_id") @db.Uuid
+  jurisdiction   Jurisdiction    @relation(fields: [jurisdictionId], references: [id])
+  categoryId     String?         @map("category_id") @db.Uuid
+  category       BudgetCategory? @relation(fields: [categoryId], references: [id])
+  // Cross-service reference to project-service's `project` (TBL-029, not
+  // built in this app) -- ADR-028/ARCH-023 §5: documented, never a real FK,
+  // mirrors ProposalBudget.fundingCategoryId's precedent above in this same
+  // file.
+  projectId      String?         @map("project_id") @db.Uuid
+  direction      LedgerDirection
+  amount         Decimal         @db.Decimal(14, 2)
+  source         String
+  occurredAt     DateTime        @map("occurred_at")
+
+  @@index([jurisdictionId])
+  @@index([categoryId])
+  @@map("ledger_entry")
+}
+
+// ---------------------------------------------------------------------------
+// civic-duty-service (SRV-009) -- TBL-024, TBL-025
+// ARCH-023 §6: both OWN -- the `assigned` scope is locally resolvable here
+// (unlike project_milestone/outcome_evaluation's own cross-service note
+// about this same table) because civic_assignment lives in the same
+// database as every citizen-facing write in this app (ADR-028's
+// single-database collapse). DP-040 (generation), DP-048 (scoring), DP-049
+// (escalation), DP-052 (load balancing), DP-054 (audit pool refresh) are all
+// async/cron -- out of scope this pass, the same carve-out ADR-030 already
+// gave DP-024/DP-042/DP-056/DP-029. Only AUTH-010's citizen-facing sync
+// permissions (assignment:accept, assignment:abandon, exemption:claim) are
+// implemented, and all three only ever transition an existing row -- no
+// citizen-facing (or, this pass, worker-facing) INSERT path exists for
+// either table, exactly like governance_role/project before their own
+// worker-only creation jobs land. Fixtures for tests go in directly via an
+// admin connection, mirroring budget_category's precedent.
+// ---------------------------------------------------------------------------
+
+enum CivicAssignmentType {
+  proposal_review
+  audit_review
+  expertise_verification
+  budget_oversight
+
+  @@map("civic_assignment_type")
+}
+
+enum CivicAssignmentStatus {
+  assigned
+  completed
+  abandoned
+  exempted
+
+  @@map("civic_assignment_status")
+}
+
+model CivicAssignment {
+  id         String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  citizenId  String                @map("citizen_id") @db.Uuid
+  citizen    Citizen               @relation(fields: [citizenId], references: [id])
+  type       CivicAssignmentType
+  targetRef  String                @map("target_ref")
+  assignedAt DateTime              @default(now()) @map("assigned_at")
+  dueAt      DateTime              @map("due_at")
+  status     CivicAssignmentStatus @default(assigned)
+
+  @@index([citizenId])
+  @@map("civic_assignment")
+}
+
+enum ExemptionStatus {
+  none
+  illness
+  disability
+  military
+  caregiving
+  other
+
+  @@map("exemption_status")
+}
+
+// @@unique([citizenId, period]) is a judgment call: TBL-025.md doesn't state
+// it explicitly, but DP-048.md's "creates OR UPDATES a participation_record
+// row per citizen for the closing period" only makes sense if at most one
+// row exists per (citizen, period) -- mirrors budget_allocation_vote's own
+// per-(citizen,period) uniqueness precedent.
+model ParticipationRecord {
+  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  citizenId       String          @map("citizen_id") @db.Uuid
+  citizen         Citizen         @relation(fields: [citizenId], references: [id])
+  period          String
+  score           Decimal         @default(0) @db.Decimal(10, 2)
+  // Null until DP-048 (out of scope) ever sets it -- mirrors
+  // BudgetCategory.allocatedAmount's same null-until-the-cron-runs shape.
+  quotaTarget     Decimal?        @map("quota_target") @db.Decimal(10, 2)
+  exemptionStatus ExemptionStatus @default(none) @map("exemption_status")
+  inactivityStage Int             @default(0) @map("inactivity_stage") @db.SmallInt
+
+  @@unique([citizenId, period])
+  @@index([citizenId])
+  @@map("participation_record")
+}
+
+// ---------------------------------------------------------------------------
+// governance-role-service (SRV-011) -- TBL-032, TBL-033
+// ---------------------------------------------------------------------------
+
+enum GovernanceRoleType {
+  auditor
+  reviewer
+  oversight
+  operator
+  platform_operator
+  review_body
+
+  @@map("governance_role_type")
+}
+
+// ADR-001's four independent accountability layers (Protocol/Implementation/
+// Audit/Citizen).
+enum GovernanceLayer {
+  protocol
+  implementation
+  audit
+  citizen
+
+  @@map("governance_layer")
+}
+
+// TBL-032.md has NO status column -- a role is "active" simply when today
+// falls within [termStart, termEnd]. Every creation path (DP-040 random
+// assignment, DP-062 acceptance handshake, DP-063 operator appointment,
+// DP-064 election, DP-065 review body selection, DP-068 break-glass) is
+// async/cron and out of scope this pass, so -- exactly like Jurisdiction/
+// ExpertDomain/BudgetCategory -- there is no citizen-facing create/update op;
+// rows are seeded/written by api_worker only.
+model GovernanceRole {
+  id         String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  citizenId  String             @map("citizen_id") @db.Uuid
+  citizen    Citizen            @relation(fields: [citizenId], references: [id])
+  roleType   GovernanceRoleType @map("role_type")
+  layer      GovernanceLayer
+  termStart  DateTime           @map("term_start") @db.Date
+  termEnd    DateTime           @map("term_end") @db.Date
+  randomized Boolean
+
+  approvals Approval[]
+
+  @@index([citizenId])
+  @@map("governance_role")
+}
+
+enum ApprovalType {
+  citizen_supermajority
+  audit_confirmation
+  body_endorsement
+
+  @@map("approval_type")
+}
+
+enum ApprovalDecision {
+  approved
+  rejected
+
+  @@map("approval_decision")
+}
+
+// PUBLIC read (FR-007/CON-005 transparency) + local-parent OWN insert --
+// the first table needing ARCH-023 §4.1's EXISTS variant against
+// governance_role rather than proposal: the inserting citizen must be the
+// citizen_id of the governance_role referenced by approverRoleId, AND that
+// role's term must currently be active (term_start <= current_date AND
+// term_end >= current_date). AUTH-010's approval:submit:council coi.none
+// condition is a runtime business-rule check (ARCH-023 §5), not enforced
+// here -- application code, next phase.
+model Approval {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actionRef      String           @map("action_ref")
+  approverRoleId String           @map("approver_role_id") @db.Uuid
+  approverRole   GovernanceRole   @relation(fields: [approverRoleId], references: [id])
+  approvalType   ApprovalType     @map("approval_type")
+  decision       ApprovalDecision
+  createdAt      DateTime         @default(now()) @map("created_at")
+
+  // DB-level backstop for "one row per role per action" -- the stronger
+  // "one row per CITIZEN per action" rule (one citizen could hold more than
+  // one simultaneous governance_role) is a service-layer check in the next
+  // phase, not enforceable by this index alone.
+  @@unique([actionRef, approverRoleId])
+  @@index([approverRoleId])
+  @@map("approval")
+}
+
+// ---------------------------------------------------------------------------
+// reputation-service (SRV-014) -- TBL-016
+// ---------------------------------------------------------------------------
+
+enum ReputationFactorType {
+  accurate_prediction
+  constructive
+  disclosure
+  successful_proposal
+  misinformation
+  undisclosed_conflict
+  manipulation
+  fraud
+
+  @@map("reputation_factor_type")
+}
+
+// PUBLIC read + api_worker-only write (ARCH-023 §6: "system-computed") --
+// no citizen-facing write of any kind. Written exclusively via an
+// in-process port call from project-service (a later phase), never HTTP.
+model ReputationRecord {
+  id         String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  citizenId  String               @map("citizen_id") @db.Uuid
+  citizen    Citizen              @relation(fields: [citizenId], references: [id])
+  factorType ReputationFactorType @map("factor_type")
+  delta      Decimal              @db.Decimal(10, 2)
+  reason     String
+  createdAt  DateTime             @default(now()) @map("created_at")
+
+  @@index([citizenId])
+  @@map("reputation_record")
+}
+
+// ---------------------------------------------------------------------------
+// project-service (SRV-013) -- TBL-029, TBL-030, TBL-031
+// PUBLIC read + api_worker-only write on all three tables (ARCH-023 §6):
+// `assigned`-scope authorization (does this citizen hold an active
+// operator/oversight/auditor governance_role) is cross-service
+// (governance-role-service) and can't be expressed as an RLS row-ownership
+// policy -- same seam shape as ARCH-023 §5's jurisdiction:member/
+// jurisdiction:affected case, just with a governance-role checker instead
+// of a jurisdiction-membership one. The app resolves that check via
+// GOVERNANCE_ROLE_CHECKER (built in the prior phase) before the write
+// executes under forWorker. `project` itself has no sync creation path
+// either -- a row is created when a proposal transitions to approved
+// (DP-029, out of scope this pass) -- seeded, like Jurisdiction/
+// GovernanceRole.
+// ---------------------------------------------------------------------------
+
+enum ProjectStatus {
+  planned
+  in_progress
+  completed
+  cancelled
+
+  @@map("project_status")
+}
+
+model Project {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  proposalId      String        @unique @map("proposal_id") @db.Uuid
+  proposal        Proposal      @relation(fields: [proposalId], references: [id])
+  timelineStart   DateTime      @map("timeline_start") @db.Date
+  timelineEnd     DateTime      @map("timeline_end") @db.Date
+  budgetAllocated Decimal?      @map("budget_allocated") @db.Decimal(14, 2)
+  // No sync op in this pass ever updates this after seeding (DP-018's
+  // increment-on-spend-report is a later-phase service concern) -- default
+  // 0 rather than left null so a freshly seeded project reads as "nothing
+  // spent yet" rather than "unknown".
+  budgetSpent     Decimal?      @default(0) @map("budget_spent") @db.Decimal(14, 2)
+  contractor      String
+  status          ProjectStatus @default(planned)
+
+  milestones  ProjectMilestone[]
+  evaluations OutcomeEvaluation[]
+
+  @@map("project")
+}
+
+enum ProjectMilestoneStatus {
+  pending
+  done
+  delayed
+
+  @@map("project_milestone_status")
+}
+
+model ProjectMilestone {
+  id          String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId   String                 @map("project_id") @db.Uuid
+  project     Project                @relation(fields: [projectId], references: [id])
+  name        String
+  dueDate     DateTime               @map("due_date") @db.Date
+  completedAt DateTime?              @map("completed_at")
+  status      ProjectMilestoneStatus @default(pending)
+
+  @@index([projectId])
+  @@map("project_milestone")
+}
+
+enum OutcomeEvaluationResult {
+  successful
+  partial
+  unsuccessful
+
+  @@map("outcome_evaluation_result")
+}
+
+model OutcomeEvaluation {
+  id              String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId       String                  @map("project_id") @db.Uuid
+  project         Project                 @relation(fields: [projectId], references: [id])
+  objective       String
+  promisedOutcome String                  @map("promised_outcome")
+  measuredOutcome String                  @map("measured_outcome")
+  evaluation      OutcomeEvaluationResult
+  evaluatedAt     DateTime                @default(now()) @map("evaluated_at")
+
+  @@index([projectId])
+  @@map("outcome_evaluation")
+}
+
+// ---------------------------------------------------------------------------
+// iam-service (SRV-018) -- TBL-040, TBL-041, TBL-042
+// PUBLIC read on all three (CON-005, no hidden grants). access_policy/
+// policy_attachment: real OWN-style INSERT (proposed_by =
+// current_citizen_id()) -- unlike project's tables above, these DO have a
+// citizen-attribution column; the "must currently hold an active operator/
+// platform_operator governance_role" half of DP-069 is role-based, not
+// resource-ownership-based, so it's checked in application code (same
+// reasoning as project's tables), only after which the write executes.
+// Revocation (DP-072) has no attribution column on either table -- treated
+// like project_milestone: api_worker-only UPDATE, app-layer role check
+// first. policy_endorsement: OWN-style INSERT
+// (endorser_citizen_id = current_citizen_id()); "different citizen than the
+// proposer, holding an active role of the SAME role_type" needs a
+// polymorphic target_type/target_id lookup across two other tables plus a
+// live governance-role-service check, so it's entirely application-layer
+// (next phase). `proposed_by`/`endorser_citizen_id` are cross-service refs
+// to identity-service's citizen (ADR-015) even though citizen lives in this
+// same database -- no Prisma relation, mirroring
+// ProposalBudget.fundingCategoryId's precedent above.
+// ---------------------------------------------------------------------------
+
+enum AccessPolicyEffect {
+  allow
+  deny
+
+  @@map("access_policy_effect")
+}
+
+enum AccessPolicyStatus {
+  pending_approval
+  active
+  rejected
+  revoked
+
+  @@map("access_policy_status")
+}
+
+model AccessPolicy {
+  id          String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  effect      AccessPolicyEffect
+  actions     String[]
+  resources   String[]
+  conditions  Json?
+  description String
+  status      AccessPolicyStatus @default(pending_approval)
+  proposedBy  String             @map("proposed_by") @db.Uuid
+  createdAt   DateTime           @default(now()) @map("created_at")
+
+  attachments PolicyAttachment[]
+
+  @@map("access_policy")
+}
+
+enum PolicyAttachmentStatus {
+  pending_approval
+  active
+  revoked
+
+  @@map("policy_attachment_status")
+}
+
+model PolicyAttachment {
+  id           String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  policyId     String                 @map("policy_id") @db.Uuid
+  policy       AccessPolicy           @relation(fields: [policyId], references: [id])
+  principalRef String                 @map("principal_ref")
+  status       PolicyAttachmentStatus @default(pending_approval)
+  proposedBy   String                 @map("proposed_by") @db.Uuid
+  createdAt    DateTime               @default(now()) @map("created_at")
+
+  @@index([policyId])
+  @@map("policy_attachment")
+}
+
+enum PolicyEndorsementTargetType {
+  policy
+  attachment
+
+  @@map("policy_endorsement_target_type")
+}
+
+enum PolicyEndorsementDecision {
+  approved
+  rejected
+
+  @@map("policy_endorsement_decision")
+}
+
+// One endorsement per citizen per target (TBL-042.md's own stated
+// uniqueness); target_id is polymorphic (access_policy.id or
+// policy_attachment.id depending on target_type) so it can't be a normal
+// FK to either table.
+model PolicyEndorsement {
+  id                String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  targetType        PolicyEndorsementTargetType @map("target_type")
+  targetId          String                      @map("target_id") @db.Uuid
+  endorserCitizenId String                      @map("endorser_citizen_id") @db.Uuid
+  decision          PolicyEndorsementDecision
+  createdAt         DateTime                    @default(now()) @map("created_at")
+
+  @@unique([targetType, targetId, endorserCitizenId])
+  @@map("policy_endorsement")
+}

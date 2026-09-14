@@ -1,20 +1,21 @@
-import createClient from "openapi-fetch";
+// @dd/api-client — typed API client shared by web + mobile (ADR-021).
+// Placeholder: real clients are generated from each app's openapi documents
+// (`pnpm --filter @dd/api-client generate`) once service implementations land.
+// Anything importing this package today gets the tiny fetch helper below.
 
-// Base URL of the API gateway (ARCH-006) -- clients never talk to a
-// service directly, only through the gateway.
-export const GATEWAY_URL =
-  process.env.NEXT_PUBLIC_GATEWAY_URL ??
-  process.env.EXPO_PUBLIC_GATEWAY_URL ??
-  "http://localhost:8080";
+export interface ApiError {
+  code: string;
+  message: string;
+}
 
-/**
- * Creates a typed client for one service's API, given the generated
- * paths type produced by `pnpm generate` (see scripts/generate.mjs) from
- * that service's openapi.yaml. Usage once a service has generated types:
- *
- *   import type { paths } from "./generated/voting-service";
- *   export const votingClient = makeClient<paths>("/voting");
- */
-export function makeClient<Paths extends object>(basePath: string) {
-  return createClient<Paths>({ baseUrl: `${GATEWAY_URL}${basePath}` });
+export async function request<T>(baseUrl: string, path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(baseUrl + path, {
+    ...init,
+    headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
+  });
+  const body = (await res.json()) as T | { error: ApiError };
+  if (!res.ok) {
+    throw new Error((body as { error: ApiError }).error?.message ?? `HTTP ${res.status}`);
+  }
+  return body as T;
 }

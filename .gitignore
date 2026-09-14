@@ -12,7 +12,8 @@ dist/
 apps/mobile/.expo/
 
 # Go
-services/go/*/bin/
+apps/api-go/bin/
+packages/go/*/bin/
 go.work.sum
 
 # Infra

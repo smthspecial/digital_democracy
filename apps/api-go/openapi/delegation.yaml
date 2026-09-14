@@ -1,0 +1,44 @@
+openapi: 3.0.3
+info:
+  title: delegation-service
+  version: 0.1.0
+  description: SRV-010 — liquid-democracy delegations. See .spec/technical/services/srv-010.md.
+servers:
+  - url: http://localhost:5000
+paths:
+  /healthz:
+    get: { summary: Liveness probe, responses: { '200': { description: OK } } }
+  /readyz:
+    get: { summary: Readiness probe, responses: { '200': { description: OK } } }
+  /delegation/delegations:
+    post:
+      summary: DP-014 create delegation (competency-checked, cycle-rejected)
+      responses: { '201': { description: Created } }
+    get:
+      summary: List delegations (publicly visible, FR-056)
+      parameters:
+        - { name: delegator_id, in: query, schema: { type: string } }
+        - { name: delegate_id, in: query, schema: { type: string } }
+        - { name: domain_id, in: query, schema: { type: string } }
+      responses: { '200': { description: OK } }
+  /delegation/delegations/{id}:
+    get:
+      summary: Get a delegation
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses: { '200': { description: OK }, '404': { description: Not found } }
+    delete:
+      summary: DP-015 revoke delegation (immediate, row retained)
+      responses: { '200': { description: OK } }
+  /delegation/resolve:
+    get:
+      summary: DP-041 delegation chain resolution (called by voting-service)
+      parameters:
+        - { name: citizen_id, in: query, required: true, schema: { type: string } }
+        - { name: domain_id, in: query, required: true, schema: { type: string } }
+        - { name: session_id, in: query, schema: { type: string } }
+      responses: { '200': { description: OK } }
+  /delegation/expire:
+    post:
+      summary: DP-045 expiry sweep (cron, daily)
+      responses: { '200': { description: OK } }

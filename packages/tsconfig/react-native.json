@@ -1,11 +1,9 @@
 {
+  "$schema": "https://json.schemastore.org/tsconfig",
   "extends": "./base.json",
   "compilerOptions": {
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
     "jsx": "react-native",
     "noEmit": true,
-    "lib": ["ES2022"],
-    "types": ["react-native"]
+    "allowJs": true
   }
 }

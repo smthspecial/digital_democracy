@@ -11,9 +11,8 @@ code that implements that spec.
 apps/
   web/                 Next.js citizen-facing web client (ADR-022)
   mobile/              Expo (React Native) mobile client (ADR-022)
-services/
-  ts/                  14 TypeScript services -- CRUD/orchestration (ADR-019)
-  go/                  4 Go services -- concurrency/crypto-critical path (ADR-019)
+  api-go/              Go app: voting, delegation, audit, auth (ADR-019, ADR-027)
+  api-ts/              TypeScript app: 13 CRUD/orchestration services (ADR-019, ADR-027)
 packages/
   tsconfig/            shared base tsconfig for every TS package
   eslint-config/       shared flat ESLint config
@@ -27,30 +26,17 @@ infra/
 
 ## Services
 
-| Service | Lang | Port (local) | Route prefix | Spec |
-|---|---|---|---|---|
-| identity-service | TS | 4001 | `/identity` | SRV-001 |
-| jurisdiction-service | TS | 4002 | `/jurisdiction` | SRV-002 |
-| problem-service | TS | 4003 | `/problems` | SRV-003 |
-| proposal-service | TS | 4004 | `/proposals` | SRV-004 |
-| competency-service | TS | 4005 | `/competency` | SRV-005 |
-| deliberation-service | TS | 4006 | `/deliberation` | SRV-006 |
-| budget-service | TS | 4007 | `/budget` | SRV-007 |
-| voting-service | **Go** | 5001 | `/voting` | SRV-008 |
-| civic-duty-service | TS | 4008 | `/civic-duty` | SRV-009 |
-| delegation-service | **Go** | 5002 | `/delegation` | SRV-010 |
-| governance-role-service | TS | 4009 | `/governance-roles` | SRV-011 |
-| audit-service | **Go** | 5003 | `/audit` | SRV-012 |
-| project-service | TS | 4010 | `/projects` | SRV-013 |
-| reputation-service | TS | 4011 | `/reputation` | SRV-014 |
-| notification-service | TS | 4012 | `/notifications` | SRV-015 |
-| ai-synthesis-service | TS | 4013 | `/ai-synthesis` | SRV-016 |
-| auth-service | **Go** | 5004 | `/auth` | SRV-017 |
-| iam-service | TS | 4014 | `/iam` | SRV-018 |
+One app per runtime (ADR-027), one database per app (ADR-028):
 
-Every service exposes `GET /healthz` (liveness) and `GET /readyz` (readiness), and documents
-its API in its own `openapi.yaml`. See ADR-019 (language split), ADR-020 (monorepo tooling),
-ADR-021 (HTTP/JSON + OpenAPI now, gRPC later), ADR-022 (web/mobile).
+| App | Lang | Port (local) | Route prefixes | Spec |
+|---|---|---|---|---|
+| api-go (voting, delegation, audit, auth) | Go | 5000 | `/voting`, `/delegation`, `/audit`, `/auth` | SRV-008, SRV-010, SRV-012, SRV-017 |
+| api-ts (13 services, shell) | TS | 4000 | `/identity`, `/jurisdiction`, `/problems`, `/proposals`, `/competency`, `/deliberation`, `/budget`, `/civic-duty`, `/governance-roles`, `/projects`, `/reputation`, `/notifications`, `/ai-synthesis` | SRV-001…007, SRV-009, SRV-011, SRV-013…016, SRV-018 |
+
+Every app exposes `GET /healthz` (liveness) and `GET /readyz` (readiness).
+api-go documents its API per service in `apps/api-go/openapi/`. See ADR-019
+(language split), ADR-020 (monorepo tooling), ADR-021 (HTTP/JSON + OpenAPI
+now, gRPC later), ADR-022 (web/mobile), ADR-027 (one app per runtime).
 
 ## Prerequisites
 
@@ -66,43 +52,45 @@ pnpm install        # installs every TS workspace package
 make dev            # runs all TS services + web via turbo (Go services: see below)
 ```
 
-Go services run independently of the pnpm/turbo dev loop:
+Go and TS run as standalone apps, outside the pnpm/turbo dev loop:
 
 ```bash
-cd services/go/voting-service && go run .
+cd apps/api-go && go run .        # :5000 (in-memory; DATABASE_URL+NATS_URL to wire up)
+cd apps/api-ts && node src/index.js  # :4000 (routing shell)
 ```
 
 ### Running everything together
 
-`pnpm --filter <service> dev` / `go run .` above start one service at a time
-against its in-memory store, with any peer-service URL simply unset. To run
-every currently-implemented service at once, on its real port, wired to a
-real NATS (JetStream) and to each other, use the root
-[`docker-compose.yml`](docker-compose.yml) instead (ADR-026, ARCH-025 §4):
+One compose file runs the whole backend — both apps, real NATS JetStream,
+and one Postgres per app (ADR-026, ADR-027, ADR-028, ARCH-025 §4):
 
 ```bash
-docker compose up --build
+podman compose up --build   # or: docker compose up --build
 ```
 
 This is the fast local inner-loop alternative to the k3s target ARCH-025
-describes — no cluster required. It also starts a shared local Postgres
-with one database per service that already has a migration
-(`infra/compose/postgres-init.sql`); no service connects to it yet (every
-service still runs in-memory), so this is forward-compatible scaffolding,
-not something exercised today.
+describes — no cluster required. api-go migrates and connects to its
+`api_go` database automatically (`DATABASE_URL`); api-ts serves its routing
+shell against an empty `api_ts` database until its services land.
 
 ## Common commands
 
 | Command | Does |
 |---|---|
 | `make build` / `make lint` / `make typecheck` / `make test` | TS workspace, via Turborepo (only affected packages re-run) |
-| `make go-build` / `make go-test` / `make go-vet` | all 4 Go services |
-| `make docker-build SERVICE=<name> LANG=<ts\|go>` | build one service's container image |
+| `make go-build` / `make go-test` / `make go-vet` | Go workspace (`apps/api-go`, `packages/go/eventbus`) |
+| `make docker-build SERVICE=<api-go\|api-ts>` | build one app's container image |
 
 ## Adding a service
 
-1. Create `services/<ts|go>/<name>/` following an existing sibling service's structure.
-2. Add its `openapi.yaml` and wire it into `packages/api-client`'s generation (`pnpm --filter @dd/api-client generate`).
-3. Add `infra/helm/values/<name>.yaml` (copy a sibling, change `name`/`image`/`port`).
-4. If Go: add the module path to `go.work`.
-5. Record the service in `.spec/technical/services/` (see `.spec/AGENTS.md`) and update the table above.
+Services live inside their runtime's app (`apps/api-go/internal/<name>/`,
+future `apps/api-ts/src/<name>/`), never as new top-level directories:
+
+1. Add the package following a sibling service's structure (domain, store,
+   service, handlers, router, tests).
+2. Mount its routes in the app entrypoint; add its contract to
+   `apps/api-go/openapi/` (ADR-021).
+3. Add its tables to the app's database migration (one db per app, ADR-028)
+   and its sqlc queries + repository if Go (ADR-029).
+4. Record the service in `.spec/technical/services/` (see `.spec/AGENTS.md`)
+   and update the table above.
