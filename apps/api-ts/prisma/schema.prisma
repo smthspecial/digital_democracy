@@ -69,6 +69,11 @@ model Citizen {
   reputationRecords             ReputationRecord[]
   civicAssignments              CivicAssignment[]
   participationRecords          ParticipationRecord[]
+  conflictsOfInterestRelated    ConflictOfInterest[]     @relation("ConflictOfInterestRelatedCitizen")
+  identityRevocations           IdentityRevocation[]
+  scopeChallengesFiled          ScopeChallenge[]         @relation("ScopeChallengeChallenger")
+  problemEvidenceSubmitted      ProblemEvidence[]
+  problemCommentsAuthored       ProblemComment[]
 
   @@index([legalIdentityHash])
   @@map("citizen")
@@ -100,6 +105,43 @@ model IdentityVerification {
 
   @@index([citizenId])
   @@map("identity_verification")
+}
+
+enum IdentityRevocationReason {
+  death
+  loss_of_citizenship
+  proven_fraud
+
+  @@map("identity_revocation_reason")
+}
+
+enum IdentityRevocationStatus {
+  pending
+  approved
+  executed
+  rejected
+
+  @@map("identity_revocation_status")
+}
+
+// US-004/FR-007/ADR-034: a revocation request against approval before
+// Citizen.status ever moves to `revoked`. `actionRef` follows the
+// `identity:revoke:{citizenId}` convention (approval rows key off it via
+// the existing GovernanceRole/Approval mechanism, ADR-034 D1).
+model IdentityRevocation {
+  id            String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  citizenId     String                    @map("citizen_id") @db.Uuid
+  citizen       Citizen                   @relation(fields: [citizenId], references: [id])
+  reason        IdentityRevocationReason
+  justification String
+  actionRef     String                    @map("action_ref")
+  status        IdentityRevocationStatus  @default(pending)
+  requestedAt   DateTime                  @default(now()) @map("requested_at")
+  executedAt    DateTime?                 @map("executed_at")
+
+  @@index([citizenId])
+  @@unique([actionRef])
+  @@map("identity_revocation")
 }
 
 // ---------------------------------------------------------------------------
@@ -135,6 +177,17 @@ model Jurisdiction {
   scopeLevel  JurisdictionScopeLevel @map("scope_level")
   boundaryRef String                 @map("boundary_ref")
   status      JurisdictionStatus     @default(active)
+  // ADR-038 D8: FR-012's 6-12 month band, seeded per scope level (180 at
+  // municipality+, 0 at property/street).
+  minResidencyDays Int               @default(0) @map("min_residency_days")
+  // ADR-035 D14/D15: population-scaled proposal support threshold.
+  // threshold = clamp(round(population * supportRateBps / 10000),
+  // minThreshold, maxThreshold). population null -> proposal creation
+  // refuses (422), never silently falls back to minThreshold.
+  population    Int?    @map("population")
+  supportRateBps Int    @default(500) @map("support_rate_bps")
+  minThreshold   Int    @default(10) @map("min_threshold")
+  maxThreshold   Int?   @map("max_threshold")
 
   residencies      Residency[]
   memberships      JurisdictionMembership[]
@@ -205,11 +258,53 @@ model Problem {
   createdAt      DateTime      @default(now()) @map("created_at")
 
   supports    ProblemSupport[]
+  evidence    ProblemEvidence[]
+  comments    ProblemComment[]
   proposals   Proposal[]
   preferences Preference[]
 
   @@index([jurisdictionId])
   @@map("problem")
+}
+
+enum ProblemEvidenceKind {
+  document
+  link
+  statement
+
+  @@map("problem_evidence_kind")
+}
+
+// E3-02/ADR-035 D18: required at submission (at least one row), addable
+// afterwards. kind=statement carries a citizen's own account when no
+// document/link exists -- FR-015's AC is met without gatekeeping on
+// possessing a document.
+model ProblemEvidence {
+  id        String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  problemId String              @map("problem_id") @db.Uuid
+  problem   Problem             @relation(fields: [problemId], references: [id])
+  citizenId String              @map("citizen_id") @db.Uuid
+  citizen   Citizen             @relation(fields: [citizenId], references: [id])
+  kind      ProblemEvidenceKind
+  ref       String
+  createdAt DateTime            @default(now()) @map("created_at")
+
+  @@index([problemId])
+  @@map("problem_evidence")
+}
+
+// E3-04/US-011: comments on issues -- fully unbuilt per the audit.
+model ProblemComment {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  problemId String   @map("problem_id") @db.Uuid
+  problem   Problem  @relation(fields: [problemId], references: [id])
+  citizenId String   @map("citizen_id") @db.Uuid
+  citizen   Citizen  @relation(fields: [citizenId], references: [id])
+  body      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([problemId])
+  @@map("problem_comment")
 }
 
 model ProblemSupport {
@@ -261,11 +356,26 @@ model Proposal {
   // challenge is open; DP-030/FR-011 resolution (out of scope, needs
   // SRV-011/012) is what would clear it.
   scopeChallengedAt   DateTime?      @map("scope_challenged_at")
+  // ADR-038: scope-rationale-displayed / D9's impact-dimension floor.
+  scopeRationale         String?    @map("scope_rationale")
+  scopeEscalationReason  String?    @map("scope_escalation_reason")
+  // ADR-036 D36: objectives/measurable-outcomes required before voting, not
+  // at draft creation -- nullable, enforced as a predicate at the
+  // draft->voting gate (E5-16), not a NOT NULL column.
+  objectives             String?
+  measurableOutcomes     String?    @map("measurable_outcomes")
+  implementationTimeline String?    @map("implementation_timeline")
+  // ADR-036 D35: the eight-stage deadlock track (FR-034), a side-track off
+  // this same state machine, not a separate model.
+  deadlockActive         Boolean    @default(false) @map("deadlock_active")
+  deadlockStage          DeadlockStage? @map("deadlock_stage")
 
   constraints           ProposalConstraint[]
   budget                ProposalBudget?
   expertAssessments     ExpertAssessment[]
   deliberationArguments DeliberationArgument[]
+  scopeChallenges        ScopeChallenge[]
+  deadlockHistory        DeadlockHistoryEntry[]
   // One project per proposal, created when a proposal transitions to
   // approved (DP-029, out of scope this pass) -- optional here because that
   // transition isn't implemented yet, so no Proposal row has one.
@@ -273,6 +383,64 @@ model Proposal {
 
   @@index([problemId])
   @@map("proposal")
+}
+
+enum ScopeChallengeStatus {
+  open
+  upheld
+  dismissed
+
+  @@map("scope_challenge_status")
+}
+
+// ADR-038 D10/D11 (jurisdiction-service scope-assignment authority read
+// alongside this table): a first-class challenge record replacing the bare
+// `Proposal.scopeChallengedAt` timestamp -- audit finding
+// scope-challenge-tracked-with-status-and-outcome.
+model ScopeChallenge {
+  id           String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  proposalId   String               @map("proposal_id") @db.Uuid
+  proposal     Proposal             @relation(fields: [proposalId], references: [id])
+  challengerId String               @map("challenger_id") @db.Uuid
+  challenger   Citizen              @relation("ScopeChallengeChallenger", fields: [challengerId], references: [id])
+  reason       String
+  status       ScopeChallengeStatus @default(open)
+  resolution   String?
+  createdAt    DateTime             @default(now()) @map("created_at")
+  resolvedAt   DateTime?            @map("resolved_at")
+
+  @@index([proposalId])
+  @@index([challengerId])
+  @@map("scope_challenge")
+}
+
+enum DeadlockStage {
+  constraint_analysis
+  alternative_generation
+  resource_partitioning
+  compensation_assessment
+  citizen_assembly_review
+  escalation_review
+  constitutional_review
+  final_decision
+
+  @@map("deadlock_stage")
+}
+
+// ADR-036 D35: FR-034's eight ordered stages, verified against the
+// pre-pivot DeadlockStage type (ARCH-026) -- ports the enum values
+// verbatim.
+model DeadlockHistoryEntry {
+  id         String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  proposalId String        @map("proposal_id") @db.Uuid
+  proposal   Proposal      @relation(fields: [proposalId], references: [id])
+  stage      DeadlockStage
+  reviewerId String        @map("reviewer_id") @db.Uuid
+  notes      String
+  at         DateTime      @default(now())
+
+  @@index([proposalId])
+  @@map("deadlock_history_entry")
 }
 
 model ProposalConstraint {
@@ -332,22 +500,66 @@ enum CompetencyStatus {
   @@map("competency_status")
 }
 
+enum CompetencyStage {
+  intake
+  credential_verification
+  public_review
+  domain_peer_review
+  decided
+
+  @@map("competency_stage")
+}
+
 model Competency {
-  id        String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  citizenId String           @map("citizen_id") @db.Uuid
-  citizen   Citizen          @relation(fields: [citizenId], references: [id])
-  domainId  String           @map("domain_id") @db.Uuid
-  domain    ExpertDomain     @relation(fields: [domainId], references: [id])
-  level     Int              @db.SmallInt
-  status    CompetencyStatus @default(applied)
-  grantedAt DateTime?        @map("granted_at")
-  expiresAt DateTime?        @map("expires_at")
+  id          String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  citizenId   String           @map("citizen_id") @db.Uuid
+  citizen     Citizen          @relation(fields: [citizenId], references: [id])
+  domainId    String           @map("domain_id") @db.Uuid
+  domain      ExpertDomain     @relation(fields: [domainId], references: [id])
+  level       Int              @db.SmallInt
+  status      CompetencyStatus @default(applied)
+  // ADR-037/E4-04: required at intake (FR-020's "earned through an
+  // auditable acquisition process").
+  evidenceRef String           @map("evidence_ref")
+  stage       CompetencyStage  @default(intake)
+  grantedAt   DateTime?        @map("granted_at")
+  expiresAt   DateTime?        @map("expires_at")
 
-  challenges CompetencyChallenge[]
+  challenges    CompetencyChallenge[]
+  stageReviews  CompetencyStageReview[]
 
+  // ADR-037/E4-04: one live claim per (citizen, domain) -- a rejected/
+  // expired/revoked claim can be re-applied for, an applied/active one
+  // cannot coexist with a second application.
   @@index([citizenId])
   @@index([domainId])
   @@map("competency")
+}
+
+enum StageReviewDecision {
+  passed
+  failed
+
+  @@map("stage_review_decision")
+}
+
+// ADR-037 D24 (E4-05): one row per stage transition attempt -- the
+// pipeline's own history, distinct from CompetencyChallenge (a citizen-
+// initiated dispute against an already-decided competency).
+model CompetencyStageReview {
+  id           String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  competencyId String               @map("competency_id") @db.Uuid
+  competency   Competency           @relation(fields: [competencyId], references: [id])
+  stage        CompetencyStage
+  // Null for an automated credential-verification pass (E4-06) -- every
+  // other stage has a human reviewer.
+  reviewerId   String?              @map("reviewer_id") @db.Uuid
+  decision     StageReviewDecision
+  notes        String
+  createdAt    DateTime             @default(now()) @map("created_at")
+
+  @@index([competencyId])
+  @@map("competency_stage_review")
 }
 
 enum CompetencyChallengeReason {
@@ -401,17 +613,23 @@ enum ConflictOfInterestType {
 // read. The "OWN" in ARCH-023 §6 describes only the INSERT restriction
 // (self-disclosure only), not a read restriction.
 model ConflictOfInterest {
-  id          String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  citizenId   String                 @map("citizen_id") @db.Uuid
-  citizen     Citizen                @relation(fields: [citizenId], references: [id])
-  domainId    String                 @map("domain_id") @db.Uuid
-  domain      ExpertDomain           @relation(fields: [domainId], references: [id])
-  type        ConflictOfInterestType
-  description String
-  disclosedAt DateTime               @default(now()) @map("disclosed_at")
+  id              String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  citizenId       String                 @map("citizen_id") @db.Uuid
+  citizen         Citizen                @relation(fields: [citizenId], references: [id])
+  domainId        String                 @map("domain_id") @db.Uuid
+  domain          ExpertDomain           @relation(fields: [domainId], references: [id])
+  type            ConflictOfInterestType
+  description     String
+  disclosedAt     DateTime               @default(now()) @map("disclosed_at")
+  // ADR-034 D3: names a citizen this conflict is about (e.g. an approver's
+  // relationship to a citizen under identity-disable review), distinct from
+  // the disclosing citizen above.
+  relatedCitizenId String?               @map("related_citizen_id") @db.Uuid
+  relatedCitizen   Citizen?              @relation("ConflictOfInterestRelatedCitizen", fields: [relatedCitizenId], references: [id])
 
   @@index([citizenId])
   @@index([domainId])
+  @@index([relatedCitizenId])
   @@map("conflict_of_interest")
 }
 
@@ -466,6 +684,10 @@ model DeliberationArgument {
   body        String
   evidenceRef String                 @map("evidence_ref")
   createdAt   DateTime               @default(now()) @map("created_at")
+  // ADR-036 D34: FR-033's argument-locking mechanism -- marks an agreement-
+  // stance argument as a settled fact; locked branches block new replies.
+  locked      Boolean                @default(false)
+  lockedAt    DateTime?              @map("locked_at")
 
   @@index([proposalId])
   @@index([authorId])

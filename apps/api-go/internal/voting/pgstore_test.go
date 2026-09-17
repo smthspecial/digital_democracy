@@ -35,11 +35,7 @@ func pgTestStore(t *testing.T) *PGStore {
 
 func pgTestURL(t *testing.T) string {
 	t.Helper()
-	url := testDatabaseURL()
-	if url == "" {
-		t.Skip("TEST_DATABASE_URL unset")
-	}
-	return url
+	return testDatabaseURL(t)
 }
 
 func pgTestSession(t *testing.T, svc *Service) *VoteSession {

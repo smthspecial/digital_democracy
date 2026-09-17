@@ -72,11 +72,12 @@ async function insertCompetency(
   status: "applied" | "active" = "active",
 ): Promise<void> {
   await withAdmin((client) =>
-    client.query(`INSERT INTO competency (id, citizen_id, domain_id, level, status) VALUES ($1, $2, $3, 2, $4)`, [
+    client.query(`INSERT INTO competency (id, citizen_id, domain_id, level, status, evidence_ref) VALUES ($1, $2, $3, 2, $4, $5)`, [
       id,
       citizenId,
       domainId,
       status,
+      'evidence-fixture',
     ]),
   );
 }
@@ -131,7 +132,7 @@ describe.skipIf(!urls)("CompetencyService (Postgres, RLS-enforced)", () => {
   // DP-011: competency:apply -- scope any, condition citizen.active.
   describe("apply (DP-011, AUTH-010 competency:apply)", () => {
     it("creates a competency row with status=applied", async () => {
-      const competency = await svc.apply(CITIZEN, { domainId: DOMAIN, level: 2 });
+      const competency = await svc.apply(CITIZEN, { domainId: DOMAIN, level: 2, evidenceRef: "evidence-1" });
       expect(competency.status).toBe("applied");
       expect(competency.citizenId).toBe(CITIZEN);
       expect(competency.domainId).toBe(DOMAIN);
@@ -139,7 +140,7 @@ describe.skipIf(!urls)("CompetencyService (Postgres, RLS-enforced)", () => {
     });
 
     it("rejects an inactive citizen", async () => {
-      await expect(svc.apply(INACTIVE, { domainId: DOMAIN, level: 2 })).rejects.toBeInstanceOf(ForbiddenDomainError);
+      await expect(svc.apply(INACTIVE, { domainId: DOMAIN, level: 2, evidenceRef: "evidence-1" })).rejects.toBeInstanceOf(ForbiddenDomainError);
     });
   });
 
@@ -173,6 +174,16 @@ describe.skipIf(!urls)("CompetencyService (Postgres, RLS-enforced)", () => {
     });
   });
 
+  describe("listConflicts (FR-025 public read)", () => {
+    it("is a pass-through, optionally filtered by citizenId/domainId", async () => {
+      await svc.declareConflict(CITIZEN, { domainId: DOMAIN, type: "employer", description: "x" });
+      await svc.declareConflict(OTHER, { domainId: DOMAIN, type: "financial", description: "y" });
+
+      expect(await svc.listConflicts()).toHaveLength(2);
+      expect(await svc.listConflicts({ citizenId: CITIZEN })).toHaveLength(1);
+    });
+  });
+
   // DP-012: competency_challenge:submit -- scope any, conditions
   // citizen.active + evidence.required (DTO layer).
   describe("submitChallenge (DP-012, AUTH-010 competency_challenge:submit)", () => {
@@ -194,6 +205,18 @@ describe.skipIf(!urls)("CompetencyService (Postgres, RLS-enforced)", () => {
       await expect(
         svc.submitChallenge(INACTIVE, { competencyId: randomUUID(), evidenceRef: "ref", reason: "misconduct" }),
       ).rejects.toBeInstanceOf(ForbiddenDomainError);
+    });
+  });
+
+  describe("listChallenges (public read)", () => {
+    it("is a pass-through, optionally filtered by competencyId", async () => {
+      const competencyId = randomUUID();
+      await insertCompetency(competencyId, CITIZEN, DOMAIN, "applied");
+      await svc.submitChallenge(OTHER, { competencyId, evidenceRef: "ref", reason: "credentials" });
+
+      expect(await svc.listChallenges()).toHaveLength(1);
+      expect(await svc.listChallenges({ competencyId })).toHaveLength(1);
+      expect(await svc.listChallenges({ competencyId: randomUUID() })).toHaveLength(0);
     });
   });
 
@@ -305,8 +328,8 @@ describe.skipIf(!urls)("CompetencyService (Postgres, RLS-enforced)", () => {
     it("listCompetencies optionally filters by citizenId/domainId", async () => {
       const otherDomainId = randomUUID();
       await insertDomain(otherDomainId, "Healthcare");
-      await svc.apply(CITIZEN, { domainId: DOMAIN, level: 1 });
-      await svc.apply(OTHER, { domainId: otherDomainId, level: 2 });
+      await svc.apply(CITIZEN, { domainId: DOMAIN, level: 1, evidenceRef: "evidence-1" });
+      await svc.apply(OTHER, { domainId: otherDomainId, level: 2, evidenceRef: "evidence-1" });
 
       expect(await svc.listCompetencies()).toHaveLength(2);
       expect(await svc.listCompetencies({ citizenId: CITIZEN })).toHaveLength(1);

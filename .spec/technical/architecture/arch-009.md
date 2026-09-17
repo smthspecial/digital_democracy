@@ -2,10 +2,12 @@
 id: ARCH-009
 type: arch
 title: "Integration & E2E test strategy"
-status: draft
-linkedIds: ADR-019,ADR-021,EPIC-001,EPIC-002,EPIC-003,EPIC-004,EPIC-005,EPIC-006,EPIC-007,EPIC-008,EPIC-009,EPIC-010,EPIC-011,EPIC-012,EPIC-013,TP-001
+status: deprecated
+linkedIds: ADR-019,ADR-021,ADR-032,EPIC-001,EPIC-002,EPIC-003,EPIC-004,EPIC-005,EPIC-006,EPIC-007,EPIC-008,EPIC-009,EPIC-010,EPIC-011,EPIC-012,EPIC-013,TP-001
 created: 2026-08-27
 ---
+
+> **Superseded by [ADR-032](../adr/adr-032.md)** (2026-09-15): the unit/integration/e2e taxonomy below was written for the 18-microservice topology this doc predates the collapse of (ADR-027). ADR-032 redefines the tiers for the current two-app architecture (unit / journey / e2e) and is the authority on which tier a test belongs to. The scenario-numbering convention (§4) and edge-case taxonomy (§3) below remain in force.
 
 ## Overview
 

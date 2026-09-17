@@ -1,5 +1,9 @@
 packages:
   - "apps/*"
-  - "services/ts/*"
   - "packages/*"
+  # No testing/ directory exists yet -- kept for TI-09/CC-07's planned
+  # cross-app e2e harness (testing/e2e-suite) to land into without a second
+  # workspace-config edit. `services/ts/*` (the pre-ADR-027 topology, dropped
+  # entirely in commit 33848ae -- see .spec/technical/architecture/arch-026.md)
+  # is NOT kept: nothing plans to recreate a directory under that name.
   - "testing/*"

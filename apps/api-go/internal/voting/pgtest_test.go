@@ -10,8 +10,21 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// testDatabaseURL returns the Postgres URL for backend tests, or "" to skip.
-func testDatabaseURL() string { return os.Getenv("TEST_DATABASE_URL") }
+// testDatabaseURL returns the Postgres URL for backend tests. Skips when
+// unset; with REQUIRE_DB_TESTS set, fails loudly instead -- mirrors
+// apps/api-ts's test-support/postgres.ts so this tier can't silently skip
+// with zero assertions in CI (BUG-004/TI-02) the way apps/api-ts's once did.
+func testDatabaseURL(t *testing.T) string {
+	t.Helper()
+	url := os.Getenv("TEST_DATABASE_URL")
+	if url == "" {
+		if os.Getenv("REQUIRE_DB_TESTS") != "" {
+			t.Fatal("REQUIRE_DB_TESTS is set but TEST_DATABASE_URL is unset")
+		}
+		t.Skip("TEST_DATABASE_URL unset")
+	}
+	return url
+}
 
 // ensureMigrated runs the app's own migration runner (internal/pg) against
 // the test database. It is idempotent (schema_migrations), so every

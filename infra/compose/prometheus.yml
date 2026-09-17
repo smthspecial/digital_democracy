@@ -1,0 +1,17 @@
+# Local-dev scrape config, mirroring the shape infra/argocd/observability.yaml
+# (kube-prometheus-stack, ADR-026) uses in the k8s environment -- same two
+# scrape targets, ServiceMonitor's local equivalent. 15s here (not
+# kube-prometheus-stack's default 30s) is fine at docker-compose's single-
+# replica scale and makes metrics feel responsive while poking at the apps
+# locally.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: api-ts
+    static_configs:
+      - targets: ["api-ts:4000"]
+  - job_name: api-go
+    static_configs:
+      - targets: ["api-go:5000"]

@@ -101,7 +101,7 @@ describe.skipIf(!urls)("ProblemController (HTTP, Postgres-backed)", () => {
     const res = await request(app.getHttpServer())
       .post("/problem/problems")
       .set("x-citizen-id", citizenId)
-      .send({ title: "Pothole", description: "Big pothole", affectedArea: "Main St", jurisdictionId });
+      .send({ title: "Pothole", description: "Big pothole", affectedArea: "Main St", jurisdictionId, evidenceKind: "statement", evidenceRef: "e" });
 
     expect(res.status).toBe(201);
     expect(res.body.status).toBe("open");
@@ -120,7 +120,7 @@ describe.skipIf(!urls)("ProblemController (HTTP, Postgres-backed)", () => {
   it("POST /problem/problems without x-citizen-id is 401", async () => {
     const res = await request(app.getHttpServer())
       .post("/problem/problems")
-      .send({ title: "T", description: "D", affectedArea: "A", jurisdictionId: randomUUID() });
+      .send({ title: "T", description: "D", affectedArea: "A", jurisdictionId: randomUUID(), evidenceKind: "statement", evidenceRef: "e" });
     expect(res.status).toBe(401);
   });
 
@@ -132,7 +132,7 @@ describe.skipIf(!urls)("ProblemController (HTTP, Postgres-backed)", () => {
     const res = await request(app.getHttpServer())
       .post("/problem/problems")
       .set("x-citizen-id", registerRes.body.id)
-      .send({ title: "T", description: "D", affectedArea: "A", jurisdictionId: randomUUID() });
+      .send({ title: "T", description: "D", affectedArea: "A", jurisdictionId: randomUUID(), evidenceKind: "statement", evidenceRef: "e" });
     expect(res.status).toBe(403);
   });
 
@@ -148,7 +148,7 @@ describe.skipIf(!urls)("ProblemController (HTTP, Postgres-backed)", () => {
     await request(app.getHttpServer())
       .post("/problem/problems")
       .set("x-citizen-id", citizenId)
-      .send({ title: "A", description: "D", affectedArea: "Area", jurisdictionId });
+      .send({ title: "A", description: "D", affectedArea: "Area", jurisdictionId, evidenceKind: "statement", evidenceRef: "e" });
 
     const res = await request(app.getHttpServer()).get("/problem/problems");
     expect(res.status).toBe(200);
@@ -162,7 +162,7 @@ describe.skipIf(!urls)("ProblemController (HTTP, Postgres-backed)", () => {
     const createRes = await request(app.getHttpServer())
       .post("/problem/problems")
       .set("x-citizen-id", citizenId)
-      .send({ title: "T", description: "D", affectedArea: "A", jurisdictionId });
+      .send({ title: "T", description: "D", affectedArea: "A", jurisdictionId, evidenceKind: "statement", evidenceRef: "e" });
 
     const endorserId = await activeCitizen("frank");
     await insertMembership(endorserId, jurisdictionId);
@@ -182,7 +182,7 @@ describe.skipIf(!urls)("ProblemController (HTTP, Postgres-backed)", () => {
     const createRes = await request(app.getHttpServer())
       .post("/problem/problems")
       .set("x-citizen-id", citizenId)
-      .send({ title: "T", description: "D", affectedArea: "A", jurisdictionId });
+      .send({ title: "T", description: "D", affectedArea: "A", jurisdictionId, evidenceKind: "statement", evidenceRef: "e" });
 
     const nonMemberId = await activeCitizen("hana");
     const res = await request(app.getHttpServer())
@@ -198,7 +198,7 @@ describe.skipIf(!urls)("ProblemController (HTTP, Postgres-backed)", () => {
     const createRes = await request(app.getHttpServer())
       .post("/problem/problems")
       .set("x-citizen-id", citizenId)
-      .send({ title: "T", description: "D", affectedArea: "A", jurisdictionId });
+      .send({ title: "T", description: "D", affectedArea: "A", jurisdictionId, evidenceKind: "statement", evidenceRef: "e" });
 
     const res = await request(app.getHttpServer()).post(`/problem/problems/${createRes.body.id}/support`);
     expect(res.status).toBe(401);
@@ -211,7 +211,7 @@ describe.skipIf(!urls)("ProblemController (HTTP, Postgres-backed)", () => {
     const createRes = await request(app.getHttpServer())
       .post("/problem/problems")
       .set("x-citizen-id", citizenId)
-      .send({ title: "T", description: "D", affectedArea: "A", jurisdictionId });
+      .send({ title: "T", description: "D", affectedArea: "A", jurisdictionId, evidenceKind: "statement", evidenceRef: "e" });
 
     const endorserId = await activeCitizen("kim");
     await insertMembership(endorserId, jurisdictionId);

@@ -15,6 +15,11 @@ export interface Jurisdiction {
   scopeLevel: JurisdictionScopeLevel;
   boundaryRef: string;
   status: JurisdictionStatus;
+  minResidencyDays: number;
+  population: number | null;
+  supportRateBps: number;
+  minThreshold: number;
+  maxThreshold: number | null;
 }
 
 // SRV-002's "Read jurisdiction tree" sync read -- assembled in-process by

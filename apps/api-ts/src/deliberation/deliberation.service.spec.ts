@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Client } from "pg";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { ForbiddenDomainError } from "../common/domain-errors.js";
+import { ForbiddenDomainError, NotFoundDomainError } from "../common/domain-errors.js";
 import type { CitizenStatusChecker } from "../identity/citizen-status.port.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { newTestPrismaService, TestDatabaseUrls, testDatabaseUrls, truncateAll } from "../test-support/postgres.js";
@@ -241,6 +241,69 @@ describe.skipIf(!urls)("DeliberationService (Postgres, RLS-enforced)", () => {
 
       expect(await svc.listPreferences()).toHaveLength(2);
       expect(await svc.listPreferences({ problemId })).toHaveLength(1);
+    });
+  });
+
+  describe("lockArgument (FR-033/ADR-036 D34, E5-03)", () => {
+    async function insertAssignment(citizenId: string, targetRef: string): Promise<void> {
+      await withAdmin((client) =>
+        client.query(
+          `INSERT INTO civic_assignment (id, citizen_id, type, target_ref, due_at) VALUES ($1, $2, 'proposal_review', $3, now() + interval '7 days')`,
+          [randomUUID(), citizenId, targetRef],
+        ),
+      );
+    }
+
+    it("throws NotFoundDomainError for an unknown argument", async () => {
+      await expect(svc.lockArgument(authorId, randomUUID())).rejects.toBeInstanceOf(NotFoundDomainError);
+    });
+
+    it("rejects a citizen with no proposal_review assignment for this proposal", async () => {
+      const argument = await svc.postArgument(authorId, { proposalId, stance: "agreement", body: "b", evidenceRef: "e" });
+      await expect(svc.lockArgument(otherId, argument.id)).rejects.toBeInstanceOf(ForbiddenDomainError);
+    });
+
+    it("rejects locking a disagreement-stance argument (ADR-036 D34: agreement only)", async () => {
+      const argument = await svc.postArgument(authorId, { proposalId, stance: "disagreement", body: "b", evidenceRef: "e" });
+      await insertAssignment(otherId, proposalId);
+      await expect(svc.lockArgument(otherId, argument.id)).rejects.toBeInstanceOf(ForbiddenDomainError);
+    });
+
+    it("locks an agreement-stance argument for a citizen with an active proposal_review assignment", async () => {
+      const argument = await svc.postArgument(authorId, { proposalId, stance: "agreement", body: "b", evidenceRef: "e" });
+      await insertAssignment(otherId, proposalId);
+
+      const locked = await svc.lockArgument(otherId, argument.id);
+      expect(locked.locked).toBe(true);
+      expect(locked.lockedAt).not.toBeNull();
+    });
+
+    it("is idempotent -- locking an already-locked argument succeeds without a fresh authority check", async () => {
+      const argument = await svc.postArgument(authorId, { proposalId, stance: "agreement", body: "b", evidenceRef: "e" });
+      await insertAssignment(otherId, proposalId);
+      await svc.lockArgument(otherId, argument.id);
+
+      // No assignment for authorId -- if this weren't idempotent it would throw ForbiddenDomainError.
+      const relocked = await svc.lockArgument(authorId, argument.id);
+      expect(relocked.locked).toBe(true);
+    });
+
+    it("blocks a new reply beneath a locked argument", async () => {
+      const argument = await svc.postArgument(authorId, { proposalId, stance: "agreement", body: "b", evidenceRef: "e" });
+      await insertAssignment(otherId, proposalId);
+      await svc.lockArgument(otherId, argument.id);
+
+      await expect(
+        svc.postArgument(authorId, { proposalId, parentId: argument.id, stance: "disagreement", body: "reply", evidenceRef: "e" }),
+      ).rejects.toBeInstanceOf(ForbiddenDomainError);
+    });
+
+    it("allows a reply beneath an unlocked argument", async () => {
+      const argument = await svc.postArgument(authorId, { proposalId, stance: "agreement", body: "b", evidenceRef: "e" });
+      const reply = await svc.postArgument(authorId, {
+        proposalId, parentId: argument.id, stance: "disagreement", body: "reply", evidenceRef: "e",
+      });
+      expect(reply.parentId).toBe(argument.id);
     });
   });
 });

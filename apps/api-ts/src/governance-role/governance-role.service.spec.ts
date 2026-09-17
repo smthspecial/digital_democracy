@@ -129,6 +129,27 @@ describe.skipIf(!urls)("GovernanceRoleService (Postgres, RLS-enforced)", () => {
       ).rejects.toBeInstanceOf(ForbiddenDomainError);
     });
 
+    it("rejects a citizen approving their own identity revocation (ADR-034 D3/E1-11)", async () => {
+      await seedRole(CITIZEN, { roleType: "auditor" });
+      await expect(
+        svc.submitApproval(CITIZEN, {
+          actionRef: `identity:revoke:${CITIZEN}`,
+          approvalType: "audit_confirmation",
+          decision: "approved",
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenDomainError);
+    });
+
+    it("allows approving someone else's identity revocation", async () => {
+      await seedRole(CITIZEN, { roleType: "auditor" });
+      const approval = await svc.submitApproval(CITIZEN, {
+        actionRef: `identity:revoke:${OTHER}`,
+        approvalType: "audit_confirmation",
+        decision: "approved",
+      });
+      expect(approval.actionRef).toBe(`identity:revoke:${OTHER}`);
+    });
+
     it("rejects a citizen who holds no governance_role at all", async () => {
       await expect(
         svc.submitApproval(CITIZEN, {
@@ -175,7 +196,7 @@ describe.skipIf(!urls)("GovernanceRoleService (Postgres, RLS-enforced)", () => {
     });
 
     it("emits exactly one audit event per successful submission", async () => {
-      await seedRole(CITIZEN);
+      await seedRole(CITIZEN, { layer: "protocol" });
       await svc.submitApproval(CITIZEN, {
         actionRef: "action-1",
         approvalType: "body_endorsement",
@@ -200,7 +221,7 @@ describe.skipIf(!urls)("GovernanceRoleService (Postgres, RLS-enforced)", () => {
 
       // The citizen now also holds a second, independent role -- the SAME
       // action_ref must still be blocked.
-      await seedRole(CITIZEN, { roleType: "reviewer" });
+      await seedRole(CITIZEN, { roleType: "reviewer", layer: "protocol" });
       await expect(
         svc.submitApproval(CITIZEN, {
           actionRef: "action-1",
@@ -212,7 +233,7 @@ describe.skipIf(!urls)("GovernanceRoleService (Postgres, RLS-enforced)", () => {
 
     it("allows a DIFFERENT citizen to submit an approval for the same actionRef", async () => {
       await seedRole(CITIZEN);
-      const roleBId = await seedRole(OTHER);
+      const roleBId = await seedRole(OTHER, { layer: "protocol" });
       await svc.submitApproval(CITIZEN, {
         actionRef: "action-1",
         approvalType: "audit_confirmation",
@@ -233,12 +254,70 @@ describe.skipIf(!urls)("GovernanceRoleService (Postgres, RLS-enforced)", () => {
         approvalType: "audit_confirmation",
         decision: "approved",
       });
+      await seedRole(CITIZEN, { layer: "protocol" });
       const second = await svc.submitApproval(CITIZEN, {
         actionRef: "action-2",
         approvalType: "body_endorsement",
         decision: "approved",
       });
       expect(second.actionRef).toBe("action-2");
+    });
+
+    it("allows two DIFFERENT citizens to submit the SAME approvalType for the same actionRef (EC-25)", async () => {
+      await seedRole(CITIZEN, { roleType: "auditor" });
+      await seedRole(OTHER, { roleType: "auditor" });
+      const first = await svc.submitApproval(CITIZEN, { actionRef: "action-1", approvalType: "audit_confirmation", decision: "approved" });
+      const second = await svc.submitApproval(OTHER, { actionRef: "action-1", approvalType: "audit_confirmation", decision: "approved" });
+      expect(first.approverRoleId).not.toBe(second.approverRoleId);
+      expect(await svc.isFullyApproved("action-1")).toBe(false);
+    });
+
+    it("accepts an approver whose term starts exactly today (EC-29)", async () => {
+      await seedRole(CITIZEN, { termStart: daysFromToday(0), termEnd: daysFromToday(30) });
+      const approval = await svc.submitApproval(CITIZEN, { actionRef: "action-1", approvalType: "audit_confirmation", decision: "approved" });
+      expect(approval.actionRef).toBe("action-1");
+    });
+
+    it("accepts an approver whose term ends exactly today, rejects one millisecond after (EC-30)", async () => {
+      await seedRole(CITIZEN, { termStart: daysFromToday(-30), termEnd: daysFromToday(0) });
+      const approval = await svc.submitApproval(CITIZEN, { actionRef: "action-1", approvalType: "audit_confirmation", decision: "approved" });
+      expect(approval.actionRef).toBe("action-1");
+
+      await seedRole(OTHER, { termStart: daysFromToday(-31), termEnd: daysFromToday(-1) });
+      await expect(
+        svc.submitApproval(OTHER, { actionRef: "action-2", approvalType: "audit_confirmation", decision: "approved" }),
+      ).rejects.toBeInstanceOf(ForbiddenDomainError);
+    });
+
+    it("a fourth approval duplicating an already-satisfied type still succeeds, with no regression (EC-33)", async () => {
+      const third = randomUUID();
+      await insertCitizen(third, "citizen-3");
+      activeCitizens.add(third);
+
+      await seedRole(CITIZEN, { roleType: "auditor" });
+      await seedRole(OTHER, { roleType: "review_body", layer: "protocol" });
+      await seedRole(third, { roleType: "reviewer" });
+
+      await svc.submitApproval(CITIZEN, { actionRef: "action-1", approvalType: "audit_confirmation", decision: "approved" });
+      await svc.submitApproval(OTHER, { actionRef: "action-1", approvalType: "body_endorsement", decision: "approved" });
+      expect(await svc.isFullyApproved("action-1")).toBe(true);
+
+      const fourth = await svc.submitApproval(third, { actionRef: "action-1", approvalType: "audit_confirmation", decision: "approved" });
+      expect(fourth.actionRef).toBe("action-1");
+      expect(await svc.isFullyApproved("action-1")).toBe(true);
+    });
+
+    it("of two concurrent submissions by the same citizen for the same actionRef, exactly one succeeds (EC-37)", async () => {
+      await seedRole(CITIZEN, { roleType: "auditor" });
+      const results = await Promise.allSettled([
+        svc.submitApproval(CITIZEN, { actionRef: "action-1", approvalType: "audit_confirmation", decision: "approved" }),
+        svc.submitApproval(CITIZEN, { actionRef: "action-1", approvalType: "audit_confirmation", decision: "approved" }),
+      ]);
+      const fulfilled = results.filter((r) => r.status === "fulfilled");
+      const rejected = results.filter((r) => r.status === "rejected");
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(ConflictDomainError);
     });
   });
 
@@ -262,6 +341,65 @@ describe.skipIf(!urls)("GovernanceRoleService (Postgres, RLS-enforced)", () => {
     it("is false once the role's term has expired", async () => {
       await seedRole(CITIZEN, { roleType: "operator", termStart: daysFromToday(-60), termEnd: daysFromToday(-1) });
       expect(await svc.isActiveHolder(CITIZEN, "operator")).toBe(false);
+    });
+  });
+
+  // ApprovalGateChecker port -- ADR-034 D1's 2-of-2 gate.
+  describe("isFullyApproved (APPROVAL_GATE port, ADR-034 D1)", () => {
+    it("is false with no approvals at all", async () => {
+      expect(await svc.isFullyApproved("identity:revoke:x")).toBe(false);
+    });
+
+    it("is false with only one of the two required approval types", async () => {
+      await seedRole(CITIZEN, { roleType: "auditor" });
+      await svc.submitApproval(CITIZEN, { actionRef: "action-1", approvalType: "audit_confirmation", decision: "approved" });
+      expect(await svc.isFullyApproved("action-1")).toBe(false);
+    });
+
+    it("is false when both approvals come from the same citizen (even under different roles)", async () => {
+      const roleA = await seedRole(CITIZEN, { roleType: "auditor" });
+      await insertGovernanceRole(randomUUID(), CITIZEN, {
+        roleType: "review_body",
+        termStart: daysFromToday(-30),
+        termEnd: daysFromToday(30),
+      });
+      await svc.submitApproval(CITIZEN, { actionRef: "action-1", approvalType: "audit_confirmation", decision: "approved" });
+      // Second approval under the same citizen's other active role would be
+      // blocked by submitApproval's own per-citizen check -- verify the gate
+      // itself independently by inserting directly.
+      await withAdmin((client) =>
+        client.query(
+          `INSERT INTO approval (id, action_ref, approver_role_id, approval_type, decision)
+           SELECT $1, $2, gr.id, $3, $4 FROM governance_role gr WHERE gr.citizen_id = $5 AND gr.role_type = 'review_body'`,
+          [randomUUID(), "action-1", "body_endorsement", "approved", CITIZEN],
+        ),
+      );
+      expect(roleA).toBeTruthy();
+      expect(await svc.isFullyApproved("action-1")).toBe(false);
+    });
+
+    it("is false when both approvals share the same role type, from different citizens", async () => {
+      await seedRole(CITIZEN, { roleType: "auditor" });
+      await seedRole(OTHER, { roleType: "auditor", layer: "protocol" });
+      await svc.submitApproval(CITIZEN, { actionRef: "action-1", approvalType: "audit_confirmation", decision: "approved" });
+      await svc.submitApproval(OTHER, { actionRef: "action-1", approvalType: "body_endorsement", decision: "approved" });
+      expect(await svc.isFullyApproved("action-1")).toBe(false);
+    });
+
+    it("is true with audit_confirmation + body_endorsement from distinct citizens holding distinct role types", async () => {
+      await seedRole(CITIZEN, { roleType: "auditor" });
+      await seedRole(OTHER, { roleType: "review_body", layer: "protocol" });
+      await svc.submitApproval(CITIZEN, { actionRef: "action-1", approvalType: "audit_confirmation", decision: "approved" });
+      await svc.submitApproval(OTHER, { actionRef: "action-1", approvalType: "body_endorsement", decision: "approved" });
+      expect(await svc.isFullyApproved("action-1")).toBe(true);
+    });
+
+    it("is false when one of the two approvals was rejected", async () => {
+      await seedRole(CITIZEN, { roleType: "auditor" });
+      await seedRole(OTHER, { roleType: "review_body", layer: "protocol" });
+      await svc.submitApproval(CITIZEN, { actionRef: "action-1", approvalType: "audit_confirmation", decision: "approved" });
+      await svc.submitApproval(OTHER, { actionRef: "action-1", approvalType: "body_endorsement", decision: "rejected" });
+      expect(await svc.isFullyApproved("action-1")).toBe(false);
     });
   });
 

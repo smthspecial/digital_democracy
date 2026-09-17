@@ -29,7 +29,9 @@ import (
 	"github.com/digital-democracy/api-go/internal/audit"
 	"github.com/digital-democracy/api-go/internal/auth"
 	"github.com/digital-democracy/api-go/internal/delegation"
+	"github.com/digital-democracy/api-go/internal/metrics"
 	"github.com/digital-democracy/api-go/internal/pg"
+	"github.com/digital-democracy/api-go/internal/scheduler"
 	"github.com/digital-democracy/api-go/internal/voting"
 	"github.com/digital-democracy/eventbus"
 )
@@ -98,6 +100,14 @@ func main() {
 		logger.Info("persistence: in-memory (DATABASE_URL unset)")
 	}
 
+	// BUG-003: notification-service has no implementation anywhere yet
+	// (ADR-031 carve-out) -- a configured NOTIFICATION_SERVICE_URL will
+	// 404 on every dispatch, the same silent-failure shape BUG-001 was.
+	// Warn loudly at startup rather than letting it fail quietly per-call.
+	if url := os.Getenv("NOTIFICATION_SERVICE_URL"); url != "" {
+		logger.Warn("NOTIFICATION_SERVICE_URL is set but no notification-service implementation exists yet (ADR-031); dispatches will fail", "url", url)
+	}
+
 	votingSvc := voting.NewService(votingStore,
 		delegationResolverFromEnv(),
 		votingAuditEmitter(bus, auditURL),
@@ -112,6 +122,23 @@ func main() {
 		authAuditEmitter(bus, auditURL),
 		authNotifierFromEnv(),
 	)
+
+	schedulerCtx, cancelScheduler := context.WithCancel(context.Background())
+	defer cancelScheduler()
+	scheduler.Start(schedulerCtx, logger, scheduler.Job{
+		Name:     "delegation.expire_due",
+		Interval: delegationExpiryInterval(),
+		Run: func(context.Context) error {
+			expired, err := delegationSvc.ExpireDue(time.Now().UTC())
+			if err != nil {
+				return err
+			}
+			if len(expired) > 0 {
+				logger.Info("delegation expiry sweep", "expired", len(expired))
+			}
+			return nil
+		},
+	})
 
 	if bus != nil {
 		consumerCtx, cancelConsumer := context.WithCancel(context.Background())
@@ -138,10 +165,11 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ready"}`))
 	})
-	mux.Handle("/voting/", voting.NewRouter(votingSvc, logger))
-	mux.Handle("/delegation/", delegation.NewRouter(delegationSvc, logger))
-	mux.Handle("/audit/", audit.NewRouter(auditSvc, logger))
-	mux.Handle("/auth/", auth.NewRouter(authSvc, logger))
+	mux.Handle("/metrics", metrics.Handler())
+	mux.Handle("/voting/", metrics.Middleware("voting", "/voting", voting.NewRouter(votingSvc, logger)))
+	mux.Handle("/delegation/", metrics.Middleware("delegation", "/delegation", delegation.NewRouter(delegationSvc, logger)))
+	mux.Handle("/audit/", metrics.Middleware("audit", "/audit", audit.NewRouter(auditSvc, logger)))
+	mux.Handle("/auth/", metrics.Middleware("auth", "/auth", auth.NewRouter(authSvc, logger)))
 
 	srv := &http.Server{
 		Addr:         ":" + port,

@@ -2,7 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { assertActiveCitizen } from "../common/assert-active-citizen.js";
 import { AUDIT_EMITTER, type AuditEmitter } from "../common/audit-emitter.js";
-import { NotFoundDomainError } from "../common/domain-errors.js";
+import { ForbiddenDomainError, NotFoundDomainError } from "../common/domain-errors.js";
 import { CITIZEN_STATUS_CHECKER } from "../identity/citizen-status.port.js";
 import type { CitizenStatusChecker } from "../identity/citizen-status.port.js";
 import { PrismaService } from "../prisma/prisma.service.js";
@@ -68,6 +68,15 @@ export class DeliberationService {
   // argument post)".
   async postArgument(citizenId: string, input: PostArgumentInput): Promise<DeliberationArgument> {
     await assertActiveCitizen(this.citizenStatus, citizenId);
+    // FR-033/E5-04: a locked branch blocks new direct replies -- the
+    // settled-fact guarantee only means something if you can't argue
+    // underneath it.
+    if (input.parentId) {
+      const parent = await this.prisma.app.deliberationArgument.findUnique({ where: { id: input.parentId } });
+      if (parent?.locked) {
+        throw new ForbiddenDomainError(`Argument ${input.parentId} is locked; no new replies may be posted beneath it`);
+      }
+    }
     const argument = await this.insertArgument(citizenId, input);
     await this.audit.emit({
       actionType: "deliberation.argument_posted",
@@ -91,6 +100,7 @@ export class DeliberationService {
   async listArguments(filter?: ArgumentListFilter): Promise<DeliberationArgument[]> {
     return this.prisma.app.deliberationArgument.findMany({
       where: filter?.proposalId ? { proposalId: filter.proposalId } : undefined,
+      orderBy: { createdAt: "asc" },
     });
   }
 
@@ -100,6 +110,36 @@ export class DeliberationService {
     return this.prisma.app.preference.findMany({
       where: filter?.problemId ? { problemId: filter.problemId } : undefined,
     });
+  }
+
+  // FR-033/ADR-036 D34/E5-03: marks an agreement-stance argument as a
+  // settled fact. Authority: an active civic_assignment(type=
+  // proposal_review, targetRef=proposalId) for the acting citizen -- real
+  // existing data (schema.prisma), TP-006 §1's "proposal-scoped assignment
+  // concept" that blocked the pre-pivot implementation. Idempotent:
+  // locking an already-locked argument is a no-op success, not an error.
+  async lockArgument(actorId: string, argumentId: string): Promise<DeliberationArgument> {
+    const argument = await this.prisma.app.deliberationArgument.findUnique({ where: { id: argumentId } });
+    if (!argument) {
+      throw new NotFoundDomainError("argument", argumentId);
+    }
+    if (argument.locked) {
+      return argument;
+    }
+    if (argument.stance !== "agreement") {
+      throw new ForbiddenDomainError("Only an agreement-stance argument may be locked as a settled fact");
+    }
+    const assignment = await this.prisma.forWorker((tx) =>
+      tx.civicAssignment.findFirst({
+        where: { citizenId: actorId, type: "proposal_review", targetRef: argument.proposalId, status: "assigned" },
+      }),
+    );
+    if (!assignment) {
+      throw new ForbiddenDomainError("Locking an argument requires an active proposal_review assignment for this proposal");
+    }
+    return this.prisma.forWorker((tx) =>
+      tx.deliberationArgument.update({ where: { id: argumentId }, data: { locked: true, lockedAt: new Date() } }),
+    );
   }
 
   // deliberation_argument_own_insert's WITH CHECK is author_id =

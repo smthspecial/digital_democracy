@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { AUDIT_EMITTER, HttpAuditEmitter } from "../common/audit-emitter.js";
 import { PrismaModule } from "../prisma/prisma.module.js";
 import { CITIZEN_STATUS_CHECKER } from "./citizen-status.port.js";
+import { DuplicateDetectionService } from "./duplicate-detection.service.js";
 import { IdentityController } from "./identity.controller.js";
 import { IdentityService } from "./identity.service.js";
 
@@ -15,9 +16,10 @@ import { IdentityService } from "./identity.service.js";
   controllers: [IdentityController],
   providers: [
     IdentityService,
+    DuplicateDetectionService,
     { provide: AUDIT_EMITTER, useClass: HttpAuditEmitter },
     { provide: CITIZEN_STATUS_CHECKER, useExisting: IdentityService },
   ],
-  exports: [IdentityService, CITIZEN_STATUS_CHECKER],
+  exports: [IdentityService, CITIZEN_STATUS_CHECKER, DuplicateDetectionService],
 })
 export class IdentityModule {}

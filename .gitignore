@@ -6,6 +6,7 @@ dist/
 *.tsbuildinfo
 .env
 .env.local
+apps/api-ts/vitest-report.json
 
 # Expo
 .expo/

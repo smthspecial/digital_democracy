@@ -28,6 +28,18 @@ export class HttpNotificationEmitter implements NotificationEmitter {
   private readonly logger = new Logger(HttpNotificationEmitter.name);
   private readonly notificationServiceUrl = process.env.NOTIFICATION_SERVICE_URL;
 
+  constructor() {
+    // BUG-003: nothing in either runtime serves POST /notifications/dispatch
+    // yet (ADR-031 carve-out) -- a configured URL will 404 on every emit,
+    // the same silent-failure shape BUG-001 was. Warn loudly at startup.
+    if (this.notificationServiceUrl) {
+      this.logger.warn(
+        `NOTIFICATION_SERVICE_URL is set (${this.notificationServiceUrl}) but no notification-service ` +
+          `implementation exists yet (ADR-031); dispatches will fail`,
+      );
+    }
+  }
+
   async emit(event: NotificationEvent): Promise<void> {
     if (!this.notificationServiceUrl) {
       return;

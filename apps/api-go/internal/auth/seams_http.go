@@ -12,8 +12,18 @@ import (
 )
 
 // httpIdentityChecker reads citizen.status from identity-service:
-// GET /identity/citizens/:id → {status}. Transport errors and non-200 fail
-// closed (no session without proof of an active identity).
+// GET /identity/citizens/:id/status → {status}. Transport errors and
+// non-200 fail closed (no session without proof of an active identity).
+//
+// BUG-002 (fixed here): this used to GET /identity/citizens/:id -- the
+// identity:read:own route, gated by identity-service's own requester-equals-
+// citizen check (identity.controller.ts's getById -> getOwn). A
+// service-to-service caller authenticating a citizen who has no session
+// yet can never satisfy that check, so every login 401ed with the old
+// path regardless of the real citizen.status. The status-only route
+// (identity.controller.ts's statusOf) is worker-scoped and carries no such
+// check by design -- it also leaks strictly less (status only, no
+// publicHandle/legalIdentityHash) than the old route did.
 type httpIdentityChecker struct {
 	base   string
 	client *http.Client
@@ -24,7 +34,7 @@ func NewHTTPIdentityChecker(base string) *httpIdentityChecker {
 }
 
 func (c *httpIdentityChecker) StatusOf(citizenID string) (string, error) {
-	resp, err := c.client.Get(fmt.Sprintf("%s/identity/citizens/%s", c.base, citizenID))
+	resp, err := c.client.Get(fmt.Sprintf("%s/identity/citizens/%s/status", c.base, citizenID))
 	if err != nil {
 		return "", err
 	}

@@ -5,12 +5,15 @@ import { AUDIT_EMITTER, type AuditEmitter } from "../common/audit-emitter.js";
 import { ConflictDomainError, ForbiddenDomainError } from "../common/domain-errors.js";
 import { CITIZEN_STATUS_CHECKER } from "../identity/citizen-status.port.js";
 import type { CitizenStatusChecker } from "../identity/citizen-status.port.js";
+import { governanceApprovalsSubmittedTotal } from "../metrics/metrics.js";
 import { PrismaService } from "../prisma/prisma.service.js";
+import type { ApprovalGateChecker } from "./approval-gate.port.js";
 import type { GovernanceRoleChecker } from "./governance-role-checker.port.js";
 import {
   Approval,
   ApprovalDecision,
   ApprovalType,
+  GovernanceLayer,
   GovernanceRole,
   GovernanceRoleListFilter,
   GovernanceRoleType,
@@ -18,6 +21,12 @@ import {
 } from "./governance-role.types.js";
 
 const UNIQUE_VIOLATION = "P2002";
+
+const REQUIRED_LAYER_BY_APPROVAL_TYPE: Record<ApprovalType, GovernanceLayer> = {
+  citizen_supermajority: "citizen",
+  audit_confirmation: "audit",
+  body_endorsement: "protocol",
+};
 
 export interface SubmitApprovalInput {
   actionRef: string;
@@ -35,7 +44,7 @@ export interface ApprovalListFilter {
 // Jurisdiction/ExpertDomain/BudgetCategory) -- no citizen-facing create/
 // update op exists here.
 @Injectable()
-export class GovernanceRoleService implements GovernanceRoleChecker {
+export class GovernanceRoleService implements GovernanceRoleChecker, ApprovalGateChecker {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(CITIZEN_STATUS_CHECKER) private readonly citizenStatus: CitizenStatusChecker,
@@ -72,13 +81,24 @@ export class GovernanceRoleService implements GovernanceRoleChecker {
   async submitApproval(citizenId: string, input: SubmitApprovalInput): Promise<Approval> {
     await assertActiveCitizen(this.citizenStatus, citizenId);
 
-    // Judgment call: a citizen could theoretically hold more than one
-    // simultaneous governance_role (SRV-011.md doesn't disambiguate this
-    // edge case) -- the first currently-active one found is used as
-    // "acting as this role". No role-selection UI/logic beyond that.
-    const ownRole = await this.findActiveRoleForCitizen(citizenId);
+    // ADR-034 D3/E1-11: approver independence -- a citizen cannot approve
+    // their own identity-revocation action, regardless of what governance
+    // role they hold. Parsed from the identity:revoke:{citizenId} action_ref
+    // convention (ADR-034 D1) rather than a real cross-module dependency on
+    // identity-revocation.service.ts, which would be circular (that module
+    // already depends on this one for APPROVAL_GATE/GOVERNANCE_ROLE_CHECKER).
+    // Full COI-based exclusion (any disclosed conflict naming the target
+    // citizen, not just the target approving their own case) needs
+    // ConflictOfInterest.domainId to become nullable first -- deferred.
+    const identityRevokeTarget = input.actionRef.match(/^identity:revoke:(.+)$/)?.[1];
+    if (identityRevokeTarget && identityRevokeTarget === citizenId) {
+      throw new ForbiddenDomainError("A citizen may not approve their own identity revocation");
+    }
+
+    const requiredLayer = REQUIRED_LAYER_BY_APPROVAL_TYPE[input.approvalType];
+    const ownRole = await this.findActiveRoleForCitizenAndLayer(citizenId, requiredLayer);
     if (!ownRole) {
-      throw new ForbiddenDomainError("Citizen holds no currently active governance role");
+      throw new ForbiddenDomainError(`Citizen holds no currently active governance role in the ${requiredLayer} layer`);
     }
 
     // SRV-011.md Key Rules: "A single person cannot supply multiple
@@ -118,6 +138,7 @@ export class GovernanceRoleService implements GovernanceRoleChecker {
       actorRef: citizenId,
       payload: { approvalId: approval.id, actionRef: approval.actionRef, approvalType: approval.approvalType },
     });
+    governanceApprovalsSubmittedTotal.inc({ approvalType: approval.approvalType });
 
     return approval;
   }
@@ -126,6 +147,29 @@ export class GovernanceRoleService implements GovernanceRoleChecker {
   // transparency -- public read.
   async listApprovals(filter?: ApprovalListFilter): Promise<Approval[]> {
     return this.findApprovalsForAction(filter?.actionRef);
+  }
+
+  // ApprovalGateChecker port: ADR-034 D1. 2-of-2, both approved: one
+  // audit_confirmation and one body_endorsement, from distinct citizens
+  // holding distinct role types. Fails closed -- any error or missing
+  // dependency resolves not-approved, never approved.
+  async isFullyApproved(actionRef: string): Promise<boolean> {
+    const approvals = await this.prisma.app.approval.findMany({
+      where: { actionRef, decision: "approved" },
+      include: { approverRole: true },
+    });
+    const audit = approvals.find((a) => a.approvalType === "audit_confirmation");
+    const body = approvals.find((a) => a.approvalType === "body_endorsement");
+    if (!audit || !body) {
+      return false;
+    }
+    if (audit.approverRole.citizenId === body.approverRole.citizenId) {
+      return false;
+    }
+    if (audit.approverRole.roleType === body.approverRole.roleType) {
+      return false;
+    }
+    return true;
   }
 
   // governance_role_public_read is USING(true) for both roles -- no citizen
@@ -156,6 +200,13 @@ export class GovernanceRoleService implements GovernanceRoleChecker {
         termStart: { lte: today },
         termEnd: { gte: today },
       },
+    });
+  }
+
+  private async findActiveRoleForCitizenAndLayer(citizenId: string, layer: GovernanceLayer): Promise<GovernanceRole | null> {
+    const today = new Date();
+    return this.prisma.app.governanceRole.findFirst({
+      where: { citizenId, layer, termStart: { lte: today }, termEnd: { gte: today } },
     });
   }
 

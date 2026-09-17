@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { AUDIT_EMITTER, HttpAuditEmitter } from "../common/audit-emitter.js";
 import { IdentityModule } from "../identity/identity.module.js";
 import { PrismaModule } from "../prisma/prisma.module.js";
+import { APPROVAL_GATE } from "./approval-gate.port.js";
 import { GOVERNANCE_ROLE_CHECKER } from "./governance-role-checker.port.js";
 import { GovernanceRoleController } from "./governance-role.controller.js";
 import { GovernanceRoleService } from "./governance-role.service.js";
@@ -26,7 +27,8 @@ import { GovernanceRoleService } from "./governance-role.service.js";
     GovernanceRoleService,
     { provide: AUDIT_EMITTER, useClass: HttpAuditEmitter },
     { provide: GOVERNANCE_ROLE_CHECKER, useExisting: GovernanceRoleService },
+    { provide: APPROVAL_GATE, useExisting: GovernanceRoleService },
   ],
-  exports: [GovernanceRoleService, GOVERNANCE_ROLE_CHECKER],
+  exports: [GovernanceRoleService, GOVERNANCE_ROLE_CHECKER, APPROVAL_GATE],
 })
 export class GovernanceRoleModule {}

@@ -178,7 +178,13 @@ export class IamService {
   // DP-072: unilateral revoke, no dual control (DP-068's grant/revoke
   // asymmetry -- pulling back access is always easier than granting it).
   // Any citizen holding an active operator, platform_operator, or auditor
-  // (AUTH-003) role may revoke.
+  // (AUTH-003) role may revoke. ADR-034 D2 (E1-12): this targets only
+  // `policy`/`attachment` (PolicyEndorsementTargetType) -- an IAM
+  // housekeeping action, never a citizen -- so FR-007's multi-party
+  // guarantee (which ADR-034 scopes to actions removing a natural person's
+  // ability to participate) does not apply here. See
+  // identity-revocation.service.ts for the citizen-scoped path, which does
+  // go through the approval gate.
   async revoke(citizenId: string, input: RevokeInput): Promise<AccessPolicy | PolicyAttachment> {
     const allowed = await Promise.all([
       this.governanceRole.isActiveHolder(citizenId, "operator"),

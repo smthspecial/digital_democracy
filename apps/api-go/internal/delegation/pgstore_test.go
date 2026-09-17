@@ -13,10 +13,7 @@ import (
 
 func pgTestStore(t *testing.T) *PGStore {
 	t.Helper()
-	if testDatabaseURL() == "" {
-		t.Skip("TEST_DATABASE_URL unset")
-	}
-	pool, err := pgxpool.New(context.Background(), testDatabaseURL())
+	pool, err := pgxpool.New(context.Background(), testDatabaseURL(t))
 	if err != nil {
 		t.Fatalf("pg connect: %v", err)
 	}

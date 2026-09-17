@@ -141,6 +141,18 @@ describe.skipIf(!urls)("GovernanceRoleController (HTTP, Postgres-backed)", () =>
     expect(res.status).toBe(400);
   });
 
+  it("POST /governance-role/approvals rejects an invalid decision value (EC-8, FR-061)", async () => {
+    const citizenId = await activeCitizen("grace");
+    await insertGovernanceRole(randomUUID(), citizenId);
+
+    const res = await request(app.getHttpServer())
+      .post("/governance-role/approvals")
+      .set("x-citizen-id", citizenId)
+      .send({ actionRef: "action-1", approvalType: "audit_confirmation", decision: "maybe" });
+
+    expect(res.status).toBe(400);
+  });
+
   it("POST /governance-role/approvals without x-citizen-id is 401", async () => {
     const res = await request(app.getHttpServer())
       .post("/governance-role/approvals")
@@ -162,6 +174,7 @@ describe.skipIf(!urls)("GovernanceRoleController (HTTP, Postgres-backed)", () =>
   it("POST /governance-role/approvals is 409 on a second submission by the same citizen for the same actionRef", async () => {
     const citizenId = await activeCitizen("erin");
     await insertGovernanceRole(randomUUID(), citizenId);
+    await insertGovernanceRole(randomUUID(), citizenId, { layer: "protocol" });
 
     await request(app.getHttpServer())
       .post("/governance-role/approvals")
@@ -174,6 +187,31 @@ describe.skipIf(!urls)("GovernanceRoleController (HTTP, Postgres-backed)", () =>
       .send({ actionRef: "action-2", approvalType: "body_endorsement", decision: "rejected" });
 
     expect(res.status).toBe(409);
+  });
+
+  it("GET /governance-role/actions/:actionRef/status is fullyApproved:false for an actionRef with zero approvals (EC-32)", async () => {
+    const res = await request(app.getHttpServer()).get("/governance-role/actions/never-submitted/status");
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ fullyApproved: false });
+  });
+
+  it("GET /governance-role/actions/:actionRef/status reflects a real 2-of-2 approval (ADR-034 D1)", async () => {
+    const auditApprover = await activeCitizen("gale");
+    await insertGovernanceRole(randomUUID(), auditApprover, { layer: "audit" });
+    await request(app.getHttpServer())
+      .post("/governance-role/approvals")
+      .set("x-citizen-id", auditApprover)
+      .send({ actionRef: "action-status-1", approvalType: "audit_confirmation", decision: "approved" });
+
+    const bodyApprover = await activeCitizen("hank");
+    await insertGovernanceRole(randomUUID(), bodyApprover, { roleType: "review_body", layer: "protocol" });
+    await request(app.getHttpServer())
+      .post("/governance-role/approvals")
+      .set("x-citizen-id", bodyApprover)
+      .send({ actionRef: "action-status-1", approvalType: "body_endorsement", decision: "approved" });
+
+    const res = await request(app.getHttpServer()).get("/governance-role/actions/action-status-1/status");
+    expect(res.body).toEqual({ fullyApproved: true });
   });
 
   it("GET /governance-role/approvals lists approvals, optionally filtered by actionRef (public)", async () => {

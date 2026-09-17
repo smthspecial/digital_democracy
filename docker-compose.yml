@@ -1,8 +1,10 @@
 # Local development compose file (ADR-026, ARCH-025 §4, ADR-027).
 #
 # One app per runtime (ADR-027): api-go (all four Go services) and api-ts
-# (all thirteen TypeScript services, currently a routing shell). Run the
-# whole backend from this one file:
+# (a fully wired NestJS monolith across fourteen domain modules -- identity,
+# jurisdiction, problem, proposal, competency, deliberation, budget,
+# governance-role, civic-duty, reputation, project, and iam). Run the whole
+# backend from this one file:
 #
 #   podman compose up --build    (or: docker compose up --build)
 #
@@ -14,7 +16,22 @@
 # matching its AuditEmitter/eventbus wiring (ADR-023). Postgres is real too:
 # one database per app (ADR-028) -- api_go and api_ts, created by
 # infra/compose/postgres-init.sql. api-go migrates itself at boot
-# (db/migrations via ADR-029); api-ts has no tables yet.
+# (db/migrations via ADR-029). api-ts does NOT migrate itself at boot
+# (ADR-030) -- it owns its schema via Prisma migrations, which also create
+# the api_app/api_worker roles api-ts's DATABASE_URL/WORKER_DATABASE_URL
+# below authenticate as. Before the api-ts container can connect
+# successfully, run once against the api_ts database:
+#   pnpm --filter @dd/api-ts exec prisma migrate deploy
+# (using a superuser URL, e.g. MIGRATE_DATABASE_URL in apps/api-ts/.env --
+# see apps/api-ts/prisma.config.ts). Until that has run, api-ts will fail to
+# connect: the api_app/api_worker roles and every table don't exist yet.
+#
+# Observability (ADR-026/ARCH-025 §2's local-dev equivalent of the
+# kube-prometheus-stack ArgoCD Application, infra/argocd/observability.yaml):
+# both apps now serve GET /metrics (ARCH-027 US-056), and prometheus/grafana
+# below scrape and visualize them -- same two-service shape, no ClickHouse/
+# Kafka-scale stack for a local dev loop. Grafana at localhost:3000
+# (admin/admin, change on first login), Prometheus at localhost:9090.
 
 services:
   # ---------------------------------------------------------------------
@@ -56,7 +73,10 @@ services:
       NATS_URL: nats://nats:4222
       COMPETENCY_SERVICE_URL: http://api-ts:4000
       IDENTITY_SERVICE_URL: http://api-ts:4000
-      NOTIFICATION_SERVICE_URL: http://api-ts:4000
+      # NOTIFICATION_SERVICE_URL deliberately unset (BUG-003): nothing in
+      # apps/api-ts serves POST /notifications/dispatch (ADR-031 carve-out
+      # -- notification-service owns no module/schema/routes in either
+      # runtime yet). Pointing this at api-ts would 404 on every dispatch.
     depends_on:
       - nats
       - postgres
@@ -69,11 +89,50 @@ services:
       - "4000:4000"
     environment:
       PORT: "4000"
-      DATABASE_URL: postgres://dd:dd@postgres:5432/api_ts
+      # api_app/api_worker (not the `dd` superuser): matches the RLS design
+      # prisma.service.ts is built around (ARCH-023 §4.3). Both roles are
+      # created by api-ts's own init migration -- see this file's header for
+      # the one-time `prisma migrate deploy` this depends on.
+      DATABASE_URL: postgres://api_app:api_app_dev@postgres:5432/api_ts
+      WORKER_DATABASE_URL: postgres://api_worker:api_worker_dev@postgres:5432/api_ts
       NATS_URL: nats://nats:4222
+      AUDIT_SERVICE_URL: http://api-go:5000
+      AUTH_SERVICE_URL: http://api-go:5000
+      # NOTIFICATION_SERVICE_URL deliberately unset -- see api-go's comment
+      # above; the same carve-out applies in this direction too.
     depends_on:
       - nats
       - postgres
 
+  # ---------------------------------------------------------------------
+  # Observability (ADR-026 local-dev equivalent)
+  # ---------------------------------------------------------------------
+
+  prometheus:
+    image: docker.io/prom/prometheus:v3.0.1
+    volumes:
+      - ./infra/compose/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - api-go
+      - api-ts
+
+  grafana:
+    image: docker.io/grafana/grafana:11.4.0
+    environment:
+      # Dev-only default; change on first login (Grafana prompts for it).
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./infra/compose/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - grafanadata:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+
 volumes:
   pgdata:
+  promdata:
+  grafanadata:

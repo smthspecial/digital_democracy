@@ -33,3 +33,17 @@ export interface CreateVerificationInput {
   evidenceRef: string;
   outcome: VerificationOutcome;
 }
+
+export type IdentityRevocationReason = "death" | "loss_of_citizenship" | "proven_fraud";
+export type IdentityRevocationStatus = "pending" | "approved" | "executed" | "rejected";
+
+export interface IdentityRevocation {
+  id: string;
+  citizenId: string;
+  reason: IdentityRevocationReason;
+  justification: string;
+  actionRef: string;
+  status: IdentityRevocationStatus;
+  requestedAt: Date;
+  executedAt: Date | null;
+}

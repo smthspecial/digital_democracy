@@ -9,6 +9,8 @@ export interface DeliberationArgument {
   body: string;
   evidenceRef: string;
   createdAt: Date;
+  locked: boolean;
+  lockedAt: Date | null;
 }
 
 export interface Preference {

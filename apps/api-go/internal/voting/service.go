@@ -4,6 +4,8 @@ import (
 	"errors"
 	"sync"
 	"time"
+
+	"github.com/digital-democracy/api-go/internal/metrics"
 )
 
 // DelegationResolver resolves whether a ballot cast should also count for
@@ -215,6 +217,7 @@ func (s *Service) CastBallot(sessionID, tokenID, tokenBlind, encryptedChoice, ci
 		_, _ = s.delegation.DelegatorsFor(sessionID, citizenID)
 	}
 	_ = s.audit.Emit("ballot_cast", "voting-service", sessionID)
+	metrics.VoteBallotsCastTotal.Inc()
 	return b, nil
 }
 
@@ -343,6 +346,7 @@ func (s *Service) Certify(sessionID string) (*VoteSession, error) {
 			return nil, err
 		}
 		_ = s.audit.Emit("vote_certified", "voting-service", sessionID)
+		metrics.VoteSessionsClosedTotal.WithLabelValues("true").Inc()
 	} else {
 		// Quorum failure stays closed (failed quorum), never certified.
 		out, err = s.store.GetSession(sessionID)
@@ -350,6 +354,7 @@ func (s *Service) Certify(sessionID string) (*VoteSession, error) {
 			return nil, err
 		}
 		_ = s.audit.Emit("vote_quorum_failed", "voting-service", sessionID)
+		metrics.VoteSessionsClosedTotal.WithLabelValues("false").Inc()
 	}
 	return out, nil
 }

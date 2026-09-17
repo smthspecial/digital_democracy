@@ -1,4 +1,6 @@
 export type CompetencyStatus = "applied" | "active" | "rejected" | "expired" | "revoked";
+export type CompetencyStage = "intake" | "credential_verification" | "public_review" | "domain_peer_review" | "decided";
+export type StageReviewDecision = "passed" | "failed";
 export type CompetencyChallengeReason = "credentials" | "conflict" | "false_claim" | "misconduct";
 export type CompetencyChallengeStatus = "open" | "reviewing" | "upheld" | "dismissed";
 export type ConflictOfInterestType = "employer" | "ownership" | "consulting" | "financial";
@@ -15,8 +17,20 @@ export interface Competency {
   domainId: string;
   level: number;
   status: CompetencyStatus;
+  evidenceRef: string;
+  stage: CompetencyStage;
   grantedAt: Date | null;
   expiresAt: Date | null;
+}
+
+export interface CompetencyStageReview {
+  id: string;
+  competencyId: string;
+  stage: CompetencyStage;
+  reviewerId: string | null;
+  decision: StageReviewDecision;
+  notes: string;
+  createdAt: Date;
 }
 
 export interface CompetencyChallenge {
@@ -55,6 +69,7 @@ export interface ApplyForCompetencyInput {
   citizenId: string;
   domainId: string;
   level: number;
+  evidenceRef: string;
 }
 
 export interface DeclareConflictOfInterestInput {
@@ -89,4 +104,13 @@ export interface CompetencyListFilter {
 
 export interface AssessmentListFilter {
   proposalId?: string;
+}
+
+export interface ConflictListFilter {
+  citizenId?: string;
+  domainId?: string;
+}
+
+export interface ChallengeListFilter {
+  competencyId?: string;
 }

@@ -1,6 +1,10 @@
 package audit
 
-import "time"
+import (
+	"time"
+
+	"github.com/digital-democracy/api-go/internal/metrics"
+)
 
 // Notifier dispatches blocked-review alerts (DP-039). No-op by default; HTTP
 // to notification-service when NOTIFICATION_SERVICE_URL is set.
@@ -60,7 +64,11 @@ func (s *Service) Append(actionType, actorRef, payload, idempotencyKey string) (
 	if actorRef == "" {
 		return nil, ErrInvalid
 	}
-	return s.store.Append(normalized, actorRef, payload, idempotencyKey)
+	e, err := s.store.Append(normalized, actorRef, payload, idempotencyKey)
+	if err == nil {
+		metrics.AuditLogAppendsTotal.WithLabelValues(normalized).Inc()
+	}
+	return e, err
 }
 
 type ReviewTrigger struct {

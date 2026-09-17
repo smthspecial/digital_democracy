@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Post, Query } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Post, Query } from "@nestjs/common";
 import { RequiredCitizenId } from "../common/citizen-id.decorator.js";
 import { CompetencyService } from "./competency.service.js";
 import { ApplyCompetencyDto } from "./dto/apply-competency.dto.js";
@@ -31,11 +31,26 @@ export class CompetencyController {
     return this.competency.listCompetencies(citizenId || domainId ? { citizenId, domainId } : undefined);
   }
 
+  // BUG-002 (delegated-expertise seam): consumed by apps/api-go's
+  // httpCompetencyChecker (delegation-service, ARCH-019) -- the route it
+  // was already written against, which never existed on this side.
+  @Get("citizens/:citizenId/domains/:domainId")
+  async hasActiveCompetency(@Param("citizenId") citizenId: string, @Param("domainId") domainId: string) {
+    return { active: await this.competency.hasActiveCompetency(citizenId, domainId) };
+  }
+
   // DP-010. AUTH-010 coi:declare -- scope own, condition citizen.active.
   @Post("conflicts")
   @HttpCode(HttpStatus.CREATED)
   declareConflict(@RequiredCitizenId() citizenId: string, @Body() dto: DeclareConflictDto) {
     return this.competency.declareConflict(citizenId, dto);
+  }
+
+  // Public read, optionally filtered by citizenId/domainId (FR-025:
+  // "disclosures are public alongside my analysis").
+  @Get("conflicts")
+  listConflicts(@Query("citizenId") citizenId?: string, @Query("domainId") domainId?: string) {
+    return this.competency.listConflicts(citizenId || domainId ? { citizenId, domainId } : undefined);
   }
 
   // DP-012. AUTH-010 competency_challenge:submit -- scope any, conditions
@@ -44,6 +59,12 @@ export class CompetencyController {
   @HttpCode(HttpStatus.CREATED)
   submitChallenge(@RequiredCitizenId() citizenId: string, @Body() dto: SubmitChallengeDto) {
     return this.competency.submitChallenge(citizenId, dto);
+  }
+
+  // Public read, optionally filtered by competencyId.
+  @Get("competency-challenges")
+  listChallenges(@Query("competencyId") competencyId?: string) {
+    return this.competency.listChallenges(competencyId ? { competencyId } : undefined);
   }
 
   // DP-021. AUTH-002 assessment:publish -- scope domain:match, conditions

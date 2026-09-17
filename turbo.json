@@ -16,7 +16,14 @@
       "dependsOn": ["^build"]
     },
     "test": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "env": [
+        "TEST_TS_DATABASE_URL",
+        "TEST_TS_WORKER_DATABASE_URL",
+        "TEST_TS_ADMIN_DATABASE_URL",
+        "REQUIRE_DB_TESTS",
+        "IDENTITY_HASH_SECRET"
+      ]
     }
   }
 }

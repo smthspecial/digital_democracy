@@ -3,6 +3,8 @@ package auth
 import (
 	"errors"
 	"time"
+
+	"github.com/digital-democracy/api-go/internal/metrics"
 )
 
 // IdentityChecker reads citizen.status before any session is issued
@@ -464,6 +466,14 @@ func (s *Service) recordEvent(citizenID, sessionID, eventType, factorType, ip, d
 		CitizenID: citizenID, SessionID: sessionID, EventType: eventType,
 		FactorType: factorType, IPAddress: ip, DeviceFingerprint: deviceFP, AnomalyReason: anomaly,
 	})
+	switch eventType {
+	case EventLoginSuccess:
+		metrics.AuthLoginAttemptsTotal.WithLabelValues("success").Inc()
+	case EventLoginFailure:
+		metrics.AuthLoginAttemptsTotal.WithLabelValues("rejected").Inc()
+	case EventAnomaly:
+		metrics.AuthAnomaliesTotal.Inc()
+	}
 }
 
 // enc is the at-rest encryption envelope placeholder (KMS in production);

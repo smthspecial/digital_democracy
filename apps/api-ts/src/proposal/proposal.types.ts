@@ -23,6 +23,13 @@ export interface Proposal {
   // declares TBL-008 as its only table -- a spec omission, not a missing
   // column (see prisma/schema.prisma's note, ADR-030).
   scopeChallengedAt: Date | null;
+  scopeRationale: string | null;
+  scopeEscalationReason: string | null;
+  objectives: string | null;
+  measurableOutcomes: string | null;
+  implementationTimeline: string | null;
+  deadlockActive: boolean;
+  deadlockStage: DeadlockStage | null;
 }
 
 export interface ProposalConstraint {
@@ -30,6 +37,38 @@ export interface ProposalConstraint {
   proposalId: string;
   text: string;
   agreed: boolean;
+}
+
+export type DeadlockStage =
+  | "constraint_analysis"
+  | "alternative_generation"
+  | "resource_partitioning"
+  | "compensation_assessment"
+  | "citizen_assembly_review"
+  | "escalation_review"
+  | "constitutional_review"
+  | "final_decision";
+
+export interface DeadlockHistoryEntry {
+  id: string;
+  proposalId: string;
+  stage: DeadlockStage;
+  reviewerId: string;
+  notes: string;
+  at: Date;
+}
+
+export type ScopeChallengeStatus = "open" | "upheld" | "dismissed";
+
+export interface ScopeChallenge {
+  id: string;
+  proposalId: string;
+  challengerId: string;
+  reason: string;
+  status: ScopeChallengeStatus;
+  resolution: string | null;
+  createdAt: Date;
+  resolvedAt: Date | null;
 }
 
 export interface ProposalBudget {

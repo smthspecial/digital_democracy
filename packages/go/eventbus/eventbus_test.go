@@ -21,11 +21,17 @@ import (
 
 // spawnNatsServer starts a real nats-server with JetStream on a free port.
 // Skips the test when the binary is unavailable (CI installs it: see the
-// go-packages job in .github/workflows/ci.yml).
+// go job in .github/workflows/ci.yml).
 func spawnNatsServer(t *testing.T) string {
 	t.Helper()
 	bin, err := exec.LookPath("nats-server")
 	if err != nil {
+		// TI-04: a skip in CI (which installs nats-server explicitly before
+		// running tests) means the install step itself broke -- that must
+		// fail loudly, not quietly report green with this test unrun.
+		if os.Getenv("REQUIRE_NATS_TESTS") != "" {
+			t.Fatalf("nats-server binary not on PATH, but REQUIRE_NATS_TESTS is set: %v", err)
+		}
 		t.Skip("nats-server binary not on PATH")
 	}
 	port := freePort(t)

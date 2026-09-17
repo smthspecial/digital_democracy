@@ -13,6 +13,26 @@ jobs:
   ts:
     name: TypeScript (lint, typecheck, test, build)
     runs-on: ubuntu-latest
+    # Postgres backs apps/api-ts's *.service.spec.ts / *.controller.e2e.spec.ts
+    # tier (BUG-004/TI-02): before this, those 264+ tests never executed in
+    # CI at all (describe.skipIf(!urls) silently skipped the whole tier --
+    # `Tests 2 passed | 262 skipped` on every run, green). REQUIRE_DB_TESTS
+    # below converts a missing/misconfigured var back into a hard failure
+    # rather than a silent return to that state.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: dd
+          POSTGRES_PASSWORD: dd
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dd"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -21,97 +41,124 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm turbo run lint typecheck test build
+
+      # Required before lint/typecheck/test/build even run: `@prisma/client`
+      # ships as an unresolvable stub (`.prisma/client/default`) until
+      # `prisma generate` writes the real generated client into
+      # node_modules -- a plain `pnpm install` does not do this on its own
+      # (no postinstall hook triggers it). No database connection needed for
+      # this step; it only reads prisma/schema.prisma.
+      - name: Generate Prisma Client
+        working-directory: apps/api-ts
+        run: pnpm exec prisma generate
+
+      - name: Create api_ts database
+        run: PGPASSWORD=dd psql -h localhost -U dd -d postgres -c "CREATE DATABASE api_ts"
+
+      - name: Apply api-ts Prisma migrations (creates api_app/api_worker roles too)
+        working-directory: apps/api-ts
+        env:
+          MIGRATE_DATABASE_URL: postgres://dd:dd@localhost:5432/api_ts
+        run: pnpm exec prisma migrate deploy
+
+      - name: Lint, typecheck, test, build
+        env:
+          # Deliberately TEST_TS_* -- see test-support/postgres.ts's header
+          # comment on why this must not collide with the go job's
+          # unprefixed TEST_DATABASE_URL for a different database.
+          TEST_TS_DATABASE_URL: postgres://api_app:api_app_dev@localhost:5432/api_ts
+          TEST_TS_WORKER_DATABASE_URL: postgres://api_worker:api_worker_dev@localhost:5432/api_ts
+          TEST_TS_ADMIN_DATABASE_URL: postgres://dd:dd@localhost:5432/api_ts
+          REQUIRE_DB_TESTS: "1"
+          IDENTITY_HASH_SECRET: ci-test-secret
+        run: pnpm turbo run lint typecheck test build
+
+      - name: Check test floor (TI-04)
+        # Defense-in-depth alongside REQUIRE_DB_TESTS above: catches a
+        # *newly re-skipped* test file (a fresh skipIf/it.skip) rather than
+        # a missing env var -- a suite that quietly shrinks back toward
+        # "2 passed" without ever reporting red. 250 is a floor below the
+        # true baseline (291 as of this fix), not the current count, so
+        # adding tests doesn't require bumping this number every time.
+        run: |
+          node -e '
+            const r = require("./apps/api-ts/vitest-report.json");
+            const floor = 250;
+            console.log(`vitest: ${r.numPassedTests}/${r.numTotalTests} passed`);
+            if (!r.success) { console.error("vitest reported failures"); process.exit(1); }
+            if (r.numPassedTests < floor) {
+              console.error(`only ${r.numPassedTests} tests ran, want >= ${floor} -- a test tier likely got silently skipped again`);
+              process.exit(1);
+            }
+          '
 
   go:
     name: Go (vet, test, build)
     runs-on: ubuntu-latest
+    # Postgres backs apps/api-go's pgstore_test.go tier (audit, auth,
+    # delegation, voting -- ARCH-027 pattern #7): before this, the job set
+    # no TEST_DATABASE_URL, so every one of those tests silently skipped on
+    # every PR -- the same shape BUG-004/TI-02 already fixed for the `ts`
+    # job above. REQUIRE_DB_TESTS converts a missing/misconfigured var back
+    # into a hard failure rather than a silent return to that state.
+    # packages/go/eventbus doesn't read these vars at all -- harmless there.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: dd
+          POSTGRES_PASSWORD: dd
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dd"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     strategy:
       matrix:
-        service: [voting-service, audit-service, auth-service, delegation-service]
+        # Matches Makefile's GO_MODULES -- the single source of truth for
+        # which Go modules exist post-ADR-027 (BUG-002: the previous
+        # 4-service matrix here pointed at services/go/<svc>, deleted by
+        # the pivot commit; this job silently built nothing for eight days).
+        module: [apps/api-go, packages/go/eventbus]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
-          cache-dependency-path: services/go/${{ matrix.service }}/go.sum
-      # audit-service's nats.go tests (ADR-023) spawn a real nats-server;
-      # go-install is needed since it's not preinstalled on the runner image.
-      - if: matrix.service == 'audit-service'
-        run: go install github.com/nats-io/nats-server/v2@latest
-      - working-directory: services/go/${{ matrix.service }}
-        run: |
-          go vet ./...
-          go test ./...
-          go build ./...
-
-  go-packages:
-    name: Go packages (vet, test, build)
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        package: [eventbus]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.22"
-          cache-dependency-path: packages/go/${{ matrix.package }}/go.sum
-      # eventbus_test.go (ADR-023) spawns a real nats-server.
+          go-version: "1.25"
+          cache-dependency-path: ${{ matrix.module }}/go.sum
+      # Both modules' nats_test.go/eventbus_test.go (ADR-023) spawn a real
+      # nats-server; not preinstalled on the runner image.
       - run: go install github.com/nats-io/nats-server/v2@latest
-      - working-directory: packages/go/${{ matrix.package }}
+      - working-directory: ${{ matrix.module }}
+        env:
+          # TI-04: a skip here means the install step above broke, not that
+          # NATS is legitimately unavailable -- must fail loudly.
+          REQUIRE_NATS_TESTS: "1"
+          # Self-migrating (apps/api-go's own pg.Up runs at test time) -- no
+          # separate "create database"/migrate step needed, unlike the `ts`
+          # job's Prisma-owned schema.
+          TEST_DATABASE_URL: postgres://dd:dd@localhost:5432/postgres?sslmode=disable
+          REQUIRE_DB_TESTS: "1"
         run: |
           go vet ./...
           go test ./...
-          go build ./...
           go build ./...
 
   docker:
-    name: Docker build (${{ matrix.service }})
+    name: Docker build (${{ matrix.app }})
     runs-on: ubuntu-latest
     needs: [ts, go]
     strategy:
       matrix:
-        include:
-          - service: identity-service
-            lang: ts
-          - service: jurisdiction-service
-            lang: ts
-          - service: problem-service
-            lang: ts
-          - service: proposal-service
-            lang: ts
-          - service: competency-service
-            lang: ts
-          - service: deliberation-service
-            lang: ts
-          - service: budget-service
-            lang: ts
-          - service: civic-duty-service
-            lang: ts
-          - service: governance-role-service
-            lang: ts
-          - service: project-service
-            lang: ts
-          - service: reputation-service
-            lang: ts
-          - service: notification-service
-            lang: ts
-          - service: ai-synthesis-service
-            lang: ts
-          - service: voting-service
-            lang: go
-          - service: delegation-service
-            lang: go
-          - service: audit-service
-            lang: go
-          - service: auth-service
-            lang: go
+        app: [api-go, api-ts]
     steps:
       - uses: actions/checkout@v4
       - uses: docker/build-push-action@v6
         with:
-          context: . # repo root -- Dockerfiles COPY shared packages/ (TS) or go.mod-only context (Go)
-          file: services/${{ matrix.lang }}/${{ matrix.service }}/Dockerfile
+          context: . # repo root -- both Dockerfiles COPY shared packages/ from there.
+          file: apps/${{ matrix.app }}/Dockerfile
           push: false
-          tags: digital-democracy/${{ matrix.service }}:ci
+          tags: digital-democracy/${{ matrix.app }}:ci

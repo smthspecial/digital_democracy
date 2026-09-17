@@ -36,11 +36,10 @@ async function insertCitizen(id: string, publicHandle: string): Promise<void> {
 
 async function insertJurisdiction(id: string, name: string): Promise<void> {
   await withAdmin((client) =>
-    client.query(`INSERT INTO jurisdiction (id, name, scope_level, boundary_ref) VALUES ($1, $2, 'municipality', $3)`, [
-      id,
-      name,
-      `ref-${id}`,
-    ]),
+    client.query(
+      `INSERT INTO jurisdiction (id, name, scope_level, boundary_ref, population) VALUES ($1, $2, 'municipality', $3, 200)`,
+      [id, name, `ref-${id}`],
+    ),
   );
 }
 
@@ -138,7 +137,7 @@ describe.skipIf(!urls)("ProposalController (HTTP, Postgres-backed)", () => {
     const res = await request(app.getHttpServer())
       .post("/proposal/proposals")
       .set("x-citizen-id", citizenId)
-      .send({ problemId, title: "Fix it", description: "Details", supportThreshold: 10 });
+      .send({ problemId, title: "Fix it", description: "Details" });
 
     expect(res.status).toBe(201);
     expect(res.body.status).toBe("draft");
@@ -157,7 +156,7 @@ describe.skipIf(!urls)("ProposalController (HTTP, Postgres-backed)", () => {
   it("POST /proposal/proposals without x-citizen-id is 401", async () => {
     const res = await request(app.getHttpServer())
       .post("/proposal/proposals")
-      .send({ problemId, title: "Fix it", description: "Details", supportThreshold: 10 });
+      .send({ problemId, title: "Fix it", description: "Details" });
     expect(res.status).toBe(401);
   });
 
@@ -169,7 +168,7 @@ describe.skipIf(!urls)("ProposalController (HTTP, Postgres-backed)", () => {
     const res = await request(app.getHttpServer())
       .post("/proposal/proposals")
       .set("x-citizen-id", registerRes.body.id)
-      .send({ problemId, title: "Fix it", description: "Details", supportThreshold: 10 });
+      .send({ problemId, title: "Fix it", description: "Details" });
     expect(res.status).toBe(403);
   });
 
@@ -187,11 +186,11 @@ describe.skipIf(!urls)("ProposalController (HTTP, Postgres-backed)", () => {
     await request(app.getHttpServer())
       .post("/proposal/proposals")
       .set("x-citizen-id", citizenId)
-      .send({ problemId: problemId1, title: "A", description: "D", supportThreshold: 1 });
+      .send({ problemId: problemId1, title: "A", description: "D" });
     await request(app.getHttpServer())
       .post("/proposal/proposals")
       .set("x-citizen-id", citizenId)
-      .send({ problemId: problemId2, title: "B", description: "D", supportThreshold: 1 });
+      .send({ problemId: problemId2, title: "B", description: "D" });
 
     const filtered = await request(app.getHttpServer()).get("/proposal/proposals").query({ problemId: problemId1 });
     expect(filtered.status).toBe(200);
@@ -204,7 +203,7 @@ describe.skipIf(!urls)("ProposalController (HTTP, Postgres-backed)", () => {
     const createRes = await request(app.getHttpServer())
       .post("/proposal/proposals")
       .set("x-citizen-id", citizenId)
-      .send({ problemId, title: "T", description: "D", supportThreshold: 1 });
+      .send({ problemId, title: "T", description: "D" });
 
     const res = await request(app.getHttpServer())
       .post(`/proposal/proposals/${createRes.body.id}/constraints`)
@@ -221,7 +220,7 @@ describe.skipIf(!urls)("ProposalController (HTTP, Postgres-backed)", () => {
     const createRes = await request(app.getHttpServer())
       .post("/proposal/proposals")
       .set("x-citizen-id", author)
-      .send({ problemId, title: "T", description: "D", supportThreshold: 1 });
+      .send({ problemId, title: "T", description: "D" });
 
     const res = await request(app.getHttpServer())
       .post(`/proposal/proposals/${createRes.body.id}/constraints`)
@@ -235,7 +234,7 @@ describe.skipIf(!urls)("ProposalController (HTTP, Postgres-backed)", () => {
     const createRes = await request(app.getHttpServer())
       .post("/proposal/proposals")
       .set("x-citizen-id", author)
-      .send({ problemId, title: "T", description: "D", supportThreshold: 1 });
+      .send({ problemId, title: "T", description: "D" });
 
     await updateProposalStatus(createRes.body.id, "voting");
 
@@ -246,12 +245,29 @@ describe.skipIf(!urls)("ProposalController (HTTP, Postgres-backed)", () => {
     expect(res.status).toBe(422);
   });
 
+  it("GET /proposal/proposals/:id/constraints is public and lists every constraint (EPIC-005)", async () => {
+    const citizenId = await activeCitizen("kara");
+    const createRes = await request(app.getHttpServer())
+      .post("/proposal/proposals")
+      .set("x-citizen-id", citizenId)
+      .send({ problemId, title: "T", description: "D" });
+    await request(app.getHttpServer())
+      .post(`/proposal/proposals/${createRes.body.id}/constraints`)
+      .set("x-citizen-id", citizenId)
+      .send({ text: "must not raise taxes" });
+
+    const res = await request(app.getHttpServer()).get(`/proposal/proposals/${createRes.body.id}/constraints`);
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0].text).toBe("must not raise taxes");
+  });
+
   it("POST /proposal/proposals/:id/budget creates and updates budget info for the author (DP-007)", async () => {
     const citizenId = await activeCitizen("ivan");
     const createRes = await request(app.getHttpServer())
       .post("/proposal/proposals")
       .set("x-citizen-id", citizenId)
-      .send({ problemId, title: "T", description: "D", supportThreshold: 1 });
+      .send({ problemId, title: "T", description: "D" });
 
     const res = await request(app.getHttpServer())
       .post(`/proposal/proposals/${createRes.body.id}/budget`)
@@ -261,17 +277,42 @@ describe.skipIf(!urls)("ProposalController (HTTP, Postgres-backed)", () => {
     expect(res.body.cost).toBe(1000);
   });
 
+  it("GET /proposal/proposals/:id/budget is public and returns null before any budget info is submitted, then the row after (US-028)", async () => {
+    const citizenId = await activeCitizen("liam");
+    const createRes = await request(app.getHttpServer())
+      .post("/proposal/proposals")
+      .set("x-citizen-id", citizenId)
+      .send({ problemId, title: "T", description: "D" });
+
+    const before = await request(app.getHttpServer()).get(`/proposal/proposals/${createRes.body.id}/budget`);
+    expect(before.status).toBe(200);
+    // Nest sends an empty body (not the JSON literal `null`) for a `null`
+    // controller return -- falsy either way for a client checking "has this
+    // proposal's author submitted budget info yet".
+    expect(before.text).toBe("");
+
+    await request(app.getHttpServer())
+      .post(`/proposal/proposals/${createRes.body.id}/budget`)
+      .set("x-citizen-id", citizenId)
+      .send({ cost: 2000, longTermCost: 300 });
+
+    const after = await request(app.getHttpServer()).get(`/proposal/proposals/${createRes.body.id}/budget`);
+    expect(after.status).toBe(200);
+    expect(after.body.cost).toBe(2000);
+    expect(after.body.longTermCost).toBe(300);
+  });
+
   it("POST /proposal/scope-challenges is 422 when no scope jurisdiction is assigned (DP-020)", async () => {
     const citizenId = await activeCitizen("julia");
     const createRes = await request(app.getHttpServer())
       .post("/proposal/proposals")
       .set("x-citizen-id", citizenId)
-      .send({ problemId, title: "T", description: "D", supportThreshold: 1 });
+      .send({ problemId, title: "T", description: "D" });
 
     const res = await request(app.getHttpServer())
       .post("/proposal/scope-challenges")
       .set("x-citizen-id", citizenId)
-      .send({ proposalId: createRes.body.id });
+      .send({ proposalId: createRes.body.id, reason: "scope looks wrong" });
     expect(res.status).toBe(422);
   });
 
@@ -280,7 +321,7 @@ describe.skipIf(!urls)("ProposalController (HTTP, Postgres-backed)", () => {
     const createRes = await request(app.getHttpServer())
       .post("/proposal/proposals")
       .set("x-citizen-id", citizenId)
-      .send({ problemId, title: "T", description: "D", supportThreshold: 1 });
+      .send({ problemId, title: "T", description: "D" });
 
     await updateProposalScopeJurisdiction(createRes.body.id, jurisdictionId);
     // jurisdiction_membership makes the real JurisdictionService.isAffected
@@ -291,7 +332,7 @@ describe.skipIf(!urls)("ProposalController (HTTP, Postgres-backed)", () => {
     const res = await request(app.getHttpServer())
       .post("/proposal/scope-challenges")
       .set("x-citizen-id", citizenId)
-      .send({ proposalId: createRes.body.id });
+      .send({ proposalId: createRes.body.id, reason: "scope looks wrong" });
     expect(res.status).toBe(201);
     expect(res.body.scopeChallengedAt).not.toBeNull();
   });

@@ -112,6 +112,23 @@ export class IdentityService implements CitizenStatusChecker {
     return citizen;
   }
 
+  // System/worker-scoped status-only read (AUTH-010 identity:status:read,
+  // worker-only -- NOT identity:read:own). BUG-002: auth-service
+  // (apps/api-go) needs citizen.status before issuing a session, but
+  // getOwn's requester-equality check can never be satisfied by a
+  // service-to-service caller authenticating on the citizen's behalf --
+  // making it satisfy that check would mean auth-service impersonating the
+  // very citizen it's about to authenticate, a privilege inversion. This
+  // route returns strictly less than getById: status only, never
+  // publicHandle or legalIdentityHash (government-identifiers-never-public).
+  async statusOf(citizenId: string): Promise<{ status: Citizen["status"] }> {
+    const citizen = await this.prisma.forWorker((tx) => tx.citizen.findUnique({ where: { id: citizenId } }));
+    if (!citizen) {
+      throw new NotFoundDomainError("citizen", citizenId);
+    }
+    return { status: citizen.status };
+  }
+
   private async registerCitizen(input: RegisterCitizenInput): Promise<Citizen> {
     // The duplicate check needs to see every citizen regardless of who's
     // registering, which is exactly what api_app's OWN-scoped policy denies

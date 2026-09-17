@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"time"
 
 	"github.com/digital-democracy/api-go/internal/audit"
 	"github.com/digital-democracy/api-go/internal/auth"
@@ -80,4 +81,17 @@ func authNotifierFromEnv() auth.Notifier {
 		return auth.NewHTTPNotifier(url)
 	}
 	return nil
+}
+
+// delegationExpiryInterval controls how often the DP-045 sweep (delegation.
+// ExpireDue) runs. DP-045's own spec says "cron, daily" -- default matches
+// that; DELEGATION_EXPIRY_INTERVAL (Go duration syntax, e.g. "5m") overrides
+// it for local dev/demo so expiry is observable without a real day passing.
+func delegationExpiryInterval() time.Duration {
+	if raw := os.Getenv("DELEGATION_EXPIRY_INTERVAL"); raw != "" {
+		if d, err := time.ParseDuration(raw); err == nil && d > 0 {
+			return d
+		}
+	}
+	return 24 * time.Hour
 }

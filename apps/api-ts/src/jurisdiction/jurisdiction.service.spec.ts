@@ -72,15 +72,13 @@ async function insertJurisdiction(row: {
   name: string;
   scopeLevel: string;
   boundaryRef: string;
+  minResidencyDays?: number;
 }): Promise<void> {
   await withAdmin((client) =>
-    client.query(`INSERT INTO jurisdiction (id, parent_id, name, scope_level, boundary_ref) VALUES ($1, $2, $3, $4, $5)`, [
-      row.id,
-      row.parentId ?? null,
-      row.name,
-      row.scopeLevel,
-      row.boundaryRef,
-    ]),
+    client.query(
+      `INSERT INTO jurisdiction (id, parent_id, name, scope_level, boundary_ref, min_residency_days) VALUES ($1, $2, $3, $4, $5, $6)`,
+      [row.id, row.parentId ?? null, row.name, row.scopeLevel, row.boundaryRef, row.minResidencyDays ?? 0],
+    ),
   );
 }
 
@@ -107,13 +105,13 @@ async function insertMembership(citizenId: string, jurisdictionId: string): Prom
 async function insertResidency(
   citizenId: string,
   jurisdictionId: string,
-  opts: { verified: boolean; status: "active" | "ended" },
+  opts: { verified: boolean; status: "active" | "ended"; startDaysAgo?: number },
 ): Promise<void> {
   await withAdmin((client) =>
     client.query(
       `INSERT INTO residency (id, citizen_id, jurisdiction_id, start_date, verified, status)
-       VALUES ($1, $2, $3, CURRENT_DATE, $4, $5)`,
-      [randomUUID(), citizenId, jurisdictionId, opts.verified, opts.status],
+       VALUES ($1, $2, $3, CURRENT_DATE - $4::int, $5, $6)`,
+      [randomUUID(), citizenId, jurisdictionId, opts.startDaysAgo ?? 0, opts.verified, opts.status],
     ),
   );
 }
@@ -219,6 +217,88 @@ describe.skipIf(!urls)("JurisdictionService (Postgres, RLS-enforced)", () => {
 
     it("is false when neither membership nor a verified active residency exists", async () => {
       expect(await svc.isAffected(randomUUID(), randomUUID())).toBe(false);
+    });
+  });
+
+  // ADR-038 D7/D8: strict AND, unlike isAffected's OR.
+  describe("isEligible", () => {
+    it("is false with a verified qualifying residency but no membership", async () => {
+      const citizenId = randomUUID();
+      const jurisdictionId = randomUUID();
+      await insertCitizen(citizenId, "elig-1");
+      await insertJurisdiction({ id: jurisdictionId, name: "Muni", scopeLevel: "municipality", boundaryRef: "ref-e1", minResidencyDays: 180 });
+      await insertResidency(citizenId, jurisdictionId, { verified: true, status: "active", startDaysAgo: 200 });
+
+      expect(await svc.isEligible(citizenId, jurisdictionId)).toBe(false);
+    });
+
+    it("is false with membership but no residency", async () => {
+      const citizenId = randomUUID();
+      const jurisdictionId = randomUUID();
+      await insertCitizen(citizenId, "elig-2");
+      await insertJurisdiction({ id: jurisdictionId, name: "Muni", scopeLevel: "municipality", boundaryRef: "ref-e2" });
+      await insertMembership(citizenId, jurisdictionId);
+
+      expect(await svc.isEligible(citizenId, jurisdictionId)).toBe(false);
+    });
+
+    it("is false when residency is under the jurisdiction's minResidencyDays", async () => {
+      const citizenId = randomUUID();
+      const jurisdictionId = randomUUID();
+      await insertCitizen(citizenId, "elig-3");
+      await insertJurisdiction({ id: jurisdictionId, name: "Muni", scopeLevel: "municipality", boundaryRef: "ref-e3", minResidencyDays: 180 });
+      await insertMembership(citizenId, jurisdictionId);
+      await insertResidency(citizenId, jurisdictionId, { verified: true, status: "active", startDaysAgo: 30 });
+
+      expect(await svc.isEligible(citizenId, jurisdictionId)).toBe(false);
+    });
+
+    it("is true with membership and a verified residency at least minResidencyDays old", async () => {
+      const citizenId = randomUUID();
+      const jurisdictionId = randomUUID();
+      await insertCitizen(citizenId, "elig-4");
+      await insertJurisdiction({ id: jurisdictionId, name: "Muni", scopeLevel: "municipality", boundaryRef: "ref-e4", minResidencyDays: 180 });
+      await insertMembership(citizenId, jurisdictionId);
+      await insertResidency(citizenId, jurisdictionId, { verified: true, status: "active", startDaysAgo: 200 });
+
+      expect(await svc.isEligible(citizenId, jurisdictionId)).toBe(true);
+    });
+
+    it("is true with a zero minResidencyDays jurisdiction (property/street) and membership plus any verified residency", async () => {
+      const citizenId = randomUUID();
+      const jurisdictionId = randomUUID();
+      await insertCitizen(citizenId, "elig-5");
+      await insertJurisdiction({ id: jurisdictionId, name: "Street", scopeLevel: "street", boundaryRef: "ref-e5", minResidencyDays: 0 });
+      await insertMembership(citizenId, jurisdictionId);
+      await insertResidency(citizenId, jurisdictionId, { verified: true, status: "active", startDaysAgo: 0 });
+
+      expect(await svc.isEligible(citizenId, jurisdictionId)).toBe(true);
+    });
+  });
+
+  describe("declareResidency / enrollMembership (E2-04)", () => {
+    it("declareResidency creates an unverified residency row visible to isAffected but not isEligible", async () => {
+      const citizenId = randomUUID();
+      const jurisdictionId = randomUUID();
+      await insertCitizen(citizenId, "decl-1");
+      await insertJurisdiction({ id: jurisdictionId, name: "Muni", scopeLevel: "municipality", boundaryRef: "ref-decl-1" });
+
+      await svc.declareResidency(citizenId, jurisdictionId, new Date());
+
+      expect(await svc.isAffected(citizenId, jurisdictionId)).toBe(false); // unverified
+      expect(await svc.isEligible(citizenId, jurisdictionId)).toBe(false);
+    });
+
+    it("enrollMembership creates a membership row usable by isMember/isAffected", async () => {
+      const citizenId = randomUUID();
+      const jurisdictionId = randomUUID();
+      await insertCitizen(citizenId, "decl-2");
+      await insertJurisdiction({ id: jurisdictionId, name: "Muni", scopeLevel: "municipality", boundaryRef: "ref-decl-2" });
+
+      await svc.enrollMembership(citizenId, jurisdictionId);
+
+      expect(await svc.isMember(citizenId, jurisdictionId)).toBe(true);
+      expect(await svc.isAffected(citizenId, jurisdictionId)).toBe(true);
     });
   });
 });

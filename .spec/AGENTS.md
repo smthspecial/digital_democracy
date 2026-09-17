@@ -9,7 +9,7 @@ All project documentation lives in the `.spec/` folder as YAML front-matter Mark
 3. Write the file at its workspace-relative path, e.g. `.spec/backlog/epics/epic-004.md`, matching the front-matter and body conventions of existing files of that type.
 4. Check the front matter against the rules below by hand before considering it done — there's no separate validation tool.
 
-## TYPE REGISTRY — the only 17 valid document types
+## TYPE REGISTRY — the only 18 valid document types
 
 | `type` | `id` prefix | Directory under `.spec/` | File name | Valid `status` values |
 |--------|-------------|--------------------------|-----------|----------------------|
@@ -22,12 +22,13 @@ All project documentation lives in the `.spec/` folder as YAML front-matter Mark
 | `sprint` | `SPR-NNN` | `planning/sprints/` | `spr-NNN.md` | `planned` · `active` · `done` |
 | `release` | `REL-NNN` | `planning/releases/` | `rel-NNN.md` | `draft` · `active` · `released` |
 | `adr` | `ADR-NNN` | `technical/adr/` | `adr-NNN.md` | `proposed` · `accepted` · `deprecated` · `superseded` |
-| `arch` | `ARCH-NNN` | `technical/arch/` | `arch-NNN.md` | `draft` · `active` · `deprecated` |
+| `arch` | `ARCH-NNN` | `technical/architecture/` | `arch-NNN.md` | `draft` · `active` · `deprecated` |
 | `service` | `SRV-NNN` | `technical/services/` | `srv-NNN.md` | `draft` · `active` · `deprecated` |
 | `data-proc` | `DP-NNN` | `technical/data-processes/` | `dp-NNN.md` | `draft` · `active` · `deprecated` |
 | `db-table` | `TBL-NNN` | `technical/database/` | `tbl-NNN.md` | `draft` · `active` · `done` |
 | `cicd` | `CICD-NNN` | `technical/cicd/` | `cicd-NNN.md` | `draft` · `active` · `deprecated` |
 | `auth-spec` | `AUTH-NNN` | `technical/auth/` | `auth-NNN.md` | `draft` · `active` · `deprecated` |
+| `test-plan` | `TP-NNN` | `technical/test-plans/` | `tp-NNN.md` | `draft` · `active` · `deprecated` |
 | `member` | `MBR-NNN` | `team/members/` | `mbr-NNN.md` | `active` · `draft` |
 | `concept` | `CON-NNN` | `concept/{section}/` | `con-NNN.md` | `draft` · `active` · `deprecated` |
 
@@ -35,10 +36,12 @@ All project documentation lives in the `.spec/` folder as YAML front-matter Mark
 
 ## Key rules
 
-- `type` is strictly enforced — only the 17 exact strings above are valid. Never invent types (`spec`, `technical-spec`, `service-spec`, `auth`, `tech-spec` are all invalid).
+- `type` is strictly enforced — only the 18 exact strings above are valid. Never invent types (`spec`, `technical-spec`, `service-spec`, `auth`, `tech-spec` are all invalid).
 - Never change an existing `id` — IDs are immutable.
 - `title` must always be in double quotes in the front matter.
 - `epicId` is required on every story; `storyId` is required on every task and bug.
 - `role` is required on every member; `processType` (`sync` | `async` | `cron`) is required on every `data-proc`.
+- `testScope` (`unit` · `integration` · `e2e`) is required on every `test-plan`.
 - Comma-separated fields (`linkedIds`, `dependsOn`, `relations`) must have no spaces around commas.
 - Dates must be `YYYY-MM-DD` only.
+- To mark a document historical without deleting it (e.g. one written against a topology a later ADR replaced), set its `status` to `deprecated` (or `superseded` for an `adr` specifically) rather than editing its body to match current reality — the doc's content should still reflect what was true when it was written.

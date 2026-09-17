@@ -1,17 +1,19 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { assertActiveCitizen } from "../common/assert-active-citizen.js";
-import { ForbiddenDomainError, NotFoundDomainError } from "../common/domain-errors.js";
+import { ConflictDomainError, ForbiddenDomainError, NotFoundDomainError } from "../common/domain-errors.js";
 import { CITIZEN_STATUS_CHECKER } from "../identity/citizen-status.port.js";
 import type { CitizenStatusChecker } from "../identity/citizen-status.port.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import {
   ApplyForCompetencyInput,
   AssessmentListFilter,
+  ChallengeListFilter,
   Competency,
   CompetencyChallenge,
   CompetencyChallengeReason,
   CompetencyListFilter,
+  ConflictListFilter,
   ConflictOfInterest,
   ConflictOfInterestType,
   DeclareConflictOfInterestInput,
@@ -22,10 +24,12 @@ import {
 } from "./competency.types.js";
 
 const FOREIGN_KEY_VIOLATION = "P2003";
+const UNIQUE_VIOLATION = "P2002";
 
 export interface ApplyInput {
   domainId: string;
   level: number;
+  evidenceRef: string;
 }
 
 export interface DeclareConflictInput {
@@ -73,7 +77,7 @@ export class CompetencyService {
   // -- competency.status can only ever be "applied" through this call.
   async apply(citizenId: string, input: ApplyInput): Promise<Competency> {
     await assertActiveCitizen(this.citizenStatus, citizenId);
-    return this.applyForCompetency({ citizenId, domainId: input.domainId, level: input.level });
+    return this.applyForCompetency({ citizenId, domainId: input.domainId, level: input.level, evidenceRef: input.evidenceRef });
   }
 
   // DP-010: coi:declare -- scope own, condition citizen.active ONLY
@@ -161,11 +165,42 @@ export class CompetencyService {
     });
   }
 
+  // BUG-002 (delegated-expertise seam): apps/api-go/internal/delegation's
+  // httpCompetencyChecker already calls this exact route
+  // (GET /competency/citizens/:citizenId/domains/:domainId -> {active}) --
+  // it just never existed on this side. competency_public_read is
+  // USING(true) (same policy listCompetencies above already reads through
+  // unscoped), so this is a plain lookup, not a worker-scoped one.
+  async hasActiveCompetency(citizenId: string, domainId: string): Promise<boolean> {
+    const competency = await this.prisma.app.competency.findFirst({
+      where: { citizenId, domainId, status: "active" },
+    });
+    return competency !== null;
+  }
+
   // expert_assessment_public_read is USING(true) -- no citizen context
   // needed.
   async listAssessments(filter?: AssessmentListFilter): Promise<ExpertAssessment[]> {
     return this.prisma.app.expertAssessment.findMany({
       where: filter?.proposalId ? { proposalId: filter.proposalId } : undefined,
+    });
+  }
+
+  // conflict_of_interest_public_read is USING(true) -- the same policy
+  // publish()'s own coi.none check above already reads through unscoped.
+  async listConflicts(filter?: ConflictListFilter): Promise<ConflictOfInterest[]> {
+    return this.prisma.app.conflictOfInterest.findMany({
+      where: {
+        ...(filter?.citizenId ? { citizenId: filter.citizenId } : {}),
+        ...(filter?.domainId ? { domainId: filter.domainId } : {}),
+      },
+    });
+  }
+
+  // competency_challenge_public_read is USING(true).
+  async listChallenges(filter?: ChallengeListFilter): Promise<CompetencyChallenge[]> {
+    return this.prisma.app.competencyChallenge.findMany({
+      where: filter?.competencyId ? { competencyId: filter.competencyId } : undefined,
     });
   }
 
@@ -175,7 +210,7 @@ export class CompetencyService {
     try {
       return await this.prisma.forCitizen(input.citizenId, (tx) =>
         tx.competency.create({
-          data: { citizenId: input.citizenId, domainId: input.domainId, level: input.level },
+          data: { citizenId: input.citizenId, domainId: input.domainId, level: input.level, evidenceRef: input.evidenceRef },
         }),
       );
     } catch (err) {
@@ -184,6 +219,13 @@ export class CompetencyService {
       // Prisma error escape to the controller).
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === FOREIGN_KEY_VIOLATION) {
         throw new NotFoundDomainError("domain", input.domainId);
+      }
+      // E4-04/ADR-037: competency_citizen_domain_live_uidx -- one live
+      // (applied|active) claim per (citizen, domain).
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === UNIQUE_VIOLATION) {
+        throw new ConflictDomainError(
+          `Citizen ${input.citizenId} already has a live competency claim in domain ${input.domainId}`,
+        );
       }
       throw err;
     }

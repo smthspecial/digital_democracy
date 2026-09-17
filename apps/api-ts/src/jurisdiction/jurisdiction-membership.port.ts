@@ -21,4 +21,10 @@ export interface JurisdictionMembershipChecker {
   // distinctly from `isMember` in AUTH-010, so given a distinct, broader
   // definition here rather than collapsing the two.
   isAffected(citizenId: string, jurisdictionId: string): Promise<boolean>;
+
+  // ADR-038 D7: strict AND -- membership AND a verified resident meeting
+  // this jurisdiction's minResidencyDays (D8). Distinct from isAffected
+  // (OR), which answers a different question (standing to challenge, not
+  // eligibility to participate).
+  isEligible(citizenId: string, jurisdictionId: string): Promise<boolean>;
 }

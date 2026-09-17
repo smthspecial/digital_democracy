@@ -2,7 +2,7 @@
 # (or: make docker-build SERVICE=api-go LANG=go — not applicable; see root Makefile)
 # Context is the repo root: the Go workspace (go.work) needs both the app
 # and the shared eventbus package present at build time.
-FROM docker.io/library/golang:1.22-alpine AS build
+FROM docker.io/library/golang:1.25-alpine AS build
 WORKDIR /src
 COPY go.work go.work.sum ./
 COPY packages/go/eventbus/go.mod packages/go/eventbus/go.sum packages/go/eventbus/

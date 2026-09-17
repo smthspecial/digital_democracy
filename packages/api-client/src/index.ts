@@ -1,7 +1,12 @@
 // @dd/api-client — typed API client shared by web + mobile (ADR-021).
-// Placeholder: real clients are generated from each app's openapi documents
-// (`pnpm --filter @dd/api-client generate`) once service implementations land.
-// Anything importing this package today gets the tiny fetch helper below.
+// CC-08: this is a hand-written fetch helper, not a generated client, and
+// there is currently no `generate` script -- the pre-pivot generator
+// (scripts/generate.mjs) was deleted in commit 33848ae and codegen against
+// apps/api-ts isn't viable yet regardless: per tp-001 §0.2, most of its
+// services' openapi.yaml files document only /healthz+/readyz (or don't
+// exist at all, e.g. iam) rather than their real routes. Generating a
+// client from apps/api-go/openapi/*.yaml (which IS accurate) is real,
+// scoped future work -- not promised by this file until it exists.
 
 export interface ApiError {
   code: string;

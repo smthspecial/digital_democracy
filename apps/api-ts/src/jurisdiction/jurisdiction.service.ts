@@ -71,4 +71,39 @@ export class JurisdictionService implements JurisdictionMembershipChecker {
     );
     return residency?.verified === true;
   }
+
+  // JurisdictionMembershipChecker port: ADR-038 D7. Strict AND, not
+  // isAffected's OR -- membership AND a verified, currently-active
+  // residency whose startDate is at least minResidencyDays in the past.
+  async isEligible(citizenId: string, jurisdictionId: string): Promise<boolean> {
+    const [member, jurisdiction, residency] = await Promise.all([
+      this.isMember(citizenId, jurisdictionId),
+      this.prisma.app.jurisdiction.findUnique({ where: { id: jurisdictionId } }),
+      this.prisma.forCitizen(citizenId, (tx) =>
+        tx.residency.findFirst({ where: { citizenId, jurisdictionId, status: "active", verified: true } }),
+      ),
+    ]);
+    if (!member || !jurisdiction || !residency) {
+      return false;
+    }
+    const daysResident = (Date.now() - residency.startDate.getTime()) / (1000 * 60 * 60 * 24);
+    return daysResident >= jurisdiction.minResidencyDays;
+  }
+
+  // E2-04: no citizen-facing create op existed for residency/membership at
+  // all (ADR-030 left both worker-seeded only) despite RLS already
+  // supporting an own-scoped insert (residency_own_insert/
+  // jurisdiction_membership_own_insert, init migration). verified defaults
+  // false -- a worker-gated verification step (matching identity
+  // verification's own pending->active shape) is separate, deliberately
+  // out of this item's scope.
+  async declareResidency(citizenId: string, jurisdictionId: string, startDate: Date): Promise<void> {
+    await this.prisma.forCitizen(citizenId, (tx) =>
+      tx.residency.create({ data: { citizenId, jurisdictionId, startDate, verified: false } }),
+    );
+  }
+
+  async enrollMembership(citizenId: string, jurisdictionId: string): Promise<void> {
+    await this.prisma.forCitizen(citizenId, (tx) => tx.jurisdictionMembership.create({ data: { citizenId, jurisdictionId } }));
+  }
 }

@@ -1,6 +1,10 @@
 package delegation
 
-import "time"
+import (
+	"time"
+
+	"github.com/digital-democracy/api-go/internal/metrics"
+)
 
 // CompetencyChecker validates that a delegate holds active competency in the
 // domain (FR-056, DP-014). Production implementation calls competency-service
@@ -107,6 +111,7 @@ func (s *Service) Create(in CreateInput, now time.Time) (*Delegation, error) {
 		return nil, err
 	}
 	_ = s.audit.Emit("delegation_created", "delegation-service", d.ID)
+	metrics.DelegationEventsTotal.WithLabelValues("created").Inc()
 	return d, nil
 }
 
@@ -126,6 +131,7 @@ func (s *Service) Revoke(id, callerCitizenID string, now time.Time) (*Delegation
 		return nil, err
 	}
 	_ = s.audit.Emit("delegation_revoked", "delegation-service", id)
+	metrics.DelegationEventsTotal.WithLabelValues("revoked").Inc()
 	return revoked, nil
 }
 
@@ -150,6 +156,7 @@ func (s *Service) ExpireDue(now time.Time) ([]*Delegation, error) {
 	}
 	for _, d := range out {
 		_ = s.audit.Emit("delegation_expired", "delegation-service", d.ID)
+		metrics.DelegationEventsTotal.WithLabelValues("expired").Inc()
 	}
 	return out, nil
 }

@@ -13,7 +13,7 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   readonly worker: PrismaClient;
 
   // `urls` overrides env vars -- used by integration tests to point at
-  // TEST_DATABASE_URL/TEST_WORKER_DATABASE_URL instead of the dev/prod ones.
+  // TEST_TS_DATABASE_URL/TEST_TS_WORKER_DATABASE_URL instead of the dev/prod ones.
   // @Optional() -- its design:paramtype is a plain object literal, not an
   // injectable class/token, so without it Nest's real DI container (as
   // opposed to every spec's `new PrismaService(...)`/provider-override

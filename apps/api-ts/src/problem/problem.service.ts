@@ -10,7 +10,15 @@ import type { JurisdictionMembershipChecker } from "../jurisdiction/jurisdiction
 import { PrismaService } from "../prisma/prisma.service.js";
 import { PROPOSAL_SUPPORT_RECOMPUTER } from "../proposal/proposal-support.port.js";
 import type { ProposalSupportRecomputer } from "../proposal/proposal-support.port.js";
-import { AddSupportInput, CreateProblemInput, Problem, ProblemSupport } from "./problem.types.js";
+import {
+  AddSupportInput,
+  CreateProblemInput,
+  Problem,
+  ProblemComment,
+  ProblemEvidence,
+  ProblemEvidenceKind,
+  ProblemSupport,
+} from "./problem.types.js";
 
 const UNIQUE_VIOLATION = "P2002";
 const FOREIGN_KEY_VIOLATION = "P2003";
@@ -20,6 +28,8 @@ export interface SubmitProblemInput {
   description: string;
   affectedArea: string;
   jurisdictionId: string;
+  evidenceKind: ProblemEvidenceKind;
+  evidenceRef: string;
 }
 
 export interface EndorseProblemResult {
@@ -50,12 +60,39 @@ export class ProblemService {
       affectedArea: input.affectedArea,
       jurisdictionId: input.jurisdictionId,
     });
+    // E3-02/ADR-035 D18: required at submission, same transaction context
+    // as the problem itself (forCitizen).
+    await this.prisma.forCitizen(citizenId, (tx) =>
+      tx.problemEvidence.create({ data: { problemId: problem.id, citizenId, kind: input.evidenceKind, ref: input.evidenceRef } }),
+    );
     await this.audit.emit({
       actionType: "problem.created",
       actorRef: citizenId,
       payload: { problemId: problem.id },
     });
     return problem;
+  }
+
+  // E3-02: addable after submission too, not just required-at-intake.
+  async addEvidence(citizenId: string, problemId: string, kind: ProblemEvidenceKind, ref: string): Promise<ProblemEvidence> {
+    await assertActiveCitizen(this.citizenStatus, citizenId);
+    await this.getProblemOrThrow(problemId);
+    return this.prisma.forCitizen(citizenId, (tx) => tx.problemEvidence.create({ data: { problemId, citizenId, kind, ref } }));
+  }
+
+  async listEvidence(problemId: string): Promise<ProblemEvidence[]> {
+    return this.prisma.app.problemEvidence.findMany({ where: { problemId }, orderBy: { createdAt: "asc" } });
+  }
+
+  // E3-04/US-011.
+  async addComment(citizenId: string, problemId: string, body: string): Promise<ProblemComment> {
+    await assertActiveCitizen(this.citizenStatus, citizenId);
+    await this.getProblemOrThrow(problemId);
+    return this.prisma.forCitizen(citizenId, (tx) => tx.problemComment.create({ data: { problemId, citizenId, body } }));
+  }
+
+  async listComments(problemId: string): Promise<ProblemComment[]> {
+    return this.prisma.app.problemComment.findMany({ where: { problemId }, orderBy: { createdAt: "asc" } });
   }
 
   // DP-004: problem:endorse -- scope jurisdiction:member, conditions

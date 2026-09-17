@@ -36,11 +36,12 @@ async function insertCompetency(
   status: "applied" | "active" = "active",
 ): Promise<void> {
   await withAdmin((client) =>
-    client.query(`INSERT INTO competency (id, citizen_id, domain_id, level, status) VALUES ($1, $2, $3, 2, $4)`, [
+    client.query(`INSERT INTO competency (id, citizen_id, domain_id, level, status, evidence_ref) VALUES ($1, $2, $3, 2, $4, $5)`, [
       id,
       citizenId,
       domainId,
       status,
+      'evidence-fixture',
     ]),
   );
 }
@@ -134,7 +135,7 @@ describe.skipIf(!urls)("CompetencyController (HTTP, Postgres-backed)", () => {
     const res = await request(app.getHttpServer())
       .post("/competency/competencies")
       .set("x-citizen-id", citizenId)
-      .send({ domainId, level: 2 });
+      .send({ domainId, level: 2, evidenceRef: "evidence-1" });
 
     expect(res.status).toBe(201);
     expect(res.body.status).toBe("applied");
@@ -146,14 +147,14 @@ describe.skipIf(!urls)("CompetencyController (HTTP, Postgres-backed)", () => {
     const res = await request(app.getHttpServer())
       .post("/competency/competencies")
       .set("x-citizen-id", citizenId)
-      .send({ domainId: "not-a-uuid", level: 9 });
+      .send({ domainId: "not-a-uuid", level: 9, evidenceRef: "evidence-1" });
     expect(res.status).toBe(400);
   });
 
   it("POST /competency/competencies without x-citizen-id is 401", async () => {
     const res = await request(app.getHttpServer())
       .post("/competency/competencies")
-      .send({ domainId: randomUUID(), level: 1 });
+      .send({ domainId: randomUUID(), level: 1, evidenceRef: "evidence-1" });
     expect(res.status).toBe(401);
   });
 
@@ -165,7 +166,7 @@ describe.skipIf(!urls)("CompetencyController (HTTP, Postgres-backed)", () => {
     const res = await request(app.getHttpServer())
       .post("/competency/competencies")
       .set("x-citizen-id", registerRes.body.id)
-      .send({ domainId: randomUUID(), level: 1 });
+      .send({ domainId: randomUUID(), level: 1, evidenceRef: "evidence-1" });
     expect(res.status).toBe(403);
   });
 
@@ -178,11 +179,11 @@ describe.skipIf(!urls)("CompetencyController (HTTP, Postgres-backed)", () => {
     await request(app.getHttpServer())
       .post("/competency/competencies")
       .set("x-citizen-id", citizenId)
-      .send({ domainId: domainId1, level: 1 });
+      .send({ domainId: domainId1, level: 1, evidenceRef: "evidence-1" });
     await request(app.getHttpServer())
       .post("/competency/competencies")
       .set("x-citizen-id", citizenId)
-      .send({ domainId: domainId2, level: 1 });
+      .send({ domainId: domainId2, level: 1, evidenceRef: "evidence-1" });
 
     const filtered = await request(app.getHttpServer())
       .get("/competency/competencies")
@@ -208,6 +209,22 @@ describe.skipIf(!urls)("CompetencyController (HTTP, Postgres-backed)", () => {
     expect(res.status).toBe(201);
     expect(res.body.citizenId).toBe(citizenId);
     expect(res.body.type).toBe("employer");
+  });
+
+  it("GET /competency/conflicts is public and lists declared conflicts, optionally filtered by citizenId (FR-025)", async () => {
+    const citizenId = await activeCitizen("harriet");
+    const domainId = randomUUID();
+    await insertDomain(domainId, "Housing");
+    const postRes = await request(app.getHttpServer())
+      .post("/competency/conflicts")
+      .set("x-citizen-id", citizenId)
+      .send({ domainId, type: "consulting", description: "Board member" });
+    expect(postRes.status).toBe(201);
+
+    const res = await request(app.getHttpServer()).get("/competency/conflicts").query({ citizenId });
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0].citizenId).toBe(citizenId);
   });
 
   it("POST /competency/conflicts rejects an inactive citizen with 403", async () => {
@@ -241,6 +258,23 @@ describe.skipIf(!urls)("CompetencyController (HTTP, Postgres-backed)", () => {
     expect(res.status).toBe(201);
     expect(res.body.status).toBe("open");
     expect(res.body.challengerId).toBe(challenger);
+  });
+
+  it("GET /competency/competency-challenges is public and lists challenges, optionally filtered by competencyId", async () => {
+    const challenger = await activeCitizen("ivy");
+    const domainId = randomUUID();
+    await insertDomain(domainId, "Water");
+    const competencyId = randomUUID();
+    await insertCompetency(competencyId, challenger, domainId, "applied");
+    await request(app.getHttpServer())
+      .post("/competency/competency-challenges")
+      .set("x-citizen-id", challenger)
+      .send({ competencyId, evidenceRef: "evidence-ref-2", reason: "misconduct" });
+
+    const res = await request(app.getHttpServer()).get("/competency/competency-challenges").query({ competencyId });
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0].competencyId).toBe(competencyId);
   });
 
   it("POST /competency/competency-challenges rejects a missing evidenceRef with 400", async () => {
@@ -326,5 +360,36 @@ describe.skipIf(!urls)("CompetencyController (HTTP, Postgres-backed)", () => {
     expect(listed.status).toBe(200);
     expect(listed.body).toHaveLength(1);
     expect(listed.body[0].expertId).toBe(citizenId);
+  });
+
+  // BUG-002: apps/api-go's delegation-service httpCompetencyChecker
+  // (ARCH-019 liquid democracy) calls exactly this route to decide whether
+  // a delegate holds active competency in a domain before allowing a
+  // delegated vote -- it existed on the Go side already, never on this one.
+  it("GET /competency/citizens/:citizenId/domains/:domainId returns {active:true} for an active grant (BUG-002)", async () => {
+    const citizenId = await activeCitizen("laura");
+    const domainId = randomUUID();
+    await insertDomain(domainId, "Water Management");
+    await insertCompetency(randomUUID(), citizenId, domainId, "active");
+
+    const res = await request(app.getHttpServer()).get(`/competency/citizens/${citizenId}/domains/${domainId}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ active: true });
+  });
+
+  it("GET /competency/citizens/:citizenId/domains/:domainId returns {active:false} for an applied (not yet active) grant", async () => {
+    const citizenId = await activeCitizen("mike");
+    const domainId = randomUUID();
+    await insertDomain(domainId, "Water Management");
+    await insertCompetency(randomUUID(), citizenId, domainId, "applied");
+
+    const res = await request(app.getHttpServer()).get(`/competency/citizens/${citizenId}/domains/${domainId}`);
+    expect(res.body).toEqual({ active: false });
+  });
+
+  it("GET /competency/citizens/:citizenId/domains/:domainId returns {active:false} when no competency row exists at all", async () => {
+    const res = await request(app.getHttpServer()).get(`/competency/citizens/${randomUUID()}/domains/${randomUUID()}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ active: false });
   });
 });

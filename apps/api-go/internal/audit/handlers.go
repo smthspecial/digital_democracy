@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/digital-democracy/api-go/internal/metrics"
 )
 
 // AUTH-010: audit_log:read → T1-public (unauthenticated). Writes are
@@ -76,10 +78,31 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		}
 		limit = n
 	}
-	entries, err := h.svc.store.ListEntries(limit)
+	actionType := r.URL.Query().Get("action_type")
+	if actionType != "" && !validAction(actionType) {
+		writeErr(w, ErrInvalid)
+		return
+	}
+	fetchLimit := limit
+	if actionType != "" {
+		fetchLimit = 0
+	}
+	entries, err := h.svc.store.ListEntries(fetchLimit)
 	if err != nil {
 		writeErr(w, err)
 		return
+	}
+	if actionType != "" {
+		filtered := make([]*AuditEntry, 0, len(entries))
+		for _, e := range entries {
+			if e.ActionType == actionType {
+				filtered = append(filtered, e)
+			}
+			if limit > 0 && len(filtered) == limit {
+				break
+			}
+		}
+		entries = filtered
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"entries": entries})
 }
@@ -98,6 +121,9 @@ func (h *Handler) verify(w http.ResponseWriter, _ *http.Request) {
 	if err != nil {
 		writeErr(w, err)
 		return
+	}
+	if !ok {
+		metrics.AuditChainVerifyFailuresTotal.Inc()
 	}
 	count, err := h.svc.store.Count()
 	if err != nil {

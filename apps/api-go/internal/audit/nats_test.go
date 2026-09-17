@@ -21,6 +21,14 @@ func spawnNatsServer(t *testing.T) string {
 	t.Helper()
 	bin, err := exec.LookPath("nats-server")
 	if err != nil {
+		// TI-04: CI sets REQUIRE_NATS_TESTS after installing nats-server
+		// explicitly -- a skip there means the install step itself broke,
+		// which must fail loudly rather than quietly report green with this
+		// test not run (the same silent-skip shape the audit-emitter bug
+		// hid behind).
+		if os.Getenv("REQUIRE_NATS_TESTS") != "" {
+			t.Fatalf("nats-server binary not on PATH, but REQUIRE_NATS_TESTS is set: %v", err)
+		}
 		t.Skip("nats-server binary not on PATH")
 	}
 	l, err := net.Listen("tcp", "127.0.0.1:0")

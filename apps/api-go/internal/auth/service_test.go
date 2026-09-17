@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -55,6 +56,39 @@ func TestLoginStatusGates(t *testing.T) {
 		if err != want {
 			t.Fatalf("status %s: err = %v, want %v", status, err, want)
 		}
+	}
+}
+
+// BUG-002: identity-service's real CitizenStatus vocabulary
+// (apps/api-ts/src/identity/identity.types.ts) is pending|active|inactive|
+// revoked -- it has no "suspended" value at all, so that branch above is
+// currently unreachable via httpIdentityChecker against the real app (worth
+// closing when the revocation workflow, EPIC-001 US-004, lands). "active"
+// and "inactive" both fall through the switch unblocked today -- proceeding
+// exactly like an unrecognized/garbage status string would, which is a gap
+// but not one this bug fix's scope (the seam contract, not the status
+// vocabulary) covers.
+func TestLoginStatusGateFallsThroughForActiveAndInactive(t *testing.T) {
+	now := time.Now().UTC()
+	for _, status := range []string{"active", "inactive"} {
+		svc := NewService(nil, IdentityCheckerFunc(func(string) (string, error) { return status, nil }), nil, nil)
+		_, _, err := svc.Login(LoginInput{CitizenID: "c", DeviceFingerprint: "fp", IPSubnet: "s"}, now)
+		if err != nil {
+			t.Fatalf("status %s: err = %v, want nil (falls through to session issuance)", status, err)
+		}
+	}
+}
+
+// A transport/decode failure from the identity checker (e.g. httpIdentityChecker
+// hitting a 5xx, a timeout, or -- BUG-002's exact failure mode -- a 404 from
+// a route the caller isn't authorized to read) must fail closed, never
+// silently proceed as if the citizen were active.
+func TestLoginFailsClosedWhenIdentityCheckerErrors(t *testing.T) {
+	now := time.Now().UTC()
+	svc := NewService(nil, IdentityCheckerFunc(func(string) (string, error) { return "", errors.New("identity-service returned 404") }), nil, nil)
+	_, _, err := svc.Login(LoginInput{CitizenID: "c", DeviceFingerprint: "fp", IPSubnet: "s"}, now)
+	if err != ErrUnauthorized {
+		t.Fatalf("err = %v, want ErrUnauthorized", err)
 	}
 }
 

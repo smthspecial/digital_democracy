@@ -115,6 +115,8 @@ describe.skipIf(!urls)("ProblemService (Postgres, RLS-enforced)", () => {
         description: "Big pothole",
         affectedArea: "Main St",
         jurisdictionId,
+        evidenceKind: "statement",
+        evidenceRef: "I saw it myself",
       });
       expect(problem.status).toBe("open");
       expect(problem.authorId).toBe(authorId);
@@ -122,7 +124,7 @@ describe.skipIf(!urls)("ProblemService (Postgres, RLS-enforced)", () => {
     });
 
     it("emits exactly one audit event on creation", async () => {
-      const problem = await svc.submit(authorId, { title: "T", description: "D", affectedArea: "A", jurisdictionId });
+      const problem = await svc.submit(authorId, { title: "T", description: "D", affectedArea: "A", jurisdictionId, evidenceKind: "statement", evidenceRef: "e" });
       expect(audit.emit).toHaveBeenCalledTimes(1);
       expect(audit.emit).toHaveBeenCalledWith(
         expect.objectContaining({ actionType: expect.stringContaining("problem"), actorRef: authorId }),
@@ -133,7 +135,7 @@ describe.skipIf(!urls)("ProblemService (Postgres, RLS-enforced)", () => {
     it("rejects an inactive citizen", async () => {
       activeCitizens.delete(authorId);
       await expect(
-        svc.submit(authorId, { title: "T", description: "D", affectedArea: "A", jurisdictionId }),
+        svc.submit(authorId, { title: "T", description: "D", affectedArea: "A", jurisdictionId, evidenceKind: "statement", evidenceRef: "e" }),
       ).rejects.toBeInstanceOf(ForbiddenDomainError);
     });
   });
@@ -201,6 +203,58 @@ describe.skipIf(!urls)("ProblemService (Postgres, RLS-enforced)", () => {
       await seedProblem();
       await seedProblem();
       expect(await svc.findAll()).toHaveLength(2);
+    });
+  });
+
+  describe("submit requires evidence (E3-02/ADR-035 D18)", () => {
+    it("creates a ProblemEvidence row alongside the problem", async () => {
+      const problem = await svc.submit(authorId, {
+        title: "T", description: "D", affectedArea: "A", jurisdictionId,
+        evidenceKind: "statement", evidenceRef: "witnessed it",
+      });
+      const evidence = await svc.listEvidence(problem.id);
+      expect(evidence).toHaveLength(1);
+      expect(evidence[0]).toMatchObject({ kind: "statement", ref: "witnessed it", citizenId: authorId });
+    });
+  });
+
+  describe("addEvidence (E3-02, post-submission)", () => {
+    it("adds a second evidence row for an existing problem", async () => {
+      const problemId = await seedProblem();
+      await svc.addEvidence(authorId, problemId, "link", "https://example.com/proof");
+      const evidence = await svc.listEvidence(problemId);
+      expect(evidence).toHaveLength(1);
+      expect(evidence[0]).toMatchObject({ kind: "link", ref: "https://example.com/proof" });
+    });
+
+    it("rejects an inactive citizen", async () => {
+      activeCitizens.delete(authorId);
+      const problemId = await seedProblem();
+      await expect(svc.addEvidence(authorId, problemId, "statement", "x")).rejects.toBeInstanceOf(ForbiddenDomainError);
+    });
+
+    it("throws NotFoundDomainError for a missing problem", async () => {
+      await expect(svc.addEvidence(authorId, randomUUID(), "statement", "x")).rejects.toBeInstanceOf(NotFoundDomainError);
+    });
+  });
+
+  describe("addComment / listComments (E3-04/US-011)", () => {
+    it("adds and lists comments in creation order", async () => {
+      const problemId = await seedProblem();
+      await svc.addComment(authorId, problemId, "first");
+      await svc.addComment(authorId, problemId, "second");
+      const comments = await svc.listComments(problemId);
+      expect(comments.map((c) => c.body)).toEqual(["first", "second"]);
+    });
+
+    it("rejects an inactive citizen", async () => {
+      activeCitizens.delete(authorId);
+      const problemId = await seedProblem();
+      await expect(svc.addComment(authorId, problemId, "x")).rejects.toBeInstanceOf(ForbiddenDomainError);
+    });
+
+    it("throws NotFoundDomainError for a missing problem", async () => {
+      await expect(svc.addComment(authorId, randomUUID(), "x")).rejects.toBeInstanceOf(NotFoundDomainError);
     });
   });
 });

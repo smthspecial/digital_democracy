@@ -176,6 +176,26 @@ func TestProtocolChangeGate(t *testing.T) {
 	}
 }
 
+// BUG-001: apps/api-ts's HttpAuditEmitter (audit-emitter.ts) maps its own
+// dotted domain verbs (identity.citizen_activated, iam.revoked, ...) onto
+// exactly these four TBL-034 values before ever sending a request -- this
+// is the Go-side half of the contract test: every value the TS mapper can
+// produce must normalize successfully via the real POST /audit/log path,
+// not just via the exported enum constants.
+func TestAppendAcceptsEveryActionTypeApiTsCanSend(t *testing.T) {
+	svc := NewService(nil, nil)
+	for _, action := range []string{
+		ActionIdentityEvent, // identity.*
+		ActionAdminAction,   // iam.*, governance_role.*
+		ActionProposalCreated,
+		ActionSystemUpdate, // problem.*, deliberation.*, reputation.*, budget.*, project.*, civic_duty.*
+	} {
+		if _, err := svc.Append(action, "citizen-1", `{"event":"test"}`, ""); err != nil {
+			t.Fatalf("Append(%q) = %v, want success", action, err)
+		}
+	}
+}
+
 func TestHealthz(t *testing.T) {
 	srv := httptest.NewServer(NewRouter(NewService(nil, nil), nil))
 	defer srv.Close()

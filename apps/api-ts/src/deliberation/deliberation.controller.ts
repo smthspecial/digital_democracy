@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Post, Query } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Post, Query } from "@nestjs/common";
 import { RequiredCitizenId } from "../common/citizen-id.decorator.js";
 import { DeclarePreferenceDto } from "./dto/declare-preference.dto.js";
 import { PostArgumentDto } from "./dto/post-argument.dto.js";
@@ -23,6 +23,12 @@ export class DeliberationController {
   @Get("arguments")
   findArguments(@Query("proposalId") proposalId?: string) {
     return this.deliberation.listArguments(proposalId ? { proposalId } : undefined);
+  }
+
+  // FR-033/E5-03. Restricted to an active proposal_review assignment.
+  @Post("arguments/:id/lock")
+  lockArgument(@Param("id") id: string, @RequiredCitizenId() citizenId: string) {
+    return this.deliberation.lockArgument(citizenId, id);
   }
 
   // DP-009. AUTH-010 preference:declare -- scope any, condition

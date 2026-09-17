@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Post, Query } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Post, Query } from "@nestjs/common";
 import { RequiredCitizenId } from "../common/citizen-id.decorator.js";
 import { SubmitApprovalDto } from "./dto/submit-approval.dto.js";
 import { GovernanceRoleService } from "./governance-role.service.js";
@@ -33,5 +33,10 @@ export class GovernanceRoleController {
   @Get("approvals")
   listApprovals(@Query("actionRef") actionRef?: string) {
     return this.governanceRole.listApprovals(actionRef ? { actionRef } : undefined);
+  }
+
+  @Get("actions/:actionRef/status")
+  async actionStatus(@Param("actionRef") actionRef: string) {
+    return { fullyApproved: await this.governanceRole.isFullyApproved(actionRef) };
   }
 }
