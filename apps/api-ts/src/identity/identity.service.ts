@@ -56,8 +56,8 @@ export class IdentityService implements CitizenStatusChecker {
     return this.registerCitizen({ publicHandle: input.publicHandle, legalIdentityHash });
   }
 
-  // DP-002: records a verification attempt with its outcome supplied
-  // synchronously in the same call. When verified and the citizen is
+  // DP-002: records a verification result from the authenticated verifier
+  // callback. When verified and the citizen is
   // currently pending, activates the citizen (citizen:activate, AUTH-010
   // system-only permission) and emits DP-036.
   async submitVerification(citizenId: string, input: SubmitVerificationInput): Promise<SubmitVerificationResult> {
@@ -98,6 +98,15 @@ export class IdentityService implements CitizenStatusChecker {
   async isActive(citizenId: string): Promise<boolean> {
     const citizen = await this.findCitizenById(citizenId);
     return citizen?.status === "active";
+  }
+
+  async assertVerifiedIdentity(citizenId: string): Promise<void> {
+    const verified = await this.prisma.forWorker(async (tx) => {
+      const citizen = await tx.citizen.findUnique({ where: { id: citizenId } });
+      if (citizen?.status !== "active") return false;
+      return (await tx.identityVerification.findFirst({ where: { citizenId, status: "verified" } })) !== null;
+    });
+    if (!verified) throw new ForbiddenDomainError("Verified active identity required for credential provisioning");
   }
 
   // AUTH-010 AUTH-001 `identity:read:own` -- scope "own".

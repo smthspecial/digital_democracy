@@ -1,4 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { AUDIT_EMITTER, type AuditEmitter } from "../common/audit-emitter.js";
+import { ForbiddenDomainError, InvalidStateDomainError, NotFoundDomainError } from "../common/domain-errors.js";
+import { GOVERNANCE_ROLE_CHECKER, type GovernanceRoleChecker } from "../governance-role/governance-role-checker.port.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import type { JurisdictionMembershipChecker } from "./jurisdiction-membership.port.js";
 import { Jurisdiction, JurisdictionNode } from "./jurisdiction.types.js";
@@ -28,14 +31,17 @@ export function buildJurisdictionTree(jurisdictions: Jurisdiction[]): Jurisdicti
   return roots;
 }
 
-// SRV-002 (ADR-030 "Jurisdiction module is read-only in this pass"): talks
-// to Postgres directly via PrismaService's dual api_app/api_worker
-// connections (ADR-030) -- no repository indirection. jurisdiction /
-// residency / jurisdiction_membership rows are seeded directly, not
-// created through any method here.
+// SRV-002 talks to Postgres directly via PrismaService's dual api_app/
+// api_worker connections (ADR-030), with no repository indirection.
+// Jurisdiction definitions remain worker-managed; citizens can declare their
+// own residency/membership and reviewers decide residency verification.
 @Injectable()
 export class JurisdictionService implements JurisdictionMembershipChecker {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(GOVERNANCE_ROLE_CHECKER) private readonly governanceRoles: GovernanceRoleChecker,
+    @Inject(AUDIT_EMITTER) private readonly audit: AuditEmitter,
+  ) {}
 
   // jurisdiction_public_read is USING(true) for both api_app and api_worker
   // (ADR-030) -- no citizen context needed.
@@ -101,6 +107,46 @@ export class JurisdictionService implements JurisdictionMembershipChecker {
     await this.prisma.forCitizen(citizenId, (tx) =>
       tx.residency.create({ data: { citizenId, jurisdictionId, startDate, verified: false } }),
     );
+  }
+
+  // A reviewer records one immutable decision against a citizen-declared
+  // residency. The explicit decision distinguishes a rejection from a
+  // declaration that has not yet been reviewed, while `verified` remains the
+  // efficient eligibility predicate used by existing callers.
+  async reviewResidency(
+    reviewerId: string,
+    residencyId: string,
+    decision: "verified" | "rejected",
+  ): Promise<void> {
+    if (!(await this.governanceRoles.isActiveHolder(reviewerId, "reviewer"))) {
+      throw new ForbiddenDomainError("Only an active reviewer may decide residency verification");
+    }
+    const residency = await this.prisma.forWorker((tx) => tx.residency.findUnique({ where: { id: residencyId } }));
+    if (!residency) {
+      throw new NotFoundDomainError("residency", residencyId);
+    }
+    const update = await this.prisma.forWorker((tx) =>
+      tx.residency.updateMany({
+        // A conditional update, rather than a read followed by update,
+        // preserves the one-decision rule under concurrent reviewer calls.
+        where: { id: residencyId, reviewedAt: null },
+        data: {
+          verified: decision === "verified",
+          verificationDecision: decision,
+          reviewedAt: new Date(),
+          reviewedByCitizenId: reviewerId,
+        },
+      }),
+    );
+    if (update.count !== 1) {
+      throw new InvalidStateDomainError(`Residency ${residencyId} has already been reviewed`);
+    }
+    await this.audit.emit({
+      actionType: "jurisdiction.residency_reviewed",
+      actorRef: reviewerId,
+      payload: { residencyId, citizenId: residency.citizenId, jurisdictionId: residency.jurisdictionId, decision },
+      idempotencyKey: `residency-review:${residencyId}`,
+    });
   }
 
   async enrollMembership(citizenId: string, jurisdictionId: string): Promise<void> {

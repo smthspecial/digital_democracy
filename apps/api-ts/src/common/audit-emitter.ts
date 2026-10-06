@@ -70,6 +70,7 @@ const ACTION_TYPE_BY_VERB: Record<string, string> = {
   "civic_duty.assignment_abandoned": "system_update",
   "civic_duty.exemption_claimed": "system_update",
   "competency.granted": "admin_action",
+  "jurisdiction.residency_reviewed": "admin_action",
 };
 
 /** Exported so the mapping is independently unit-testable (no I/O) -- falls back to `system_update` for any verb not in the table above rather than dropping the entry, and logs so a genuinely new verb gets a real mapping decision instead of silently miscategorizing forever. */

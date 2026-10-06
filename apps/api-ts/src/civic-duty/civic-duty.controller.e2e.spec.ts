@@ -7,6 +7,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DomainErrorFilter } from "../common/domain-error.filter.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { newTestPrismaService, TestDatabaseUrls, testDatabaseUrls, truncateAll } from "../test-support/postgres.js";
+import { installTestAuth, testBearer } from "../test-support/auth.js";
+import { IdentityService } from "../identity/identity.service.js";
 import { CivicDutyModule } from "./civic-duty.module.js";
 
 process.env.IDENTITY_HASH_SECRET ??= "test-secret";
@@ -63,6 +65,7 @@ describe.skipIf(!urls)("CivicDutyController (HTTP, Postgres-backed)", () => {
       .compile();
 
     app = moduleRef.createNestApplication();
+    installTestAuth(app);
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
     app.useGlobalFilters(new DomainErrorFilter());
     await app.init();
@@ -83,14 +86,14 @@ describe.skipIf(!urls)("CivicDutyController (HTTP, Postgres-backed)", () => {
       .post("/identity/citizens")
       .send({ publicHandle: handle, legalIdentifier: `id-${handle}` });
     const citizenId = registerRes.body.id;
-    await request(app.getHttpServer())
-      .post("/identity/verifications")
-      .set("x-citizen-id", citizenId)
-      .send({ method: "national_id", evidenceRef: "ref-1", outcome: "verified" });
+    // This domain fixture needs an active citizen, not an external verifier.
+    await app.get(IdentityService).submitVerification(citizenId, {
+      method: "national_id", evidenceRef: "ref-1", outcome: "verified",
+    });
     return citizenId;
   }
 
-  it("GET /civic-duty/assignments without x-citizen-id is 401", async () => {
+  it("GET /civic-duty/assignments without bearer token is 401", async () => {
     const res = await request(app.getHttpServer()).get("/civic-duty/assignments");
     expect(res.status).toBe(401);
   });
@@ -103,7 +106,7 @@ describe.skipIf(!urls)("CivicDutyController (HTTP, Postgres-backed)", () => {
     await insertAssignment(mineId, citizenId);
     await insertAssignment(theirsId, otherId);
 
-    const res = await request(app.getHttpServer()).get("/civic-duty/assignments").set("x-citizen-id", citizenId);
+    const res = await request(app.getHttpServer()).get("/civic-duty/assignments").set("authorization", testBearer(citizenId));
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(1);
     expect(res.body[0].id).toBe(mineId);
@@ -116,7 +119,7 @@ describe.skipIf(!urls)("CivicDutyController (HTTP, Postgres-backed)", () => {
 
     const res = await request(app.getHttpServer())
       .post(`/civic-duty/assignments/${assignmentId}/complete`)
-      .set("x-citizen-id", citizenId);
+      .set("authorization", testBearer(citizenId));
     expect(res.status).toBe(201);
     expect(res.body.status).toBe("completed");
   });
@@ -131,7 +134,7 @@ describe.skipIf(!urls)("CivicDutyController (HTTP, Postgres-backed)", () => {
 
     const res = await request(app.getHttpServer())
       .post(`/civic-duty/assignments/${assignmentId}/complete`)
-      .set("x-citizen-id", citizenId);
+      .set("authorization", testBearer(citizenId));
     expect(res.status).toBe(403);
   });
 
@@ -139,7 +142,7 @@ describe.skipIf(!urls)("CivicDutyController (HTTP, Postgres-backed)", () => {
     const citizenId = await activeCitizen("erin");
     const res = await request(app.getHttpServer())
       .post("/civic-duty/participation/exemption")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ period: "2026-06", exemptionStatus: "illness" });
     expect(res.status).toBe(404);
   });
@@ -152,14 +155,14 @@ describe.skipIf(!urls)("CivicDutyController (HTTP, Postgres-backed)", () => {
 
     const res = await request(app.getHttpServer())
       .post("/civic-duty/participation/exemption")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ period: "2026-06", exemptionStatus: "military" });
     expect(res.status).toBe(200);
     expect(res.body.exemptionStatus).toBe("military");
 
     const assignments = await request(app.getHttpServer())
       .get("/civic-duty/assignments")
-      .set("x-citizen-id", citizenId);
+      .set("authorization", testBearer(citizenId));
     expect(assignments.body.find((a: { id: string }) => a.id === assignmentId).status).toBe("exempted");
   });
 });

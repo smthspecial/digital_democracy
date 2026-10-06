@@ -5,6 +5,8 @@ import { CITIZEN_STATUS_CHECKER } from "./citizen-status.port.js";
 import { DuplicateDetectionService } from "./duplicate-detection.service.js";
 import { IdentityController } from "./identity.controller.js";
 import { IdentityService } from "./identity.service.js";
+import { IdentityVerifierGuard } from "./identity-verifier.guard.js";
+import { AuthProvisioner } from "./auth-provisioner.js";
 
 // PrismaModule is @Global() (app.module.ts already imports it once for the
 // real app) but is imported here too so a standalone
@@ -16,6 +18,8 @@ import { IdentityService } from "./identity.service.js";
   controllers: [IdentityController],
   providers: [
     IdentityService,
+    IdentityVerifierGuard,
+    AuthProvisioner,
     DuplicateDetectionService,
     { provide: AUDIT_EMITTER, useClass: HttpAuditEmitter },
     { provide: CITIZEN_STATUS_CHECKER, useExisting: IdentityService },

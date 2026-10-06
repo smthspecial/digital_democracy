@@ -12,8 +12,34 @@ paths:
     get: { summary: Readiness probe, responses: { '200': { description: OK } } }
   /auth/login:
     post:
-      summary: DP-059 login (credential → status gate → T1 session, step-up optional)
-      responses: { '201': { description: Created }, '401': { description: No detail leak }, '403': { description: Pending identity } }
+      summary: Disabled legacy identifier-only login; use passkey login ceremonies
+      deprecated: true
+      responses: { '401': { description: Credential ceremony required } }
+  /auth/identities/provision:
+    post:
+      summary: Signed api-ts request provisions a first-passkey enrollment grant for an active verified identity
+      description: Requires X-DD-Service=api-ts, X-DD-Timestamp and X-DD-Signature. HMAC-SHA256 input is method, path, Unix timestamp and SHA256 body hash separated by newlines. Grants expire in 300 seconds and cannot authenticate normal API requests.
+      responses: { '201': { description: Enrollment grant issued }, '401': { description: Invalid service signature or inactive identity }, '403': { description: Account already has a passkey }, '503': { description: RP configuration missing } }
+  /auth/passkeys/registration/begin:
+    post:
+      summary: Consume the enrollment grant and return WebAuthn creation options
+      description: Authorization Bearer contains the enrollment grant. Response contains ceremony_token and options.publicKey. Decode base64url binary fields before calling navigator.credentials.create.
+      responses: { '200': { description: Creation options }, '401': { description: Invalid, expired or consumed grant } }
+  /auth/passkeys/registration/finish:
+    post:
+      summary: Verify the authenticator response and persist the first passkey
+      description: Authorization Bearer contains ceremony_token. Body is the WebAuthn credential JSON (id, rawId, type, response.clientDataJSON and response.attestationObject, with binary values encoded as base64url). The ceremony is consumed even on a failed verification. Does not issue a citizen session.
+      responses: { '201': { description: Credential enrolled }, '401': { description: Invalid ceremony or attestation } }
+  /auth/passkeys/login/begin:
+    post:
+      summary: Generate a login challenge for the citizen's enrolled passkey
+      description: Body contains citizen_id, device_fingerprint and ip_subnet. Response contains ceremony_token and options.publicKey for navigator.credentials.get. User verification is required.
+      responses: { '200': { description: Assertion options }, '401': { description: No usable enrolled credential } }
+  /auth/passkeys/login/finish:
+    post:
+      summary: Verify a single-use assertion and issue a T3 session
+      description: Authorization Bearer contains ceremony_token. Body is the WebAuthn assertion JSON with base64url-encoded clientDataJSON, authenticatorData, signature and userHandle. Origin, RP ID, challenge, public key, user verification and authenticator counter are checked. Response contains an access token; refresh token is an HttpOnly cookie. A fresh ceremony can also supply fresh T3 assurance.
+      responses: { '201': { description: Session issued }, '401': { description: Invalid assertion or inactive identity } }
   /auth/refresh:
     post:
       summary: DP-059 refresh (binding check → rotation → tier re-evaluation)
@@ -31,23 +57,19 @@ paths:
       responses: { '200': { description: OK }, '401': { description: Invalid } }
   /auth/factors:
     post:
-      summary: DP-060 MFA enrollment (totp/passkey/facial; immediate tier upgrade)
-      responses: { '201': { description: Created } }
+      summary: Disabled placeholder factor enrollment; use passkey registration
+      deprecated: true
+      responses: { '401': { description: Verified ceremony required } }
   /auth/stepup:
     post:
-      summary: DP-061 step-up challenge (T3 needs passkey/facial; brute force suspends)
-      responses: { '200': { description: OK } }
+      summary: Disabled placeholder step-up; complete a fresh passkey login
+      deprecated: true
+      responses: { '401': { description: Verified ceremony required } }
   /auth/revoke-all:
     post:
-      summary: Internal revoke_all_sessions for identity-service (DP-042 linkage)
-      responses: { '200': { description: OK } }
-  /auth/purge:
-    post:
-      summary: DP-067 purge expired sessions (revoked rows retained)
-      responses: { '200': { description: OK } }
+      summary: Internal revoke_all_sessions for identity-service; requires a signed service request (DP-042 linkage)
+      responses: { '200': { description: OK }, '401': { description: Unauthenticated service caller } }
   /auth/events:
     get:
-      summary: List auth events, optionally per citizen
-      parameters:
-        - { name: citizen_id, in: query, schema: { type: string } }
-      responses: { '200': { description: OK } }
+      summary: List the authenticated citizen's own auth events
+      responses: { '200': { description: OK }, '401': { description: Invalid access token } }

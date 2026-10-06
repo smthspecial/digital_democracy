@@ -8,6 +8,7 @@ import { AUDIT_EMITTER } from "../common/audit-emitter.js";
 import { DomainErrorFilter } from "../common/domain-error.filter.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { newTestPrismaService, TestDatabaseUrls, testDatabaseUrls, truncateAll } from "../test-support/postgres.js";
+import { installTestAuth, testBearer } from "../test-support/auth.js";
 import { IamModule } from "./iam.module.js";
 
 const urls = testDatabaseUrls();
@@ -77,6 +78,7 @@ describe.skipIf(!urls)("IamController (HTTP, Postgres-backed)", () => {
       .compile();
 
     app = moduleRef.createNestApplication();
+    installTestAuth(app);
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
     app.useGlobalFilters(new DomainErrorFilter());
     await app.init();
@@ -96,11 +98,11 @@ describe.skipIf(!urls)("IamController (HTTP, Postgres-backed)", () => {
   };
 
   it("POST /iam/policies without an operator/platform_operator role is 403", async () => {
-    const res = await request(app.getHttpServer()).post("/iam/policies").set("x-citizen-id", NOBODY).send(POLICY_BODY);
+    const res = await request(app.getHttpServer()).post("/iam/policies").set("authorization", testBearer(NOBODY)).send(POLICY_BODY);
     expect(res.status).toBe(403);
   });
 
-  it("POST /iam/policies without x-citizen-id is 401", async () => {
+  it("POST /iam/policies without bearer token is 401", async () => {
     const res = await request(app.getHttpServer()).post("/iam/policies").send(POLICY_BODY);
     expect(res.status).toBe(401);
   });
@@ -108,7 +110,7 @@ describe.skipIf(!urls)("IamController (HTTP, Postgres-backed)", () => {
   it("full grant flow: propose -> endorse activates -> evaluate allows -> revoke -> evaluate denies", async () => {
     const proposeRes = await request(app.getHttpServer())
       .post("/iam/policies")
-      .set("x-citizen-id", PROPOSER)
+      .set("authorization", testBearer(PROPOSER))
       .send(POLICY_BODY);
     expect(proposeRes.status).toBe(201);
     expect(proposeRes.body.status).toBe("pending_approval");
@@ -116,19 +118,19 @@ describe.skipIf(!urls)("IamController (HTTP, Postgres-backed)", () => {
 
     const attachRes = await request(app.getHttpServer())
       .post("/iam/attachments")
-      .set("x-citizen-id", PROPOSER)
+      .set("authorization", testBearer(PROPOSER))
       .send({ policyId, principalRef: `citizen:${PROPOSER}` });
     expect(attachRes.status).toBe(201);
     const attachmentId = attachRes.body.id;
 
     await request(app.getHttpServer())
       .post(`/iam/policies/${policyId}/endorsements`)
-      .set("x-citizen-id", ENDORSER)
+      .set("authorization", testBearer(ENDORSER))
       .send({ decision: "approved" })
       .expect(201);
     await request(app.getHttpServer())
       .post(`/iam/attachments/${attachmentId}/endorsements`)
-      .set("x-citizen-id", ENDORSER)
+      .set("authorization", testBearer(ENDORSER))
       .send({ decision: "approved" })
       .expect(201);
 
@@ -138,7 +140,7 @@ describe.skipIf(!urls)("IamController (HTTP, Postgres-backed)", () => {
     expect(allowed.status).toBe(201);
     expect(allowed.body.effect).toBe("allow");
 
-    await request(app.getHttpServer()).post(`/iam/policies/${policyId}/revoke`).set("x-citizen-id", ENDORSER).expect(201);
+    await request(app.getHttpServer()).post(`/iam/policies/${policyId}/revoke`).set("authorization", testBearer(ENDORSER)).expect(201);
 
     const denied = await request(app.getHttpServer())
       .post("/iam/evaluate")

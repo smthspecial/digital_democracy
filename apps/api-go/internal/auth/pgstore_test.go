@@ -19,7 +19,7 @@ func pgTestStore(t *testing.T) *PGStore {
 	}
 	t.Cleanup(pool.Close)
 	ensureMigrated(t, pool)
-	for _, table := range []string{"auth_event", "mfa_factor", "session"} {
+	for _, table := range []string{"auth_ceremony", "auth_event", "mfa_factor", "session"} {
 		if _, err := pool.Exec(context.Background(), "TRUNCATE "+table+" CASCADE"); err != nil {
 			t.Fatalf("truncate %s: %v", table, err)
 		}
@@ -27,10 +27,42 @@ func pgTestStore(t *testing.T) *PGStore {
 	return NewPGStore(pool)
 }
 
+func TestPGCeremonyConsumptionAndCredentialUpdates(t *testing.T) {
+	store := pgTestStore(t)
+	now := time.Now().UTC()
+	citizen := newID()
+	if err := store.InsertCeremony("grant-hash", Ceremony{CitizenID: citizen, Kind: "enrollment", Payload: []byte(`{}`), ExpiresAt: now.Add(time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ConsumeCeremony("grant-hash", "login", now); err != ErrUnauthorized {
+		t.Fatalf("cross-purpose consumption: %v", err)
+	}
+	if grant, err := store.ConsumeCeremony("grant-hash", "enrollment", now); err != nil || grant.CitizenID != citizen {
+		t.Fatalf("consumption: %+v %v", grant, err)
+	}
+	if _, err := store.ConsumeCeremony("grant-hash", "enrollment", now); err != ErrUnauthorized {
+		t.Fatalf("replayed grant: %v", err)
+	}
+	previous := []byte(`{"signCount":0}`)
+	factor, err := store.InsertPasskey(&MfaFactor{CitizenID: citizen, PasskeyCredentialID: newToken(), LastUsedAt: now}, previous)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveWebAuthnCredential(factor.ID, []byte(`{"signCount":1}`), previous); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveWebAuthnCredential(factor.ID, []byte(`{"signCount":2}`), previous); err == nil {
+		t.Fatal("stale credential update accepted")
+	}
+	if _, err := store.InsertPasskey(&MfaFactor{CitizenID: citizen, PasskeyCredentialID: newToken(), LastUsedAt: now}, previous); err == nil {
+		t.Fatal("second bootstrap credential accepted")
+	}
+}
+
 // DP-059 login/refresh + DP-060 enrollment + DP-061 step-up hold on Postgres.
 func TestPGAuthLoginRefreshStepUp(t *testing.T) {
 	pg := pgTestStore(t)
-	svc := NewService(pg, nil, nil, nil)
+	svc := NewService(pg, activeIdentityChecker{}, nil, nil)
 	now := time.Now().UTC()
 	citizen := newID()
 
@@ -73,7 +105,7 @@ func TestPGAuthLoginRefreshStepUp(t *testing.T) {
 // DP-066 device mismatch suspends; DP-067 purges only expired rows.
 func TestPGAuthAnomalyAndPurge(t *testing.T) {
 	pg := pgTestStore(t)
-	svc := NewService(pg, nil, nil, nil)
+	svc := NewService(pg, activeIdentityChecker{}, nil, nil)
 	now := time.Now().UTC()
 	citizen := newID()
 

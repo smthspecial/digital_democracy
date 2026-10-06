@@ -8,6 +8,8 @@ import { AUDIT_EMITTER } from "../common/audit-emitter.js";
 import { DomainErrorFilter } from "../common/domain-error.filter.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { newTestPrismaService, TestDatabaseUrls, testDatabaseUrls, truncateAll } from "../test-support/postgres.js";
+import { installTestAuth, testBearer } from "../test-support/auth.js";
+import { IdentityService } from "../identity/identity.service.js";
 import { IdentityRevocationModule } from "./identity-revocation.module.js";
 
 process.env.IDENTITY_HASH_SECRET ??= "test-secret";
@@ -61,6 +63,7 @@ describe.skipIf(!urls)("IdentityRevocationController (HTTP, Postgres-backed)", (
       .compile();
 
     app = moduleRef.createNestApplication();
+    installTestAuth(app);
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
     app.useGlobalFilters(new DomainErrorFilter());
     await app.init();
@@ -76,10 +79,10 @@ describe.skipIf(!urls)("IdentityRevocationController (HTTP, Postgres-backed)", (
       .post("/identity/citizens")
       .send({ publicHandle: handle, legalIdentifier: `id-${handle}` });
     const citizenId = registerRes.body.id;
-    await request(app.getHttpServer())
-      .post("/identity/verifications")
-      .set("x-citizen-id", citizenId)
-      .send({ method: "national_id", evidenceRef: "ref-1", outcome: "verified" });
+    // This domain fixture needs an active citizen, not an external verifier.
+    await app.get(IdentityService).submitVerification(citizenId, {
+      method: "national_id", evidenceRef: "ref-1", outcome: "verified",
+    });
     return citizenId;
   }
 
@@ -88,14 +91,14 @@ describe.skipIf(!urls)("IdentityRevocationController (HTTP, Postgres-backed)", (
     await insertGovernanceRole(auditApprover, "audit");
     await request(app.getHttpServer())
       .post("/governance-role/approvals")
-      .set("x-citizen-id", auditApprover)
+      .set("authorization", testBearer(auditApprover))
       .send({ actionRef, approvalType: "audit_confirmation", decision: "approved" });
 
     const bodyApprover = await activeCitizen(`body-${randomUUID()}`);
     await insertGovernanceRole(bodyApprover, "protocol", "review_body");
     await request(app.getHttpServer())
       .post("/governance-role/approvals")
-      .set("x-citizen-id", bodyApprover)
+      .set("authorization", testBearer(bodyApprover))
       .send({ actionRef, approvalType: "body_endorsement", decision: "approved" });
   }
 
@@ -105,7 +108,7 @@ describe.skipIf(!urls)("IdentityRevocationController (HTTP, Postgres-backed)", (
 
     const res = await request(app.getHttpServer())
       .post("/identity/revocations")
-      .set("x-citizen-id", actorId)
+      .set("authorization", testBearer(actorId))
       .send({ citizenId: targetId, reason: "proven_fraud", justification: "j" });
 
     expect(res.status).toBe(403);
@@ -117,7 +120,7 @@ describe.skipIf(!urls)("IdentityRevocationController (HTTP, Postgres-backed)", (
 
     const res = await request(app.getHttpServer())
       .post("/identity/revocations")
-      .set("x-citizen-id", actorId)
+      .set("authorization", testBearer(actorId))
       .send({ citizenId: randomUUID(), reason: "death", justification: "j" });
 
     expect(res.status).toBe(404);
@@ -130,7 +133,7 @@ describe.skipIf(!urls)("IdentityRevocationController (HTTP, Postgres-backed)", (
 
     const requestRes = await request(app.getHttpServer())
       .post("/identity/revocations")
-      .set("x-citizen-id", actorId)
+      .set("authorization", testBearer(actorId))
       .send({ citizenId: targetId, reason: "death", justification: "j" });
     expect(requestRes.status).toBe(201);
 
@@ -150,7 +153,7 @@ describe.skipIf(!urls)("IdentityRevocationController (HTTP, Postgres-backed)", (
 
     const requestRes = await request(app.getHttpServer())
       .post("/identity/revocations")
-      .set("x-citizen-id", actorId)
+      .set("authorization", testBearer(actorId))
       .send({ citizenId: targetId, reason: "death", justification: "j" });
 
     await fullyApprove(requestRes.body.actionRef);

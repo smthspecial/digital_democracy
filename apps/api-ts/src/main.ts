@@ -5,11 +5,13 @@ import "reflect-metadata";
 import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module.js";
+import { createAuthContextMiddleware } from "./common/auth-context.js";
 import { DomainErrorFilter } from "./common/domain-error.filter.js";
 import { metricsMiddleware } from "./metrics/metrics.middleware.js";
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { rawBody: true });
+  app.use(createAuthContextMiddleware());
   app.use(metricsMiddleware);
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
   app.useGlobalFilters(new DomainErrorFilter());

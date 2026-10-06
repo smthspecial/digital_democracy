@@ -7,7 +7,10 @@ import { AUDIT_EMITTER } from "../common/audit-emitter.js";
 import { DomainErrorFilter } from "../common/domain-error.filter.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { newTestPrismaService, TestDatabaseUrls, testDatabaseUrls, truncateAll } from "../test-support/postgres.js";
+import { installTestAuth, testBearer } from "../test-support/auth.js";
 import { IdentityModule } from "./identity.module.js";
+import { AuthProvisioner } from "./auth-provisioner.js";
+import { testVerifierHeaders } from "../test-support/identity-verifier.js";
 
 process.env.IDENTITY_HASH_SECRET ??= "test-secret";
 
@@ -22,6 +25,7 @@ describe.skipIf(!urls)("IdentityController (HTTP, Postgres-backed)", () => {
   let prisma: PrismaService;
 
   beforeAll(async () => {
+    process.env.IDENTITY_VERIFIER_SHARED_SECRET = "test-verifier-secret";
     await truncateAll(urls as TestDatabaseUrls);
     prisma = newTestPrismaService(urls as TestDatabaseUrls);
     await prisma.onModuleInit();
@@ -31,9 +35,12 @@ describe.skipIf(!urls)("IdentityController (HTTP, Postgres-backed)", () => {
       .useValue(prisma)
       .overrideProvider(AUDIT_EMITTER)
       .useValue({ emit: async () => undefined })
+      .overrideProvider(AuthProvisioner)
+      .useValue({ provision: async () => ({ enrollment_grant: "test-enrollment-grant", expires_in: 300 }) })
       .compile();
 
-    app = moduleRef.createNestApplication();
+    app = moduleRef.createNestApplication({ rawBody: true });
+    installTestAuth(app);
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
     app.useGlobalFilters(new DomainErrorFilter());
     await app.init();
@@ -43,6 +50,11 @@ describe.skipIf(!urls)("IdentityController (HTTP, Postgres-backed)", () => {
     await app.close();
     await prisma?.onModuleDestroy();
   });
+
+  function verify(citizenId: string, body: Record<string, string>) {
+    const path = `/identity/citizens/${citizenId}/verifications`;
+    return request(app.getHttpServer()).post(path).set(testVerifierHeaders(path, body)).send(body);
+  }
 
   it("POST /identity/citizens registers a pending citizen (DP-001)", async () => {
     const res = await request(app.getHttpServer())
@@ -70,22 +82,19 @@ describe.skipIf(!urls)("IdentityController (HTTP, Postgres-backed)", () => {
       .send({ publicHandle: "bob", legalIdentifier: "id-flow-1" });
     const citizenId = registerRes.body.id;
 
-    const verifyRes = await request(app.getHttpServer())
-      .post("/identity/verifications")
-      .set("x-citizen-id", citizenId)
-      .send({ method: "national_id", evidenceRef: "ref-1", outcome: "verified" });
+    const verifyRes = await verify(citizenId, { method: "national_id", evidenceRef: "ref-1", outcome: "verified" });
 
     expect(verifyRes.status).toBe(201);
     expect(verifyRes.body.citizen.status).toBe("active");
 
     const readRes = await request(app.getHttpServer())
       .get(`/identity/citizens/${citizenId}`)
-      .set("x-citizen-id", citizenId);
+      .set("authorization", testBearer(citizenId));
     expect(readRes.status).toBe(200);
     expect(readRes.body.status).toBe("active");
   });
 
-  it("GET /identity/citizens/:id without the citizen header is 401", async () => {
+  it("GET /identity/citizens/:id without the bearer token is 401", async () => {
     const res = await request(app.getHttpServer()).get(`/identity/citizens/${randomUUID()}`);
     expect(res.status).toBe(401);
   });
@@ -97,17 +106,17 @@ describe.skipIf(!urls)("IdentityController (HTTP, Postgres-backed)", () => {
 
     const res = await request(app.getHttpServer())
       .get(`/identity/citizens/${registerRes.body.id}`)
-      .set("x-citizen-id", randomUUID());
+      .set("authorization", testBearer(randomUUID()));
     expect(res.status).toBe(403);
   });
 
-  it("GET /identity/citizens/:id/status (BUG-002) returns only {status}, no citizen header required", async () => {
+  it("GET /identity/citizens/:id/status (BUG-002) returns only {status}, no bearer token required", async () => {
     const registerRes = await request(app.getHttpServer())
       .post("/identity/citizens")
       .send({ publicHandle: "erin", legalIdentifier: "id-flow-status-1" });
     const citizenId = registerRes.body.id;
 
-    // No x-citizen-id header: this is the exact shape auth-service's
+    // No bearer token: this is the exact shape auth-service's
     // httpIdentityChecker calls with -- a service-to-service caller with no
     // requester identity of its own (BUG-002's fix). GET :id (getById)
     // requires the header and would 401 here.
@@ -125,10 +134,7 @@ describe.skipIf(!urls)("IdentityController (HTTP, Postgres-backed)", () => {
       .post("/identity/citizens")
       .send({ publicHandle: "frank", legalIdentifier: "id-flow-status-2" });
     const citizenId = registerRes.body.id;
-    await request(app.getHttpServer())
-      .post("/identity/verifications")
-      .set("x-citizen-id", citizenId)
-      .send({ method: "national_id", evidenceRef: "ref-1", outcome: "verified" });
+    await verify(citizenId, { method: "national_id", evidenceRef: "ref-1", outcome: "verified" });
 
     const res = await request(app.getHttpServer()).get(`/identity/citizens/${citizenId}/status`);
     expect(res.body).toEqual({ status: "active" });
@@ -175,15 +181,9 @@ describe.skipIf(!urls)("IdentityController (HTTP, Postgres-backed)", () => {
       .post("/identity/citizens")
       .send({ publicHandle: "dave", legalIdentifier: "id-flow-3" });
     const citizenId = registerRes.body.id;
-    await request(app.getHttpServer())
-      .post("/identity/verifications")
-      .set("x-citizen-id", citizenId)
-      .send({ method: "national_id", evidenceRef: "ref-1", outcome: "verified" });
+    await verify(citizenId, { method: "national_id", evidenceRef: "ref-1", outcome: "verified" });
 
-    const res = await request(app.getHttpServer())
-      .post("/identity/verifications")
-      .set("x-citizen-id", citizenId)
-      .send({ method: "national_id", evidenceRef: "ref-2", outcome: "verified" });
+    const res = await verify(citizenId, { method: "national_id", evidenceRef: "ref-2", outcome: "verified" });
     expect(res.status).toBe(422);
   });
 
@@ -193,10 +193,7 @@ describe.skipIf(!urls)("IdentityController (HTTP, Postgres-backed)", () => {
       .send({ publicHandle: "grace", legalIdentifier: "id-flow-ec11-outcome" });
     const citizenId = registerRes.body.id;
 
-    const res = await request(app.getHttpServer())
-      .post("/identity/verifications")
-      .set("x-citizen-id", citizenId)
-      .send({ method: "national_id", evidenceRef: "ref-1", outcome: "maybe" });
+    const res = await verify(citizenId, { method: "national_id", evidenceRef: "ref-1", outcome: "maybe" });
     expect(res.status).toBe(400);
   });
 
@@ -206,10 +203,7 @@ describe.skipIf(!urls)("IdentityController (HTTP, Postgres-backed)", () => {
       .send({ publicHandle: "heidi", legalIdentifier: "id-flow-ec11-method" });
     const citizenId = registerRes.body.id;
 
-    const res = await request(app.getHttpServer())
-      .post("/identity/verifications")
-      .set("x-citizen-id", citizenId)
-      .send({ method: "drivers_license", evidenceRef: "ref-1", outcome: "verified" });
+    const res = await verify(citizenId, { method: "drivers_license", evidenceRef: "ref-1", outcome: "verified" });
     expect(res.status).toBe(400);
   });
 });

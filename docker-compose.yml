@@ -73,6 +73,11 @@ services:
       NATS_URL: nats://nats:4222
       COMPETENCY_SERVICE_URL: http://api-ts:4000
       IDENTITY_SERVICE_URL: http://api-ts:4000
+      # Shared internal-call key. Set it in the shell/.env used by Compose;
+      # api-go rejects internal operations when it is absent.
+      INTERNAL_SERVICE_SHARED_SECRET: ${INTERNAL_SERVICE_SHARED_SECRET:-}
+      WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-}
+      WEBAUTHN_RP_ORIGIN: ${WEBAUTHN_RP_ORIGIN:-}
       # NOTIFICATION_SERVICE_URL deliberately unset (BUG-003): nothing in
       # apps/api-ts serves POST /notifications/dispatch (ADR-031 carve-out
       # -- notification-service owns no module/schema/routes in either
@@ -98,6 +103,8 @@ services:
       NATS_URL: nats://nats:4222
       AUDIT_SERVICE_URL: http://api-go:5000
       AUTH_SERVICE_URL: http://api-go:5000
+      IDENTITY_VERIFIER_SHARED_SECRET: ${IDENTITY_VERIFIER_SHARED_SECRET:-}
+      INTERNAL_SERVICE_SHARED_SECRET: ${INTERNAL_SERVICE_SHARED_SECRET:-}
       # NOTIFICATION_SERVICE_URL deliberately unset -- see api-go's comment
       # above; the same carve-out applies in this direction too.
     depends_on:

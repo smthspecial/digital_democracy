@@ -9,6 +9,7 @@ import { DomainErrorFilter } from "../common/domain-error.filter.js";
 import { NOTIFICATION_EMITTER } from "../common/notification-emitter.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { newTestPrismaService, TestDatabaseUrls, testDatabaseUrls, truncateAll } from "../test-support/postgres.js";
+import { installTestAuth, testBearer } from "../test-support/auth.js";
 import { ProjectModule } from "./project.module.js";
 
 const urls = testDatabaseUrls();
@@ -157,6 +158,7 @@ describe.skipIf(!urls)("ProjectController (HTTP, Postgres-backed)", () => {
       .compile();
 
     app = moduleRef.createNestApplication();
+    installTestAuth(app);
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
     app.useGlobalFilters(new DomainErrorFilter());
     await app.init();
@@ -182,7 +184,7 @@ describe.skipIf(!urls)("ProjectController (HTTP, Postgres-backed)", () => {
   it("PATCH /projects/milestones/:id without an oversight/operator role is 403", async () => {
     const res = await request(app.getHttpServer())
       .patch(`/projects/milestones/${milestoneId}`)
-      .set("x-citizen-id", NOBODY)
+      .set("authorization", testBearer(NOBODY))
       .send({ status: "done" });
     expect(res.status).toBe(403);
   });
@@ -190,7 +192,7 @@ describe.skipIf(!urls)("ProjectController (HTTP, Postgres-backed)", () => {
   it("PATCH /projects/milestones/:id with a spend delta pushes a ledger entry", async () => {
     const res = await request(app.getHttpServer())
       .patch(`/projects/milestones/${milestoneId}`)
-      .set("x-citizen-id", OVERSIGHT)
+      .set("authorization", testBearer(OVERSIGHT))
       .send({ status: "pending", spentDelta: 500 });
     expect(res.status).toBe(200);
 
@@ -203,7 +205,7 @@ describe.skipIf(!urls)("ProjectController (HTTP, Postgres-backed)", () => {
   it("POST /projects/:id/evaluations without an auditor/oversight role is 403", async () => {
     const res = await request(app.getHttpServer())
       .post(`/projects/${projectId}/evaluations`)
-      .set("x-citizen-id", NOBODY)
+      .set("authorization", testBearer(NOBODY))
       .send({ objective: "x", promisedOutcome: "y", measuredOutcome: "z", evaluation: "successful" });
     expect(res.status).toBe(403);
   });
@@ -211,7 +213,7 @@ describe.skipIf(!urls)("ProjectController (HTTP, Postgres-backed)", () => {
   it("POST /projects/:id/evaluations on a successful outcome records a reputation delta for the proposal author", async () => {
     const res = await request(app.getHttpServer())
       .post(`/projects/${projectId}/evaluations`)
-      .set("x-citizen-id", AUDITOR)
+      .set("authorization", testBearer(AUDITOR))
       .send({
         objective: "Reduce commute times",
         promisedOutcome: "20% faster commutes",

@@ -280,6 +280,9 @@ func (s *PGStore) SessionsOf(citizenID string) ([]*Session, error) {
 func (s *PGStore) PurgeExpired(now time.Time) (int, error) {
 	ctx, cancel := opCtx()
 	defer cancel()
+	if _, err := s.pool.Exec(ctx, `DELETE FROM auth_ceremony WHERE expires_at <= $1`, now); err != nil {
+		return 0, err
+	}
 	n, err := s.q.PurgeExpiredSessions(ctx, pgconv.TSTZ(now.Add(-PurgeGrace)))
 	if err != nil {
 		return 0, err

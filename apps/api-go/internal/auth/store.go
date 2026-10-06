@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"encoding/json"
 	"sync"
 	"time"
 )
@@ -12,7 +13,9 @@ import (
 // instead of silent 401s. Methods return nil errors; the error exists for
 // parity with PGStore.
 type MemoryStore struct {
-	mu sync.RWMutex
+	ceremonies  map[string]Ceremony
+	credentials map[string]json.RawMessage
+	mu          sync.RWMutex
 
 	sessions          map[string]*Session
 	sessionByAccess   map[string]string
@@ -31,6 +34,8 @@ type MemoryStore struct {
 
 func NewStore() *MemoryStore {
 	return &MemoryStore{
+		ceremonies:        make(map[string]Ceremony),
+		credentials:       make(map[string]json.RawMessage),
 		sessions:          make(map[string]*Session),
 		sessionByAccess:   make(map[string]string),
 		sessionByRefresh:  make(map[string]string),

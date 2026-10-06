@@ -8,6 +8,8 @@ import { AUDIT_EMITTER } from "../common/audit-emitter.js";
 import { DomainErrorFilter } from "../common/domain-error.filter.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { newTestPrismaService, TestDatabaseUrls, testDatabaseUrls, truncateAll } from "../test-support/postgres.js";
+import { installTestAuth, testBearer } from "../test-support/auth.js";
+import { IdentityService } from "../identity/identity.service.js";
 import { DeliberationModule } from "./deliberation.module.js";
 
 process.env.IDENTITY_HASH_SECRET ??= "test-secret";
@@ -97,6 +99,7 @@ describe.skipIf(!urls)("DeliberationController (HTTP, Postgres-backed)", () => {
       .compile();
 
     app = moduleRef.createNestApplication();
+    installTestAuth(app);
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
     app.useGlobalFilters(new DomainErrorFilter());
     await app.init();
@@ -115,10 +118,10 @@ describe.skipIf(!urls)("DeliberationController (HTTP, Postgres-backed)", () => {
       .post("/identity/citizens")
       .send({ publicHandle: handle, legalIdentifier: `id-${handle}` });
     const citizenId = registerRes.body.id;
-    await request(app.getHttpServer())
-      .post("/identity/verifications")
-      .set("x-citizen-id", citizenId)
-      .send({ method: "national_id", evidenceRef: "ref-1", outcome: "verified" });
+    // This domain fixture needs an active citizen, not an external verifier.
+    await app.get(IdentityService).submitVerification(citizenId, {
+      method: "national_id", evidenceRef: "ref-1", outcome: "verified",
+    });
     return citizenId;
   }
 
@@ -141,7 +144,7 @@ describe.skipIf(!urls)("DeliberationController (HTTP, Postgres-backed)", () => {
     const proposalId = await seedProposal();
     const res = await request(app.getHttpServer())
       .post("/deliberation/arguments")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ proposalId, stance: "agreement", body: "Good idea", evidenceRef: "study-1" });
 
     expect(res.status).toBe(201);
@@ -153,7 +156,7 @@ describe.skipIf(!urls)("DeliberationController (HTTP, Postgres-backed)", () => {
     const citizenId = await activeCitizen("bob");
     const res = await request(app.getHttpServer())
       .post("/deliberation/arguments")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ proposalId: randomUUID(), stance: "agreement", body: "Good idea" });
     expect(res.status).toBe(400);
   });
@@ -162,12 +165,12 @@ describe.skipIf(!urls)("DeliberationController (HTTP, Postgres-backed)", () => {
     const citizenId = await activeCitizen("cleo");
     const res = await request(app.getHttpServer())
       .post("/deliberation/arguments")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ proposalId: randomUUID(), stance: "neutral", body: "x", evidenceRef: "e" });
     expect(res.status).toBe(400);
   });
 
-  it("POST /deliberation/arguments without x-citizen-id is 401", async () => {
+  it("POST /deliberation/arguments without bearer token is 401", async () => {
     const res = await request(app.getHttpServer())
       .post("/deliberation/arguments")
       .send({ proposalId: randomUUID(), stance: "agreement", body: "x", evidenceRef: "e" });
@@ -181,7 +184,7 @@ describe.skipIf(!urls)("DeliberationController (HTTP, Postgres-backed)", () => {
 
     const res = await request(app.getHttpServer())
       .post("/deliberation/arguments")
-      .set("x-citizen-id", registerRes.body.id)
+      .set("authorization", testBearer(registerRes.body.id))
       .send({ proposalId: randomUUID(), stance: "agreement", body: "x", evidenceRef: "e" });
     expect(res.status).toBe(403);
   });
@@ -192,11 +195,11 @@ describe.skipIf(!urls)("DeliberationController (HTTP, Postgres-backed)", () => {
     const proposalId2 = await seedProposal();
     await request(app.getHttpServer())
       .post("/deliberation/arguments")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ proposalId: proposalId1, stance: "agreement", body: "a", evidenceRef: "e" });
     await request(app.getHttpServer())
       .post("/deliberation/arguments")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ proposalId: proposalId2, stance: "disagreement", body: "b", evidenceRef: "e" });
 
     const filtered = await request(app.getHttpServer())
@@ -212,7 +215,7 @@ describe.skipIf(!urls)("DeliberationController (HTTP, Postgres-backed)", () => {
     const problemId = await seedProblem();
     const res = await request(app.getHttpServer())
       .post("/deliberation/preferences")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ problemId, desiredOutcome: "Fewer potholes" });
 
     expect(res.status).toBe(201);
@@ -224,12 +227,12 @@ describe.skipIf(!urls)("DeliberationController (HTTP, Postgres-backed)", () => {
     const citizenId = await activeCitizen("gabe");
     const res = await request(app.getHttpServer())
       .post("/deliberation/preferences")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ desiredOutcome: "x" });
     expect(res.status).toBe(400);
   });
 
-  it("POST /deliberation/preferences without x-citizen-id is 401", async () => {
+  it("POST /deliberation/preferences without bearer token is 401", async () => {
     const res = await request(app.getHttpServer())
       .post("/deliberation/preferences")
       .send({ problemId: randomUUID(), desiredOutcome: "x" });
@@ -243,7 +246,7 @@ describe.skipIf(!urls)("DeliberationController (HTTP, Postgres-backed)", () => {
 
     const res = await request(app.getHttpServer())
       .post("/deliberation/preferences")
-      .set("x-citizen-id", registerRes.body.id)
+      .set("authorization", testBearer(registerRes.body.id))
       .send({ problemId: randomUUID(), desiredOutcome: "x" });
     expect(res.status).toBe(403);
   });
@@ -254,11 +257,11 @@ describe.skipIf(!urls)("DeliberationController (HTTP, Postgres-backed)", () => {
     const problemId2 = await seedProblem();
     await request(app.getHttpServer())
       .post("/deliberation/preferences")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ problemId: problemId1, desiredOutcome: "a" });
     await request(app.getHttpServer())
       .post("/deliberation/preferences")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ problemId: problemId2, desiredOutcome: "b" });
 
     const filtered = await request(app.getHttpServer())

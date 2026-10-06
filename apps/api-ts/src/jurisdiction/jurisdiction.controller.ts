@@ -1,7 +1,8 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Post } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Post } from "@nestjs/common";
 import { RequiredCitizenId } from "../common/citizen-id.decorator.js";
 import { DeclareResidencyDto } from "./dto/declare-residency.dto.js";
 import { EnrollMembershipDto } from "./dto/enroll-membership.dto.js";
+import { ReviewResidencyDto } from "./dto/review-residency.dto.js";
 import { JurisdictionService } from "./jurisdiction.service.js";
 
 // Route prefix per ADR-027 (one prefix per hosted service). No DP-NNN
@@ -25,6 +26,17 @@ export class JurisdictionController {
   async declareResidency(@RequiredCitizenId() citizenId: string, @Body() dto: DeclareResidencyDto) {
     await this.jurisdiction.declareResidency(citizenId, dto.jurisdictionId, new Date(dto.startDate));
     return { status: "declared" };
+  }
+
+  @Post("residencies/:id/review")
+  @HttpCode(HttpStatus.OK)
+  async reviewResidency(
+    @RequiredCitizenId() reviewerId: string,
+    @Param("id") residencyId: string,
+    @Body() dto: ReviewResidencyDto,
+  ) {
+    await this.jurisdiction.reviewResidency(reviewerId, residencyId, dto.decision);
+    return { status: dto.decision };
   }
 
   @Post("memberships")

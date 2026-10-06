@@ -1,9 +1,11 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Post } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, ParseUUIDPipe, Post, UseGuards, Header } from "@nestjs/common";
 import { RequiredCitizenId } from "../common/citizen-id.decorator.js";
 import { DuplicateDetectionService } from "./duplicate-detection.service.js";
 import { RegisterCitizenDto } from "./dto/register-citizen.dto.js";
 import { SubmitVerificationDto } from "./dto/submit-verification.dto.js";
 import { IdentityService } from "./identity.service.js";
+import { IdentityVerifierGuard } from "./identity-verifier.guard.js";
+import { AuthProvisioner } from "./auth-provisioner.js";
 
 // Route prefix per ADR-027 (one prefix per hosted service).
 //
@@ -20,6 +22,7 @@ export class IdentityController {
   constructor(
     @Inject(IdentityService) private readonly identity: IdentityService,
     @Inject(DuplicateDetectionService) private readonly duplicateDetection: DuplicateDetectionService,
+    @Inject(AuthProvisioner) private readonly authProvisioner: AuthProvisioner,
   ) {}
 
   // DP-001. Unauthenticated (a civic identity does not exist yet).
@@ -45,13 +48,26 @@ export class IdentityController {
     return this.identity.statusOf(id);
   }
 
-  // DP-002. actor: "citizen (status pending)" -- the acting citizen is
-  // always the requester, never a body field (mirrors the identity_verification
-  // OWN RLS policy: citizen_id = current_citizen_id()).
-  @Post("verifications")
+  // DP-002/ADR-040: the trusted verifier supplies the evidence decision.
+  // No pre-existing citizen session is needed for identity provisioning.
+  @Post("citizens/:id/verifications")
+  @UseGuards(IdentityVerifierGuard)
+  @Header("Cache-Control", "no-store")
   @HttpCode(HttpStatus.CREATED)
-  submitVerification(@RequiredCitizenId() citizenId: string, @Body() dto: SubmitVerificationDto) {
-    return this.identity.submitVerification(citizenId, dto);
+  async submitVerification(@Param("id", ParseUUIDPipe) citizenId: string, @Body() dto: SubmitVerificationDto) {
+    const result = await this.identity.submitVerification(citizenId, dto);
+    if (result.citizen.status !== "active") return result;
+    return { ...result, enrollment: await this.authProvisioner.provision(citizenId) };
+  }
+
+  // Retries after a cross-runtime outage require the trusted verifier again.
+  // An active account with no verified evidence may never receive a grant.
+  @Post("citizens/:id/enrollment-grant")
+  @UseGuards(IdentityVerifierGuard)
+  @Header("Cache-Control", "no-store")
+  async enrollmentGrant(@Param("id", ParseUUIDPipe) citizenId: string) {
+    await this.identity.assertVerifiedIdentity(citizenId);
+    return this.authProvisioner.provision(citizenId);
   }
 
   // FR-005 AC3/ADR-034 D6 (E1-13). Review-facing, not auto-acting.

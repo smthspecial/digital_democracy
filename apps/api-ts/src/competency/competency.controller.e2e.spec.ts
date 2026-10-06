@@ -7,6 +7,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DomainErrorFilter } from "../common/domain-error.filter.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { newTestPrismaService, TestDatabaseUrls, testDatabaseUrls, truncateAll } from "../test-support/postgres.js";
+import { installTestAuth, testBearer } from "../test-support/auth.js";
+import { IdentityService } from "../identity/identity.service.js";
 import { CompetencyModule } from "./competency.module.js";
 
 process.env.IDENTITY_HASH_SECRET ??= "test-secret";
@@ -96,6 +98,7 @@ describe.skipIf(!urls)("CompetencyController (HTTP, Postgres-backed)", () => {
       .compile();
 
     app = moduleRef.createNestApplication();
+    installTestAuth(app);
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
     app.useGlobalFilters(new DomainErrorFilter());
     await app.init();
@@ -113,10 +116,10 @@ describe.skipIf(!urls)("CompetencyController (HTTP, Postgres-backed)", () => {
       .post("/identity/citizens")
       .send({ publicHandle: handle, legalIdentifier: `id-${handle}` });
     const citizenId = registerRes.body.id;
-    await request(app.getHttpServer())
-      .post("/identity/verifications")
-      .set("x-citizen-id", citizenId)
-      .send({ method: "national_id", evidenceRef: "ref-1", outcome: "verified" });
+    // This domain fixture needs an active citizen, not an external verifier.
+    await app.get(IdentityService).submitVerification(citizenId, {
+      method: "national_id", evidenceRef: "ref-1", outcome: "verified",
+    });
     return citizenId;
   }
 
@@ -134,7 +137,7 @@ describe.skipIf(!urls)("CompetencyController (HTTP, Postgres-backed)", () => {
     await insertDomain(domainId, "Housing");
     const res = await request(app.getHttpServer())
       .post("/competency/competencies")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ domainId, level: 2, evidenceRef: "evidence-1" });
 
     expect(res.status).toBe(201);
@@ -146,12 +149,12 @@ describe.skipIf(!urls)("CompetencyController (HTTP, Postgres-backed)", () => {
     const citizenId = await activeCitizen("bob");
     const res = await request(app.getHttpServer())
       .post("/competency/competencies")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ domainId: "not-a-uuid", level: 9, evidenceRef: "evidence-1" });
     expect(res.status).toBe(400);
   });
 
-  it("POST /competency/competencies without x-citizen-id is 401", async () => {
+  it("POST /competency/competencies without bearer token is 401", async () => {
     const res = await request(app.getHttpServer())
       .post("/competency/competencies")
       .send({ domainId: randomUUID(), level: 1, evidenceRef: "evidence-1" });
@@ -165,7 +168,7 @@ describe.skipIf(!urls)("CompetencyController (HTTP, Postgres-backed)", () => {
 
     const res = await request(app.getHttpServer())
       .post("/competency/competencies")
-      .set("x-citizen-id", registerRes.body.id)
+      .set("authorization", testBearer(registerRes.body.id))
       .send({ domainId: randomUUID(), level: 1, evidenceRef: "evidence-1" });
     expect(res.status).toBe(403);
   });
@@ -178,11 +181,11 @@ describe.skipIf(!urls)("CompetencyController (HTTP, Postgres-backed)", () => {
     await insertDomain(domainId2, "Energy");
     await request(app.getHttpServer())
       .post("/competency/competencies")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ domainId: domainId1, level: 1, evidenceRef: "evidence-1" });
     await request(app.getHttpServer())
       .post("/competency/competencies")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ domainId: domainId2, level: 1, evidenceRef: "evidence-1" });
 
     const filtered = await request(app.getHttpServer())
@@ -199,7 +202,7 @@ describe.skipIf(!urls)("CompetencyController (HTTP, Postgres-backed)", () => {
     await insertDomain(domainId, "Parks");
     const res = await request(app.getHttpServer())
       .post("/competency/conflicts")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({
         domainId,
         type: "employer",
@@ -217,7 +220,7 @@ describe.skipIf(!urls)("CompetencyController (HTTP, Postgres-backed)", () => {
     await insertDomain(domainId, "Housing");
     const postRes = await request(app.getHttpServer())
       .post("/competency/conflicts")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ domainId, type: "consulting", description: "Board member" });
     expect(postRes.status).toBe(201);
 
@@ -234,7 +237,7 @@ describe.skipIf(!urls)("CompetencyController (HTTP, Postgres-backed)", () => {
 
     const res = await request(app.getHttpServer())
       .post("/competency/conflicts")
-      .set("x-citizen-id", registerRes.body.id)
+      .set("authorization", testBearer(registerRes.body.id))
       .send({ domainId: randomUUID(), type: "financial", description: "x" });
     expect(res.status).toBe(403);
   });
@@ -248,7 +251,7 @@ describe.skipIf(!urls)("CompetencyController (HTTP, Postgres-backed)", () => {
 
     const res = await request(app.getHttpServer())
       .post("/competency/competency-challenges")
-      .set("x-citizen-id", challenger)
+      .set("authorization", testBearer(challenger))
       .send({
         competencyId,
         evidenceRef: "evidence-ref-1",
@@ -268,7 +271,7 @@ describe.skipIf(!urls)("CompetencyController (HTTP, Postgres-backed)", () => {
     await insertCompetency(competencyId, challenger, domainId, "applied");
     await request(app.getHttpServer())
       .post("/competency/competency-challenges")
-      .set("x-citizen-id", challenger)
+      .set("authorization", testBearer(challenger))
       .send({ competencyId, evidenceRef: "evidence-ref-2", reason: "misconduct" });
 
     const res = await request(app.getHttpServer()).get("/competency/competency-challenges").query({ competencyId });
@@ -281,7 +284,7 @@ describe.skipIf(!urls)("CompetencyController (HTTP, Postgres-backed)", () => {
     const challenger = await activeCitizen("hana");
     const res = await request(app.getHttpServer())
       .post("/competency/competency-challenges")
-      .set("x-citizen-id", challenger)
+      .set("authorization", testBearer(challenger))
       .send({ competencyId: randomUUID(), evidenceRef: "", reason: "credentials" });
     expect(res.status).toBe(400);
   });
@@ -290,7 +293,7 @@ describe.skipIf(!urls)("CompetencyController (HTTP, Postgres-backed)", () => {
     const citizenId = await activeCitizen("ivan");
     const res = await request(app.getHttpServer())
       .post("/competency/assessments")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({
         proposalId: randomUUID(),
         domainId: randomUUID(),
@@ -310,12 +313,12 @@ describe.skipIf(!urls)("CompetencyController (HTTP, Postgres-backed)", () => {
     await insertCompetency(randomUUID(), citizenId, domainId, "active");
     await request(app.getHttpServer())
       .post("/competency/conflicts")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ domainId, type: "consulting", description: "Undisclosed-turned-disclosed interest" });
 
     const res = await request(app.getHttpServer())
       .post("/competency/assessments")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({
         proposalId: randomUUID(),
         domainId,
@@ -343,7 +346,7 @@ describe.skipIf(!urls)("CompetencyController (HTTP, Postgres-backed)", () => {
 
     const res = await request(app.getHttpServer())
       .post("/competency/assessments")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({
         proposalId,
         domainId,

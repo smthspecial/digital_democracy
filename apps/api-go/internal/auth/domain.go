@@ -94,9 +94,9 @@ type Session struct {
 	CreatedAt         time.Time `json:"created_at"`
 }
 
-// MfaFactor is TBL-038. Secrets/embeddings are stored encrypted-at-rest
-// (opaque "enc:" envelope here; KMS envelope encryption in production). The
-// biometric embedding never leaves this service (ADR-014).
+// MfaFactor is TBL-038. Runtime passkeys persist public credential state in
+// webauthn_credential; their private keys remain on the authenticator.
+// TOTP/biometric fields are reserved and currently used only by test fixtures.
 type MfaFactor struct {
 	ID                    string     `json:"id"`
 	CitizenID             string     `json:"citizen_id"`

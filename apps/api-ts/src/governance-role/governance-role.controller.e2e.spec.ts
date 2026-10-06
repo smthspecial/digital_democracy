@@ -8,6 +8,8 @@ import { AUDIT_EMITTER } from "../common/audit-emitter.js";
 import { DomainErrorFilter } from "../common/domain-error.filter.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { newTestPrismaService, TestDatabaseUrls, testDatabaseUrls, truncateAll } from "../test-support/postgres.js";
+import { installTestAuth, testBearer } from "../test-support/auth.js";
+import { IdentityService } from "../identity/identity.service.js";
 import { GovernanceRoleModule } from "./governance-role.module.js";
 
 process.env.IDENTITY_HASH_SECRET ??= "test-secret";
@@ -81,6 +83,7 @@ describe.skipIf(!urls)("GovernanceRoleController (HTTP, Postgres-backed)", () =>
       .compile();
 
     app = moduleRef.createNestApplication();
+    installTestAuth(app);
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
     app.useGlobalFilters(new DomainErrorFilter());
     await app.init();
@@ -98,10 +101,10 @@ describe.skipIf(!urls)("GovernanceRoleController (HTTP, Postgres-backed)", () =>
       .post("/identity/citizens")
       .send({ publicHandle: handle, legalIdentifier: `id-${handle}` });
     const citizenId = registerRes.body.id;
-    await request(app.getHttpServer())
-      .post("/identity/verifications")
-      .set("x-citizen-id", citizenId)
-      .send({ method: "national_id", evidenceRef: "ref-1", outcome: "verified" });
+    // This domain fixture needs an active citizen, not an external verifier.
+    await app.get(IdentityService).submitVerification(citizenId, {
+      method: "national_id", evidenceRef: "ref-1", outcome: "verified",
+    });
     return citizenId;
   }
 
@@ -121,7 +124,7 @@ describe.skipIf(!urls)("GovernanceRoleController (HTTP, Postgres-backed)", () =>
 
     const res = await request(app.getHttpServer())
       .post("/governance-role/approvals")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ actionRef: "action-1", approvalType: "audit_confirmation", decision: "approved" });
 
     expect(res.status).toBe(201);
@@ -135,7 +138,7 @@ describe.skipIf(!urls)("GovernanceRoleController (HTTP, Postgres-backed)", () =>
 
     const res = await request(app.getHttpServer())
       .post("/governance-role/approvals")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ actionRef: "action-1", approvalType: "citizen_supermajority", decision: "approved" });
 
     expect(res.status).toBe(400);
@@ -147,13 +150,13 @@ describe.skipIf(!urls)("GovernanceRoleController (HTTP, Postgres-backed)", () =>
 
     const res = await request(app.getHttpServer())
       .post("/governance-role/approvals")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ actionRef: "action-1", approvalType: "audit_confirmation", decision: "maybe" });
 
     expect(res.status).toBe(400);
   });
 
-  it("POST /governance-role/approvals without x-citizen-id is 401", async () => {
+  it("POST /governance-role/approvals without bearer token is 401", async () => {
     const res = await request(app.getHttpServer())
       .post("/governance-role/approvals")
       .send({ actionRef: "action-1", approvalType: "audit_confirmation", decision: "approved" });
@@ -165,7 +168,7 @@ describe.skipIf(!urls)("GovernanceRoleController (HTTP, Postgres-backed)", () =>
 
     const res = await request(app.getHttpServer())
       .post("/governance-role/approvals")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ actionRef: "action-1", approvalType: "audit_confirmation", decision: "approved" });
 
     expect(res.status).toBe(403);
@@ -178,12 +181,12 @@ describe.skipIf(!urls)("GovernanceRoleController (HTTP, Postgres-backed)", () =>
 
     await request(app.getHttpServer())
       .post("/governance-role/approvals")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ actionRef: "action-2", approvalType: "audit_confirmation", decision: "approved" });
 
     const res = await request(app.getHttpServer())
       .post("/governance-role/approvals")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ actionRef: "action-2", approvalType: "body_endorsement", decision: "rejected" });
 
     expect(res.status).toBe(409);
@@ -200,14 +203,14 @@ describe.skipIf(!urls)("GovernanceRoleController (HTTP, Postgres-backed)", () =>
     await insertGovernanceRole(randomUUID(), auditApprover, { layer: "audit" });
     await request(app.getHttpServer())
       .post("/governance-role/approvals")
-      .set("x-citizen-id", auditApprover)
+      .set("authorization", testBearer(auditApprover))
       .send({ actionRef: "action-status-1", approvalType: "audit_confirmation", decision: "approved" });
 
     const bodyApprover = await activeCitizen("hank");
     await insertGovernanceRole(randomUUID(), bodyApprover, { roleType: "review_body", layer: "protocol" });
     await request(app.getHttpServer())
       .post("/governance-role/approvals")
-      .set("x-citizen-id", bodyApprover)
+      .set("authorization", testBearer(bodyApprover))
       .send({ actionRef: "action-status-1", approvalType: "body_endorsement", decision: "approved" });
 
     const res = await request(app.getHttpServer()).get("/governance-role/actions/action-status-1/status");
@@ -220,7 +223,7 @@ describe.skipIf(!urls)("GovernanceRoleController (HTTP, Postgres-backed)", () =>
 
     await request(app.getHttpServer())
       .post("/governance-role/approvals")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ actionRef: "action-3", approvalType: "audit_confirmation", decision: "approved" });
 
     const res = await request(app.getHttpServer()).get("/governance-role/approvals").query({ actionRef: "action-3" });

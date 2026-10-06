@@ -8,6 +8,8 @@ import { AUDIT_EMITTER } from "../common/audit-emitter.js";
 import { DomainErrorFilter } from "../common/domain-error.filter.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { newTestPrismaService, TestDatabaseUrls, testDatabaseUrls, truncateAll } from "../test-support/postgres.js";
+import { installTestAuth, testBearer } from "../test-support/auth.js";
+import { IdentityService } from "../identity/identity.service.js";
 import { BudgetModule } from "./budget.module.js";
 
 process.env.IDENTITY_HASH_SECRET ??= "test-secret";
@@ -74,6 +76,7 @@ describe.skipIf(!urls)("BudgetController (HTTP, Postgres-backed)", () => {
       .compile();
 
     app = moduleRef.createNestApplication();
+    installTestAuth(app);
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
     app.useGlobalFilters(new DomainErrorFilter());
     await app.init();
@@ -91,10 +94,10 @@ describe.skipIf(!urls)("BudgetController (HTTP, Postgres-backed)", () => {
       .post("/identity/citizens")
       .send({ publicHandle: handle, legalIdentifier: `id-${handle}` });
     const citizenId = registerRes.body.id;
-    await request(app.getHttpServer())
-      .post("/identity/verifications")
-      .set("x-citizen-id", citizenId)
-      .send({ method: "national_id", evidenceRef: "ref-1", outcome: "verified" });
+    // This domain fixture needs an active citizen, not an external verifier.
+    await app.get(IdentityService).submitVerification(citizenId, {
+      method: "national_id", evidenceRef: "ref-1", outcome: "verified",
+    });
     return citizenId;
   }
 
@@ -114,7 +117,7 @@ describe.skipIf(!urls)("BudgetController (HTTP, Postgres-backed)", () => {
     const citizenId = await activeCitizen("alice");
     const res = await request(app.getHttpServer())
       .post("/budget/budget-votes")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ period: "2026-Q3", allocations: [{ categoryId, percentage: 100 }] });
 
     expect(res.status).toBe(201);
@@ -127,7 +130,7 @@ describe.skipIf(!urls)("BudgetController (HTTP, Postgres-backed)", () => {
     const citizenId = await activeCitizen("bob");
     const res = await request(app.getHttpServer())
       .post("/budget/budget-votes")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ period: "2026-Q3" });
     expect(res.status).toBe(400);
   });
@@ -136,12 +139,12 @@ describe.skipIf(!urls)("BudgetController (HTTP, Postgres-backed)", () => {
     const citizenId = await activeCitizen("carol");
     const res = await request(app.getHttpServer())
       .post("/budget/budget-votes")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ period: "2026-Q3", allocations: [{ categoryId, percentage: 40 }] });
     expect(res.status).toBe(422);
   });
 
-  it("POST /budget/budget-votes without x-citizen-id is 401", async () => {
+  it("POST /budget/budget-votes without bearer token is 401", async () => {
     const res = await request(app.getHttpServer())
       .post("/budget/budget-votes")
       .send({ period: "2026-Q3", allocations: [] });
@@ -155,18 +158,18 @@ describe.skipIf(!urls)("BudgetController (HTTP, Postgres-backed)", () => {
 
     const res = await request(app.getHttpServer())
       .post("/budget/budget-votes")
-      .set("x-citizen-id", registerRes.body.id)
+      .set("authorization", testBearer(registerRes.body.id))
       .send({ period: "2026-Q3", allocations: [{ categoryId, percentage: 100 }] });
     expect(res.status).toBe(403);
   });
 
   it("GET /budget/budget-votes without ?period= is 400 (does not silently return everything)", async () => {
     const citizenId = await activeCitizen("erin");
-    const res = await request(app.getHttpServer()).get("/budget/budget-votes").set("x-citizen-id", citizenId);
+    const res = await request(app.getHttpServer()).get("/budget/budget-votes").set("authorization", testBearer(citizenId));
     expect(res.status).toBe(400);
   });
 
-  it("GET /budget/budget-votes without x-citizen-id is 401", async () => {
+  it("GET /budget/budget-votes without bearer token is 401", async () => {
     const res = await request(app.getHttpServer()).get("/budget/budget-votes").query({ period: "2026-Q3" });
     expect(res.status).toBe(401);
   });
@@ -175,12 +178,12 @@ describe.skipIf(!urls)("BudgetController (HTTP, Postgres-backed)", () => {
     const citizenId = await activeCitizen("frank");
     await request(app.getHttpServer())
       .post("/budget/budget-votes")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ period: "2026-Q3", allocations: [{ categoryId, percentage: 100 }] });
 
     const res = await request(app.getHttpServer())
       .get("/budget/budget-votes")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .query({ period: "2026-Q3" });
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(1);

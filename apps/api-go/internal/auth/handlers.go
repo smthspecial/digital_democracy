@@ -2,6 +2,7 @@ package auth
 
 import (
 	"encoding/json"
+	"github.com/go-webauthn/webauthn/webauthn"
 	"net/http"
 	"time"
 )
@@ -56,47 +57,10 @@ func setRefreshCookie(w http.ResponseWriter, refresh string, expires time.Time) 
 	})
 }
 
-type Handler struct{ svc *Service }
-
-func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
-	var in struct {
-		CitizenID         string `json:"citizen_id"`
-		DeviceFingerprint string `json:"device_fingerprint"`
-		IPSubnet          string `json:"ip_subnet"`
-		StepUpFactorType  string `json:"step_up_factor_type,omitempty"`
-		StepUpProof       string `json:"step_up_proof,omitempty"`
-		LivenessConfirmed bool   `json:"liveness_confirmed,omitempty"`
-	}
-	if !decodeJSON(w, r, &in) {
-		return
-	}
-	sess, tokens, err := h.svc.Login(LoginInput{
-		CitizenID:         in.CitizenID,
-		DeviceFingerprint: in.DeviceFingerprint,
-		IP:                r.RemoteAddr,
-		IPSubnet:          in.IPSubnet,
-		StepUpFactorType:  in.StepUpFactorType,
-		StepUpProof:       in.StepUpProof,
-		LivenessConfirmed: in.LivenessConfirmed,
-	}, time.Now().UTC())
-	if err != nil {
-		writeErr(w, err)
-		return
-	}
-	setRefreshCookie(w, tokens.RefreshToken, sess.ExpiresAt)
-	factors, err := h.svc.store.ActiveFactors(in.CitizenID)
-	if err != nil {
-		writeErr(w, err)
-		return
-	}
-	stepUp := tokens.AssuranceTier == TierT1 && len(factors) > 0
-	writeJSON(w, http.StatusCreated, map[string]any{
-		"session_id":        tokens.SessionID,
-		"access_token":      tokens.AccessToken,
-		"assurance_tier":    tokens.AssuranceTier,
-		"access_expires_at": tokens.AccessExpiresAt,
-		"step_up_required":  stepUp,
-	})
+type Handler struct {
+	passkeys             *webauthn.WebAuthn
+	svc                  *Service
+	internalSharedSecret []byte
 }
 
 func (h *Handler) refresh(w http.ResponseWriter, r *http.Request) {
@@ -144,64 +108,6 @@ func (h *Handler) validate(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handler) enroll(w http.ResponseWriter, r *http.Request) {
-	var in struct {
-		CitizenID           string  `json:"citizen_id"`
-		SessionID           string  `json:"session_id"`
-		FactorType          string  `json:"factor_type"`
-		TOTPSecret          string  `json:"totp_secret,omitempty"`
-		PasskeyCredentialID string  `json:"passkey_credential_id,omitempty"`
-		PasskeyPublicKey    string  `json:"passkey_public_key,omitempty"`
-		BiometricEmbedding  string  `json:"biometric_embedding,omitempty"`
-		LivenessConfirmed   bool    `json:"liveness_confirmed,omitempty"`
-		ReferenceMatchScore float64 `json:"reference_match_score,omitempty"`
-	}
-	if !decodeJSON(w, r, &in) {
-		return
-	}
-	f, err := h.svc.Enroll(EnrollInput(in), time.Now().UTC())
-	if err != nil {
-		writeErr(w, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, map[string]any{
-		"id":          f.ID,
-		"citizen_id":  f.CitizenID,
-		"factor_type": f.FactorType,
-		"status":      f.Status,
-	})
-}
-
-func (h *Handler) stepUp(w http.ResponseWriter, r *http.Request) {
-	var in struct {
-		SessionID         string `json:"session_id"`
-		FactorType        string `json:"factor_type"`
-		Proof             string `json:"proof"`
-		LivenessConfirmed bool   `json:"liveness_confirmed,omitempty"`
-	}
-	if !decodeJSON(w, r, &in) {
-		return
-	}
-	tokens, err := h.svc.StepUp(StepUpInput{
-		SessionID:         in.SessionID,
-		FactorType:        in.FactorType,
-		Proof:             in.Proof,
-		LivenessConfirmed: in.LivenessConfirmed,
-		DeviceFingerprint: r.Header.Get("X-Device-Fingerprint"),
-		IP:                r.RemoteAddr,
-	}, time.Now().UTC())
-	if err != nil {
-		writeErr(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"session_id":        tokens.SessionID,
-		"access_token":      tokens.AccessToken,
-		"assurance_tier":    tokens.AssuranceTier,
-		"access_expires_at": tokens.AccessExpiresAt,
-	})
-}
-
 func (h *Handler) revokeAll(w http.ResponseWriter, r *http.Request) {
 	// Internal endpoint for identity-service only (mesh mTLS, AUTH-012).
 	var in struct {
@@ -218,17 +124,13 @@ func (h *Handler) revokeAll(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"revoked": n})
 }
 
-func (h *Handler) purge(w http.ResponseWriter, _ *http.Request) {
-	purged, err := h.svc.Purge(time.Now().UTC())
+func (h *Handler) events(w http.ResponseWriter, r *http.Request) {
+	sess, err := h.svc.Validate(bearer(r), time.Now().UTC())
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, ErrUnauthorized)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"purged": purged})
-}
-
-func (h *Handler) events(w http.ResponseWriter, r *http.Request) {
-	events, err := h.svc.store.ListEvents(r.URL.Query().Get("citizen_id"))
+	events, err := h.svc.store.ListEvents(sess.CitizenID)
 	if err != nil {
 		writeErr(w, err)
 		return

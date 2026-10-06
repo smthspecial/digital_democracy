@@ -6,6 +6,7 @@ import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { newTestPrismaService, TestDatabaseUrls, testDatabaseUrls, truncateAll } from "../test-support/postgres.js";
+import { installTestAuth } from "../test-support/auth.js";
 import { JurisdictionModule } from "./jurisdiction.module.js";
 
 const urls = testDatabaseUrls();
@@ -80,6 +81,7 @@ describe.skipIf(!urls)("JurisdictionController (HTTP, Postgres-backed)", () => {
       .compile();
 
     app = moduleRef.createNestApplication();
+    installTestAuth(app);
     await app.init();
   });
 
@@ -100,7 +102,7 @@ describe.skipIf(!urls)("JurisdictionController (HTTP, Postgres-backed)", () => {
     expect(res.body[0].children[0].children[0].id).toBe(municipalityId);
   });
 
-  it("is publicly reachable without an x-citizen-id header (public SELECT policy)", async () => {
+  it("is publicly reachable without a bearer token (public SELECT policy)", async () => {
     const res = await request(app.getHttpServer()).get("/jurisdiction/jurisdictions");
     expect(res.status).toBe(200);
   });

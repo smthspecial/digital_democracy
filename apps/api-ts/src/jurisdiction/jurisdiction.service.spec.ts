@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Client } from "pg";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { newTestPrismaService, TestDatabaseUrls, testDatabaseUrls, truncateAll } from "../test-support/postgres.js";
 import { buildJurisdictionTree, JurisdictionService } from "./jurisdiction.service.js";
@@ -51,11 +51,51 @@ describe("buildJurisdictionTree", () => {
   });
 });
 
-// jurisdiction/residency/jurisdiction_membership have no citizen-facing (or
-// worker-facing) create op in this pass (ADR-030 "Jurisdiction module is
-// read-only") -- fixtures below go in directly via the admin connection,
-// the same way a real deployment would seed these tables, bypassing RLS
-// the way `truncateAll` already does.
+describe("JurisdictionService.reviewResidency", () => {
+  it("requires an active reviewer and records a conditional verified decision", async () => {
+    const residency = { id: "residency-1", citizenId: "resident-1", jurisdictionId: "jurisdiction-1" };
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+    const prisma = {
+      forWorker: async (work: (tx: { residency: { findUnique: typeof vi.fn; updateMany: typeof updateMany } }) => unknown) =>
+        work({ residency: { findUnique: vi.fn().mockResolvedValue(residency), updateMany } }),
+    } as unknown as PrismaService;
+    const governanceRoles = { isActiveHolder: vi.fn().mockResolvedValue(true) };
+    const audit = { emit: vi.fn().mockResolvedValue(undefined) };
+    const service = new JurisdictionService(prisma, governanceRoles, audit);
+
+    await service.reviewResidency("reviewer-1", residency.id, "verified");
+
+    expect(updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: residency.id, reviewedAt: null },
+        data: expect.objectContaining({ verified: true, verificationDecision: "verified", reviewedByCitizenId: "reviewer-1" }),
+      }),
+    );
+    expect(audit.emit).toHaveBeenCalledWith(expect.objectContaining({ actorRef: "reviewer-1" }));
+  });
+
+  it("rejects unauthorized and already-reviewed decisions", async () => {
+    const missingPrisma = {} as PrismaService;
+    const unauthorized = new JurisdictionService(
+      missingPrisma,
+      { isActiveHolder: vi.fn().mockResolvedValue(false) },
+      { emit: vi.fn() },
+    );
+    await expect(unauthorized.reviewResidency("reviewer-1", "residency-1", "verified")).rejects.toThrow("Only an active reviewer");
+
+    const prisma = {
+      forWorker: async (work: (tx: { residency: { findUnique: typeof vi.fn; updateMany: typeof vi.fn } }) => unknown) =>
+        work({ residency: { findUnique: vi.fn().mockResolvedValue({ id: "residency-1", citizenId: "resident-1", jurisdictionId: "jurisdiction-1" }), updateMany: vi.fn().mockResolvedValue({ count: 0 }) } }),
+    } as unknown as PrismaService;
+    const reviewed = new JurisdictionService(prisma, { isActiveHolder: vi.fn().mockResolvedValue(true) }, { emit: vi.fn() });
+    await expect(reviewed.reviewResidency("reviewer-1", "residency-1", "rejected")).rejects.toThrow("already been reviewed");
+  });
+});
+
+// Fixtures below go in directly via the admin connection where a test needs
+// a particular legacy state, bypassing RLS the way `truncateAll` already
+// does. Citizen declarations and reviewer decisions are covered through the
+// service's public API below.
 async function withAdmin<T>(work: (client: Client) => Promise<T>): Promise<T> {
   const client = new Client({ connectionString: urls!.admin });
   await client.connect();
@@ -106,14 +146,16 @@ async function insertResidency(
   citizenId: string,
   jurisdictionId: string,
   opts: { verified: boolean; status: "active" | "ended"; startDaysAgo?: number },
-): Promise<void> {
+): Promise<string> {
+  const id = randomUUID();
   await withAdmin((client) =>
     client.query(
       `INSERT INTO residency (id, citizen_id, jurisdiction_id, start_date, verified, status)
        VALUES ($1, $2, $3, CURRENT_DATE - $4::int, $5, $6)`,
-      [randomUUID(), citizenId, jurisdictionId, opts.startDaysAgo ?? 0, opts.verified, opts.status],
+      [id, citizenId, jurisdictionId, opts.startDaysAgo ?? 0, opts.verified, opts.status],
     ),
   );
+  return id;
 }
 
 // Real-Postgres pass: connects as api_app/api_worker (not a superuser), so
@@ -124,12 +166,16 @@ async function insertResidency(
 describe.skipIf(!urls)("JurisdictionService (Postgres, RLS-enforced)", () => {
   let prisma: PrismaService;
   let svc: JurisdictionService;
+  const governanceRoles = { isActiveHolder: vi.fn() };
+  const audit = { emit: vi.fn() };
 
   beforeEach(async () => {
     await truncateAll(urls as TestDatabaseUrls);
     prisma = newTestPrismaService(urls as TestDatabaseUrls);
     await prisma.onModuleInit();
-    svc = new JurisdictionService(prisma);
+    governanceRoles.isActiveHolder.mockReset();
+    audit.emit.mockReset();
+    svc = new JurisdictionService(prisma, governanceRoles, audit);
   });
 
   afterAll(async () => {
@@ -299,6 +345,51 @@ describe.skipIf(!urls)("JurisdictionService (Postgres, RLS-enforced)", () => {
 
       expect(await svc.isMember(citizenId, jurisdictionId)).toBe(true);
       expect(await svc.isAffected(citizenId, jurisdictionId)).toBe(true);
+    });
+  });
+
+  describe("reviewResidency", () => {
+    it("records one reviewer decision and makes a verified residency eligible", async () => {
+      const residentId = randomUUID();
+      const reviewerId = randomUUID();
+      const jurisdictionId = randomUUID();
+      await insertCitizen(residentId, "resident");
+      await insertCitizen(reviewerId, "reviewer");
+      await insertJurisdiction({ id: jurisdictionId, name: "Muni", scopeLevel: "municipality", boundaryRef: "ref-review" });
+      await insertMembership(residentId, jurisdictionId);
+      const residencyId = await insertResidency(residentId, jurisdictionId, { verified: false, status: "active" });
+      governanceRoles.isActiveHolder.mockResolvedValue(true);
+      audit.emit.mockResolvedValue(undefined);
+
+      await svc.reviewResidency(reviewerId, residencyId, "verified");
+
+      const residency = await prisma.forWorker((tx) => tx.residency.findUniqueOrThrow({ where: { id: residencyId } }));
+      expect(residency.verified).toBe(true);
+      expect(residency.verificationDecision).toBe("verified");
+      expect(residency.reviewedByCitizenId).toBe(reviewerId);
+      expect(residency.reviewedAt).not.toBeNull();
+      expect(await svc.isEligible(residentId, jurisdictionId)).toBe(true);
+      expect(audit.emit).toHaveBeenCalledWith(
+        expect.objectContaining({ actionType: "jurisdiction.residency_reviewed", actorRef: reviewerId }),
+      );
+    });
+
+    it("rejects an unauthorized reviewer and a second decision", async () => {
+      const residentId = randomUUID();
+      const reviewerId = randomUUID();
+      const jurisdictionId = randomUUID();
+      await insertCitizen(residentId, "resident-2");
+      await insertCitizen(reviewerId, "reviewer-2");
+      await insertJurisdiction({ id: jurisdictionId, name: "Muni", scopeLevel: "municipality", boundaryRef: "ref-review-2" });
+      const residencyId = await insertResidency(residentId, jurisdictionId, { verified: false, status: "active" });
+
+      governanceRoles.isActiveHolder.mockResolvedValue(false);
+      await expect(svc.reviewResidency(reviewerId, residencyId, "verified")).rejects.toThrow("Only an active reviewer");
+
+      governanceRoles.isActiveHolder.mockResolvedValue(true);
+      audit.emit.mockResolvedValue(undefined);
+      await svc.reviewResidency(reviewerId, residencyId, "rejected");
+      await expect(svc.reviewResidency(reviewerId, residencyId, "verified")).rejects.toThrow("already been reviewed");
     });
   });
 });

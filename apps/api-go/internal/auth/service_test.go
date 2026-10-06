@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func testService() *Service { return NewService(nil, nil, nil, nil) }
+func testService() *Service { return NewService(nil, activeIdentityChecker{}, nil, nil) }
 
 func login(t *testing.T, svc *Service, citizen string) (*Session, *Tokens) {
 	t.Helper()
@@ -68,13 +68,16 @@ func TestLoginStatusGates(t *testing.T) {
 // exactly like an unrecognized/garbage status string would, which is a gap
 // but not one this bug fix's scope (the seam contract, not the status
 // vocabulary) covers.
-func TestLoginStatusGateFallsThroughForActiveAndInactive(t *testing.T) {
+func TestLoginStatusGateRequiresActiveIdentity(t *testing.T) {
 	now := time.Now().UTC()
-	for _, status := range []string{"active", "inactive"} {
+	for _, status := range []string{"active", "inactive", "unknown"} {
 		svc := NewService(nil, IdentityCheckerFunc(func(string) (string, error) { return status, nil }), nil, nil)
 		_, _, err := svc.Login(LoginInput{CitizenID: "c", DeviceFingerprint: "fp", IPSubnet: "s"}, now)
-		if err != nil {
-			t.Fatalf("status %s: err = %v, want nil (falls through to session issuance)", status, err)
+		if status == "active" && err != nil {
+			t.Fatalf("active identity rejected: %v", err)
+		}
+		if status != "active" && err != ErrUnauthorized {
+			t.Fatalf("status %s: err = %v, want unauthorized", status, err)
 		}
 	}
 }
@@ -221,7 +224,7 @@ func TestPurge(t *testing.T) {
 }
 
 func TestHealthz(t *testing.T) {
-	srv := httptest.NewServer(NewRouter(testService(), nil))
+	srv := httptest.NewServer(NewRouter(testService(), nil, ""))
 	defer srv.Close()
 	for _, path := range []string{"/healthz", "/readyz"} {
 		resp, err := http.Get(srv.URL + path)

@@ -8,6 +8,8 @@ import { AUDIT_EMITTER } from "../common/audit-emitter.js";
 import { DomainErrorFilter } from "../common/domain-error.filter.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { newTestPrismaService, TestDatabaseUrls, testDatabaseUrls, truncateAll } from "../test-support/postgres.js";
+import { installTestAuth, testBearer } from "../test-support/auth.js";
+import { IdentityService } from "../identity/identity.service.js";
 import { ProblemModule } from "./problem.module.js";
 
 process.env.IDENTITY_HASH_SECRET ??= "test-secret";
@@ -69,6 +71,7 @@ describe.skipIf(!urls)("ProblemController (HTTP, Postgres-backed)", () => {
       .compile();
 
     app = moduleRef.createNestApplication();
+    installTestAuth(app);
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
     app.useGlobalFilters(new DomainErrorFilter());
     await app.init();
@@ -86,10 +89,10 @@ describe.skipIf(!urls)("ProblemController (HTTP, Postgres-backed)", () => {
       .post("/identity/citizens")
       .send({ publicHandle: handle, legalIdentifier: `id-${handle}` });
     const citizenId = registerRes.body.id;
-    await request(app.getHttpServer())
-      .post("/identity/verifications")
-      .set("x-citizen-id", citizenId)
-      .send({ method: "national_id", evidenceRef: "ref-1", outcome: "verified" });
+    // This domain fixture needs an active citizen, not an external verifier.
+    await app.get(IdentityService).submitVerification(citizenId, {
+      method: "national_id", evidenceRef: "ref-1", outcome: "verified",
+    });
     return citizenId;
   }
 
@@ -100,7 +103,7 @@ describe.skipIf(!urls)("ProblemController (HTTP, Postgres-backed)", () => {
 
     const res = await request(app.getHttpServer())
       .post("/problem/problems")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ title: "Pothole", description: "Big pothole", affectedArea: "Main St", jurisdictionId, evidenceKind: "statement", evidenceRef: "e" });
 
     expect(res.status).toBe(201);
@@ -112,12 +115,12 @@ describe.skipIf(!urls)("ProblemController (HTTP, Postgres-backed)", () => {
     const citizenId = await activeCitizen("bob");
     const res = await request(app.getHttpServer())
       .post("/problem/problems")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ title: "Pothole" });
     expect(res.status).toBe(400);
   });
 
-  it("POST /problem/problems without x-citizen-id is 401", async () => {
+  it("POST /problem/problems without bearer token is 401", async () => {
     const res = await request(app.getHttpServer())
       .post("/problem/problems")
       .send({ title: "T", description: "D", affectedArea: "A", jurisdictionId: randomUUID(), evidenceKind: "statement", evidenceRef: "e" });
@@ -131,7 +134,7 @@ describe.skipIf(!urls)("ProblemController (HTTP, Postgres-backed)", () => {
 
     const res = await request(app.getHttpServer())
       .post("/problem/problems")
-      .set("x-citizen-id", registerRes.body.id)
+      .set("authorization", testBearer(registerRes.body.id))
       .send({ title: "T", description: "D", affectedArea: "A", jurisdictionId: randomUUID(), evidenceKind: "statement", evidenceRef: "e" });
     expect(res.status).toBe(403);
   });
@@ -147,7 +150,7 @@ describe.skipIf(!urls)("ProblemController (HTTP, Postgres-backed)", () => {
     await insertJurisdiction(jurisdictionId, "Municipality");
     await request(app.getHttpServer())
       .post("/problem/problems")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ title: "A", description: "D", affectedArea: "Area", jurisdictionId, evidenceKind: "statement", evidenceRef: "e" });
 
     const res = await request(app.getHttpServer()).get("/problem/problems");
@@ -161,7 +164,7 @@ describe.skipIf(!urls)("ProblemController (HTTP, Postgres-backed)", () => {
     await insertJurisdiction(jurisdictionId, "Municipality");
     const createRes = await request(app.getHttpServer())
       .post("/problem/problems")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ title: "T", description: "D", affectedArea: "A", jurisdictionId, evidenceKind: "statement", evidenceRef: "e" });
 
     const endorserId = await activeCitizen("frank");
@@ -169,7 +172,7 @@ describe.skipIf(!urls)("ProblemController (HTTP, Postgres-backed)", () => {
 
     const res = await request(app.getHttpServer())
       .post(`/problem/problems/${createRes.body.id}/support`)
-      .set("x-citizen-id", endorserId);
+      .set("authorization", testBearer(endorserId));
     expect(res.status).toBe(201);
     expect(res.body.support.citizenId).toBe(endorserId);
     expect(res.body.problem.id).toBe(createRes.body.id);
@@ -181,23 +184,23 @@ describe.skipIf(!urls)("ProblemController (HTTP, Postgres-backed)", () => {
     await insertJurisdiction(jurisdictionId, "Municipality");
     const createRes = await request(app.getHttpServer())
       .post("/problem/problems")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ title: "T", description: "D", affectedArea: "A", jurisdictionId, evidenceKind: "statement", evidenceRef: "e" });
 
     const nonMemberId = await activeCitizen("hana");
     const res = await request(app.getHttpServer())
       .post(`/problem/problems/${createRes.body.id}/support`)
-      .set("x-citizen-id", nonMemberId);
+      .set("authorization", testBearer(nonMemberId));
     expect(res.status).toBe(403);
   });
 
-  it("POST /problem/problems/:id/support without x-citizen-id is 401", async () => {
+  it("POST /problem/problems/:id/support without bearer token is 401", async () => {
     const citizenId = await activeCitizen("ivan");
     const jurisdictionId = randomUUID();
     await insertJurisdiction(jurisdictionId, "Municipality");
     const createRes = await request(app.getHttpServer())
       .post("/problem/problems")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ title: "T", description: "D", affectedArea: "A", jurisdictionId, evidenceKind: "statement", evidenceRef: "e" });
 
     const res = await request(app.getHttpServer()).post(`/problem/problems/${createRes.body.id}/support`);
@@ -210,7 +213,7 @@ describe.skipIf(!urls)("ProblemController (HTTP, Postgres-backed)", () => {
     await insertJurisdiction(jurisdictionId, "Municipality");
     const createRes = await request(app.getHttpServer())
       .post("/problem/problems")
-      .set("x-citizen-id", citizenId)
+      .set("authorization", testBearer(citizenId))
       .send({ title: "T", description: "D", affectedArea: "A", jurisdictionId, evidenceKind: "statement", evidenceRef: "e" });
 
     const endorserId = await activeCitizen("kim");
@@ -218,10 +221,10 @@ describe.skipIf(!urls)("ProblemController (HTTP, Postgres-backed)", () => {
 
     await request(app.getHttpServer())
       .post(`/problem/problems/${createRes.body.id}/support`)
-      .set("x-citizen-id", endorserId);
+      .set("authorization", testBearer(endorserId));
     const res = await request(app.getHttpServer())
       .post(`/problem/problems/${createRes.body.id}/support`)
-      .set("x-citizen-id", endorserId);
+      .set("authorization", testBearer(endorserId));
     expect(res.status).toBe(409);
   });
 
@@ -229,7 +232,7 @@ describe.skipIf(!urls)("ProblemController (HTTP, Postgres-backed)", () => {
     const citizenId = await activeCitizen("liam");
     const res = await request(app.getHttpServer())
       .post("/problem/problems/00000000-0000-0000-0000-000000000000/support")
-      .set("x-citizen-id", citizenId);
+      .set("authorization", testBearer(citizenId));
     expect(res.status).toBe(404);
   });
 });

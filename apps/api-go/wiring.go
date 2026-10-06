@@ -66,7 +66,8 @@ func identityCheckerFromEnv() auth.IdentityChecker {
 	if url := os.Getenv("IDENTITY_SERVICE_URL"); url != "" {
 		return auth.NewHTTPIdentityChecker(url)
 	}
-	return nil
+	// Missing configuration must never turn citizen status into allow-all.
+	return auth.NewHTTPIdentityChecker("")
 }
 
 func auditNotifierFromEnv() audit.Notifier {
@@ -89,6 +90,18 @@ func authNotifierFromEnv() auth.Notifier {
 // it for local dev/demo so expiry is observable without a real day passing.
 func delegationExpiryInterval() time.Duration {
 	if raw := os.Getenv("DELEGATION_EXPIRY_INTERVAL"); raw != "" {
+		if d, err := time.ParseDuration(raw); err == nil && d > 0 {
+			return d
+		}
+	}
+	return 24 * time.Hour
+}
+
+// authPurgeInterval controls DP-067's in-process daily session cleanup.
+// The public purge endpoint was intentionally removed: only auth-service
+// itself needs this maintenance operation.
+func authPurgeInterval() time.Duration {
+	if raw := os.Getenv("AUTH_PURGE_INTERVAL"); raw != "" {
 		if d, err := time.ParseDuration(raw); err == nil && d > 0 {
 			return d
 		}

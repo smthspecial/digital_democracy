@@ -53,7 +53,8 @@ model Citizen {
   createdAt         DateTime          @default(now()) @map("created_at")
 
   verifications                 IdentityVerification[]
-  residencies                   Residency[]
+  residencies                   Residency[]               @relation("ResidencyResident")
+  residencyReviews              Residency[]               @relation("ResidencyReviewer")
   memberships                   JurisdictionMembership[]
   problemsAuthored              Problem[]                @relation("ProblemAuthor")
   problemSupports               ProblemSupport[]
@@ -206,15 +207,26 @@ enum ResidencyStatus {
   @@map("residency_status")
 }
 
+enum ResidencyVerificationDecision {
+  verified
+  rejected
+
+  @@map("residency_verification_decision")
+}
+
 model Residency {
-  id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  citizenId      String          @map("citizen_id") @db.Uuid
-  citizen        Citizen         @relation(fields: [citizenId], references: [id])
-  jurisdictionId String          @map("jurisdiction_id") @db.Uuid
-  jurisdiction   Jurisdiction    @relation(fields: [jurisdictionId], references: [id])
-  startDate      DateTime        @map("start_date") @db.Date
-  verified       Boolean         @default(false)
-  status         ResidencyStatus @default(active)
+  id                   String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  citizenId            String                         @map("citizen_id") @db.Uuid
+  citizen              Citizen                        @relation("ResidencyResident", fields: [citizenId], references: [id])
+  jurisdictionId       String                         @map("jurisdiction_id") @db.Uuid
+  jurisdiction         Jurisdiction                   @relation(fields: [jurisdictionId], references: [id])
+  startDate            DateTime                       @map("start_date") @db.Date
+  verified             Boolean                        @default(false)
+  verificationDecision ResidencyVerificationDecision? @map("verification_decision")
+  reviewedAt           DateTime?                      @map("reviewed_at")
+  reviewedByCitizenId  String?                        @map("reviewed_by_citizen_id") @db.Uuid
+  reviewedBy           Citizen?                       @relation("ResidencyReviewer", fields: [reviewedByCitizenId], references: [id])
+  status               ResidencyStatus                @default(active)
 
   @@index([citizenId])
   @@index([jurisdictionId])

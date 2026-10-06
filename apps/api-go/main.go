@@ -138,6 +138,19 @@ func main() {
 			}
 			return nil
 		},
+	}, scheduler.Job{
+		Name:     "auth.purge_expired",
+		Interval: authPurgeInterval(),
+		Run: func(context.Context) error {
+			purged, err := authSvc.Purge(time.Now().UTC())
+			if err != nil {
+				return err
+			}
+			if purged > 0 {
+				logger.Info("auth expiry purge", "purged", purged)
+			}
+			return nil
+		},
 	})
 
 	if bus != nil {
@@ -169,7 +182,7 @@ func main() {
 	mux.Handle("/voting/", metrics.Middleware("voting", "/voting", voting.NewRouter(votingSvc, logger)))
 	mux.Handle("/delegation/", metrics.Middleware("delegation", "/delegation", delegation.NewRouter(delegationSvc, logger)))
 	mux.Handle("/audit/", metrics.Middleware("audit", "/audit", audit.NewRouter(auditSvc, logger)))
-	mux.Handle("/auth/", metrics.Middleware("auth", "/auth", auth.NewRouter(authSvc, logger)))
+	mux.Handle("/auth/", metrics.Middleware("auth", "/auth", auth.NewRouter(authSvc, logger, os.Getenv("INTERNAL_SERVICE_SHARED_SECRET"))))
 
 	srv := &http.Server{
 		Addr:         ":" + port,
