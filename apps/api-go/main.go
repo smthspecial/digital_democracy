@@ -32,12 +32,41 @@ import (
 	"github.com/digital-democracy/api-go/internal/metrics"
 	"github.com/digital-democracy/api-go/internal/pg"
 	"github.com/digital-democracy/api-go/internal/scheduler"
+	"github.com/digital-democracy/api-go/internal/security"
 	"github.com/digital-democracy/api-go/internal/voting"
 	"github.com/digital-democracy/eventbus"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+
+	if os.Getenv("MIGRATE_ONLY") == "1" {
+		if os.Getenv("APP_ENV") == "production" {
+			if err := security.VerifiedDatabaseURL(os.Getenv("MIGRATE_DATABASE_URL")); err != nil {
+				logger.Error("unsafe migration TLS configuration")
+				os.Exit(1)
+			}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		pool, err := pg.Connect(ctx, os.Getenv("MIGRATE_DATABASE_URL"))
+		if err != nil {
+			logger.Error("migration connection failed", "error", err)
+			os.Exit(1)
+		}
+		defer pool.Close()
+		if err = pg.Up(ctx, pool, db.Files); err != nil {
+			logger.Error("migration failed", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if err := security.ProductionConfig(os.Getenv); err != nil {
+		logger.Error("unsafe production configuration", "error", err)
+		os.Exit(1)
+	}
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -48,8 +77,17 @@ func main() {
 	// consumer (best practice: connections are thread-safe and multiplex).
 	var bus *eventbus.Bus
 	if url := os.Getenv("NATS_URL"); url != "" {
+		if os.Getenv("INTERNAL_SERVICE_SHARED_SECRET") == "" {
+			logger.Error("NATS audit ingestion requires producer signing credentials")
+			os.Exit(1)
+		}
 		var err error
-		bus, err = eventbus.Connect(url)
+		tlsOptions, tlsErr := eventbus.TLSOptions(os.Getenv("NATS_TLS_CA_FILE"), os.Getenv("NATS_TLS_CERT_FILE"), os.Getenv("NATS_TLS_KEY_FILE"))
+		if tlsErr != nil {
+			logger.Error("broker TLS configuration failed", "error", tlsErr)
+			os.Exit(1)
+		}
+		bus, err = eventbus.Connect(url, tlsOptions...)
 		if err != nil {
 			logger.Error("failed to connect NATS", "error", err)
 			os.Exit(1)
@@ -64,13 +102,14 @@ func main() {
 	auditURL := os.Getenv("AUDIT_SERVICE_URL")
 
 	// Persistence: Postgres via sqlc repositories when DATABASE_URL is set
-	// (ADR-029 — migrations run automatically at boot); otherwise the
+	// (ADR-029 — migrations use the separate MIGRATE_ONLY job); otherwise the
 	// in-memory stores. One shared pool for all four services (ADR-028).
 	var (
 		votingStore     voting.Store
 		delegationStore delegation.Store
 		auditStore      audit.Store
 		authStore       auth.Store
+		runtimePool     *pgxpool.Pool
 	)
 	if dbURL := os.Getenv("DATABASE_URL"); dbURL != "" {
 		bootCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -81,11 +120,17 @@ func main() {
 			os.Exit(1)
 		}
 		defer pool.Close()
-		if err := pg.Up(bootCtx, pool, db.Files); err != nil {
-			cancel()
-			logger.Error("failed to migrate Postgres", "error", err)
+		var privileged bool
+		if err := pool.QueryRow(bootCtx, "SELECT rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb FROM pg_roles WHERE rolname=current_user").Scan(&privileged); err != nil || privileged {
+			logger.Error("runtime database must use a restricted non-superuser role")
 			os.Exit(1)
 		}
+		runtimePool = pool
+		if len(os.Getenv("AUDIT_SIGNING_KEY")) < 32 {
+			logger.Error("persistent audit requires AUDIT_SIGNING_KEY of at least 32 characters")
+			os.Exit(1)
+		}
+
 		cancel()
 		votingStore = voting.NewPGStore(pool)
 		delegationStore = delegation.NewPGStore(pool)
@@ -112,6 +157,12 @@ func main() {
 		delegationResolverFromEnv(),
 		votingAuditEmitter(bus, auditURL),
 	)
+	if os.Getenv("APP_ENV") == "production" {
+		votingSvc.BlockUnreviewedProductionCrypto()
+	}
+	if url := os.Getenv("GOVERNANCE_SERVICE_URL"); url != "" {
+		votingSvc.SetCertificationSink(voting.NewHTTPCertificationSink(url, os.Getenv("INTERNAL_SERVICE_SHARED_SECRET")))
+	}
 	delegationSvc := delegation.NewService(delegationStore,
 		competencyCheckerFromEnv(),
 		delegationAuditEmitter(bus, auditURL),
@@ -138,6 +189,10 @@ func main() {
 			}
 			return nil
 		},
+	}, scheduler.Job{
+		Name:     "voting.reconcile_certified",
+		Interval: time.Minute,
+		Run:      func(context.Context) error { return votingSvc.ReconcileCertified() },
 	}, scheduler.Job{
 		Name:     "auth.purge_expired",
 		Interval: authPurgeInterval(),
@@ -167,6 +222,13 @@ func main() {
 		logger.Info("NATS_URL unset, audit ingestion is HTTP-only")
 	}
 
+	access := &security.Access{Secret: os.Getenv("INTERNAL_SERVICE_SHARED_SECRET"), Replays: &security.ReplayStore{Pool: runtimePool}, Validate: func(token string) (string, string, error) {
+		sess, err := authSvc.Validate(token, time.Now().UTC())
+		if err != nil {
+			return "", "", err
+		}
+		return sess.CitizenID, sess.AssuranceTier, nil
+	}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -179,16 +241,19 @@ func main() {
 		_, _ = w.Write([]byte(`{"status":"ready"}`))
 	})
 	mux.Handle("/metrics", metrics.Handler())
-	mux.Handle("/voting/", metrics.Middleware("voting", "/voting", voting.NewRouter(votingSvc, logger)))
-	mux.Handle("/delegation/", metrics.Middleware("delegation", "/delegation", delegation.NewRouter(delegationSvc, logger)))
-	mux.Handle("/audit/", metrics.Middleware("audit", "/audit", audit.NewRouter(auditSvc, logger)))
-	mux.Handle("/auth/", metrics.Middleware("auth", "/auth", auth.NewRouter(authSvc, logger, os.Getenv("INTERNAL_SERVICE_SHARED_SECRET"))))
+	mux.Handle("/voting/", metrics.Middleware("voting", "/voting", voting.NewRouter(votingSvc, logger, access)))
+	mux.Handle("/delegation/", metrics.Middleware("delegation", "/delegation", delegation.NewRouter(delegationSvc, logger, access)))
+	mux.Handle("/audit/", metrics.Middleware("audit", "/audit", audit.NewRouter(auditSvc, logger, access)))
+	mux.Handle("/auth/", metrics.Middleware("auth", "/auth", auth.NewRouter(authSvc, logger, os.Getenv("INTERNAL_SERVICE_SHARED_SECRET"), access.Replays)))
 
 	srv := &http.Server{
-		Addr:         ":" + port,
-		Handler:      mux,
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		Addr:              os.Getenv("LISTEN_HOST") + ":" + port,
+		Handler:           security.Limit(mux),
+		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    16 << 10,
+		ReadTimeout:       5 * time.Second,
+		WriteTimeout:      10 * time.Second,
 	}
 
 	go func() {

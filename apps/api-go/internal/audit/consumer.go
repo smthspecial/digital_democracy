@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/digital-democracy/eventbus"
@@ -60,7 +61,11 @@ func StartAuditConsumer(ctx context.Context, bus *eventbus.Bus, svc *Service, lo
 				logger.Error("audit consumer: malformed event, dropping", "subject", subject, "error", err)
 				return nil
 			}
-			if _, err := svc.Append(evt.ActionType, evt.ActorRef, evt.Payload, evt.ID); err != nil {
+			if !evt.Verify("api-go", os.Getenv("INTERNAL_SERVICE_SHARED_SECRET")) {
+				logger.Error("audit consumer: unauthenticated event, dropping")
+				return nil
+			}
+			if _, err := svc.Append(evt.ActionType, evt.Producer+":"+evt.ActorRef, evt.Payload, evt.Producer+":"+evt.ID); err != nil {
 				// Unknown action verb: same poison policy as above.
 				logger.Error("audit consumer: invalid event, dropping",
 					"action", evt.ActionType, "id", evt.ID, "error", err)

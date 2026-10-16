@@ -1,0 +1,48 @@
+name: api-go
+lang: go
+image:
+  repository: ghcr.io/digital-democracy/api-go
+port: 8080
+envSecret: api-go-runtime
+route:
+  prefixes:
+  - /auth
+  - /voting
+  - /delegation
+  - /audit
+allowedIngress:
+- namespace: kube-system
+  name: traefik
+  publicGateway: true
+- namespace: api-ts
+  name: api-ts
+- namespace: api-go
+  name: api-go
+allowedEgress:
+- api-ts
+- api-go
+allowedDependencies:
+- namespace: infrastructure
+  name: postgres
+  port: 5432
+- namespace: infrastructure
+  name: nats
+  port: 4222
+configEnv:
+  APP_ENV: production
+  COMPETENCY_SERVICE_URL: http://api-ts.api-ts.svc.cluster.local:8080
+  IDENTITY_SERVICE_URL: http://api-ts.api-ts.svc.cluster.local:8080
+  JURISDICTION_SERVICE_URL: http://api-ts.api-ts.svc.cluster.local:8080
+  GOVERNANCE_SERVICE_URL: http://api-ts.api-ts.svc.cluster.local:8080
+publicMutations:
+- method: POST
+  paths:
+  - /auth/passkeys/*
+  - /auth/step-up/*
+  - /auth/refresh
+  - /auth/logout
+  - /voting/ballots
+  - /delegation/delegations
+- method: DELETE
+  paths:
+  - /delegation/delegations/*

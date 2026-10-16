@@ -1,0 +1,10 @@
+[
+  {
+    "VulnerabilityID": "GO-2026-5932",
+    "PkgName": "golang.org/x/crypto",
+    "InstalledVersion": "v0.57.0",
+    "owner": "dependency-maintainer",
+    "reviewBy": "2026-11-07",
+    "reason": "Module-level OpenPGP maintenance notice. Current govulncheck reports no reachable or imported vulnerable symbols/packages. The application does not use OpenPGP; exact image and Go scanner evidence are retained under testing/production-readiness. Reassess on version/reachability changes. This review does not permit HIGH/CRITICAL findings."
+  }
+]

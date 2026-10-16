@@ -1,3 +1,4 @@
+import { serviceHeaders } from "./internal-service.guard.js";
 import { Injectable, Logger } from "@nestjs/common";
 import { auditEmitFailuresTotal } from "../metrics/metrics.js";
 
@@ -101,7 +102,8 @@ export class HttpAuditEmitter implements AuditEmitter {
     try {
       const response = await fetch(`${this.auditServiceUrl}/audit/log`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...serviceHeaders("POST", "/audit/log", JSON.stringify(body)) },
+        signal: AbortSignal.timeout(3000),
         body: JSON.stringify(body),
       });
       if (!response.ok) {

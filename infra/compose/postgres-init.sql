@@ -1,4 +1,6 @@
--- Local-dev Postgres bootstrap for compose (ADR-026, ARCH-025 §4, ADR-028).
+-- Historical bootstrap, retained for reference; Compose uses postgres-init.sh
+-- with per-app restricted credentials and CONNECT isolation (ADR-041).
+-- Original local-dev bootstrap (ADR-026, ARCH-025 §4, ADR-028).
 --
 -- One shared Postgres *server* for local dev, one *database* per app
 -- (ADR-028): api_go holds all four Go services' tables (apps/api-go,

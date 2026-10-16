@@ -1,0 +1,113 @@
+{
+  "recordedAtUTC": "2026-10-14T10:04:19.892807+00:00",
+  "executionFinishedAtUTC": "2026-10-14T10:03:43.732202+00:00",
+  "scope": "TASK-007 local synthetic blind-credential component experiment; no application integration or deployment",
+  "implementation": {
+    "module": "github.com/cloudflare/circl",
+    "version": "v1.6.5",
+    "revision": "cfa7c70defd831ffb0792ab2af560bfef43d60ca",
+    "license": "BSD-3-Clause",
+    "moduleChecksum": "h1:O64F26HEqNhznd/hrC5KZXVKYuKM2rx4deZDTc4ihQA=",
+    "variant": "RSABSSA-SHA384-PSS-Randomized",
+    "reference": "https://www.rfc-editor.org/rfc/rfc9474.html"
+  },
+  "toolchain": "go version go1.27.1 linux/amd64",
+  "fixture": {
+    "identities": "eligible-a, eligible-b, ineligible; synthetic only",
+    "keys": "Two ephemeral 3072-bit RSA keys; no private material retained",
+    "storage": "In-memory maps and mutexes in one test process",
+    "trustedManifest": "Synthetic fixed manifest hashes; public keys supplied by fixture"
+  },
+  "workingDirectory": "testing/cryptography",
+  "environment": {
+    "GOWORK": "off",
+    "GOMODCACHE": "/tmp/dd-crypto-module-cache",
+    "GOCACHE": "/tmp/dd-crypto-build-cache"
+  },
+  "commands": [
+    {
+      "command": "go mod verify",
+      "passed": true
+    },
+    {
+      "command": "go vet ./...",
+      "passed": true
+    },
+    {
+      "command": "go test -mod=readonly -race -count=1 -json ./... github.com/cloudflare/circl/blindsign/blindrsa",
+      "passed": true
+    }
+  ],
+  "packages": {
+    "github.com/cloudflare/circl/blindsign/blindrsa": {
+      "passedTestEventsIncludingParents": 26,
+      "passedLeafCases": 22,
+      "passedCases": [
+        "TestRoundTrip/RSABSSA-SHA384-PSS-Deterministic",
+        "TestRoundTrip/RSABSSA-SHA384-PSSZero-Deterministic",
+        "TestRoundTrip/RSABSSA-SHA384-PSS-Randomized",
+        "TestRoundTrip/RSABSSA-SHA384-PSSZero-Randomized",
+        "TestDeterministicRoundTrip",
+        "TestDeterministicBlindFailure",
+        "TestBlindRejectsNonCoprimeMessage/RSABSSA-SHA384-PSS-Deterministic",
+        "TestBlindRejectsNonCoprimeMessage/RSABSSA-SHA384-PSSZero-Deterministic",
+        "TestBlindRejectsNonCoprimeMessage/RSABSSA-SHA384-PSS-Randomized",
+        "TestBlindRejectsNonCoprimeMessage/RSABSSA-SHA384-PSSZero-Randomized",
+        "TestRandomSignVerify",
+        "TestFixedRandomSignVerify",
+        "TestVectors/RSABSSA-SHA384-PSS-Randomized",
+        "TestVectors/RSABSSA-SHA384-PSSZERO-Randomized",
+        "TestVectors/RSABSSA-SHA384-PSS-Deterministic",
+        "TestVectors/RSABSSA-SHA384-PSSZERO-Deterministic",
+        "TestNonCanonicalSignatureRejection/RSABSSA-SHA384-PSS-Deterministic",
+        "TestNonCanonicalSignatureRejection/RSABSSA-SHA384-PSSZero-Deterministic",
+        "TestNonCanonicalSignatureRejection/RSABSSA-SHA384-PSS-Randomized",
+        "TestNonCanonicalSignatureRejection/RSABSSA-SHA384-PSSZero-Randomized",
+        "TestPSSZeroVerifierAcceptsSaltedSignatures",
+        "Example_blindrsa"
+      ],
+      "failed": 0,
+      "skipped": 0
+    },
+    "github.com/digital-democracy/cryptography-experiment": {
+      "passedTestEventsIncludingParents": 18,
+      "passedLeafCases": 16,
+      "passedCases": [
+        "TestBlindCredentialExperiment/blind_issuance_and_independent_RSA-PSS_verification",
+        "TestBlindCredentialExperiment/ineligible_citizen_and_replacement_issuance_rejected",
+        "TestBlindCredentialExperiment/malformed_request_does_not_consume_eligibility",
+        "TestBlindCredentialExperiment/tampering_and_alternate_election_keys_rejected/changed_token",
+        "TestBlindCredentialExperiment/tampering_and_alternate_election_keys_rejected/changed_signature",
+        "TestBlindCredentialExperiment/tampering_and_alternate_election_keys_rejected/short_signature",
+        "TestBlindCredentialExperiment/tampering_and_alternate_election_keys_rejected/trailing_message",
+        "TestBlindCredentialExperiment/tampering_and_alternate_election_keys_rejected/empty_message",
+        "TestBlindCredentialExperiment/tampering_and_alternate_election_keys_rejected/other_manifest",
+        "TestBlindCredentialExperiment/tampering_and_alternate_election_keys_rejected/other_signing_key",
+        "TestBlindCredentialExperiment/blind_signer_cannot_authorize_another_election",
+        "TestBlindCredentialExperiment/concurrent_issuance_grants_at_most_one_distinct_request",
+        "TestBlindCredentialExperiment/concurrent_redemption_spends_exactly_once",
+        "TestBlindCredentialExperiment/new_preparation_and_signature_do_not_bypass_spent_nonce",
+        "TestBlindCredentialExperiment/corrupt_issuer_response_rejected_by_client",
+        "TestBlindCredentialExperiment/transferable_bearer_credential_remains_an_explicit_limitation"
+      ],
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "ciJobAdded": "cryptography",
+  "remoteCIExecuted": false,
+  "sourceSha256": {
+    "testing/cryptography/credential_test.go": "9828920637f9260b628a3aaa2f0e12d6eb4e789f1c40c375231e74a11072e060",
+    "testing/cryptography/go.mod": "fad6eb82d4bf6cc5871b6d42b9a5aee3906952bc967ca928149c2e4b11166c6b",
+    "testing/cryptography/go.sum": "b1bb29f7ee462ce7c5577470730d63157e215b3f0ae215d03ed4656e23cd0bed"
+  },
+  "productionApproved": false,
+  "limitations": [
+    "No complete protocol selection or independent design/implementation review",
+    "No network anonymity, issuer metadata/tagging or compromised-client qualification",
+    "Bearer credentials transferable; theft/coercion demonstration succeeds as an explicitly expected limitation",
+    "No real eligibility, HTTP/client encryption, durable issuance, ballot-bound spending or process/replica recovery",
+    "No trustee ceremony, encrypted tally, receipt-freeness or voting-method qualification",
+    "Production voting gate unchanged; only isolated cryptography tests executed in this continuation"
+  ]
+}

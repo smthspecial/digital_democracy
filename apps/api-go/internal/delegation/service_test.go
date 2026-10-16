@@ -8,7 +8,9 @@ import (
 	"time"
 )
 
-func testService() *Service { return NewService(nil, nil, nil) }
+func testService() *Service {
+	return NewService(nil, CompetencyCheckerFunc(func(string, string) (bool, error) { return true, nil }), nil)
+}
 
 func create(t *testing.T, svc *Service, delegator, delegate, domain string, expires time.Time) *Delegation {
 	t.Helper()

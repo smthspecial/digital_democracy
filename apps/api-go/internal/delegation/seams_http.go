@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/digital-democracy/api-go/internal/security"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/digital-democracy/eventbus"
@@ -24,7 +26,12 @@ func NewHTTPCompetencyChecker(base string) *httpCompetencyChecker {
 }
 
 func (c *httpCompetencyChecker) HasActiveCompetency(citizenID, domainID string) (bool, error) {
-	resp, err := c.client.Get(fmt.Sprintf("%s/competency/citizens/%s/domains/%s", c.base, citizenID, domainID))
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/competency/citizens/%s/domains/%s", c.base, citizenID, domainID), nil)
+	if err != nil {
+		return false, err
+	}
+	security.Sign(req, "api-go", os.Getenv("INTERNAL_SERVICE_SHARED_SECRET"), nil)
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return false, err
 	}
@@ -61,6 +68,9 @@ func (e *natsAuditEmitter) Emit(actionType, actorRef, payload string) error {
 		Payload:    payload,
 		OccurredAt: time.Now().UTC(),
 	}
+	if err := evt.Sign("api-go", os.Getenv("INTERNAL_SERVICE_SHARED_SECRET")); err != nil {
+		return err
+	}
 	body, _ := json.Marshal(evt)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -81,7 +91,13 @@ func (h *httpAuditEmitter) Emit(actionType, actorRef, payload string) error {
 	body, _ := json.Marshal(map[string]string{
 		"action_type": actionType, "actor_ref": actorRef, "payload": payload,
 	})
-	resp, err := h.client.Post(h.base+"/audit/log", "application/json", bytes.NewReader(body))
+	req, err := http.NewRequest("POST", h.base+"/audit/log", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	security.Sign(req, "api-go", os.Getenv("INTERNAL_SERVICE_SHARED_SECRET"), body)
+	resp, err := h.client.Do(req)
 	if err != nil {
 		return err
 	}

@@ -1,0 +1,169 @@
+{
+  "storage": "postgres",
+  "cases": [
+    {
+      "case": "anonymous /voting/sessions",
+      "status": 401,
+      "expected": 401,
+      "passed": true
+    },
+    {
+      "case": "anonymous /voting/sessions/b1c90d5a-98d9-40cb-bbad-0571841c261a/open",
+      "status": 401,
+      "expected": 401,
+      "passed": true
+    },
+    {
+      "case": "anonymous /voting/sessions/f65f6341-2c7b-49e8-a94d-e93f426a9da1/tokens",
+      "status": 401,
+      "expected": 401,
+      "passed": true
+    },
+    {
+      "case": "anonymous /voting/sessions/ffa0dcda-9473-4925-9fb5-d0b0ad4586f3/tally",
+      "status": 401,
+      "expected": 401,
+      "passed": true
+    },
+    {
+      "case": "anonymous /voting/sessions/13da8210-e7bf-4d0a-94be-45fd980cb512/certify",
+      "status": 401,
+      "expected": 401,
+      "passed": true
+    },
+    {
+      "case": "anonymous /audit/log",
+      "status": 401,
+      "expected": 401,
+      "passed": true
+    },
+    {
+      "case": "anonymous /audit/rights",
+      "status": 401,
+      "expected": 401,
+      "passed": true
+    },
+    {
+      "case": "anonymous /audit/reviews",
+      "status": 401,
+      "expected": 401,
+      "passed": true
+    },
+    {
+      "case": "anonymous /audit/protocol-changes",
+      "status": 401,
+      "expected": 401,
+      "passed": true
+    },
+    {
+      "case": "anonymous /delegation/delegations",
+      "status": 401,
+      "expected": 401,
+      "passed": true
+    },
+    {
+      "case": "anonymous /delegation/expire",
+      "status": 401,
+      "expected": 401,
+      "passed": true
+    },
+    {
+      "case": "anonymous /auth/identities/provision",
+      "status": 401,
+      "expected": 401,
+      "passed": true
+    },
+    {
+      "case": "anonymous /auth/revoke-all",
+      "status": 401,
+      "expected": 401,
+      "passed": true
+    },
+    {
+      "case": "forged ballot bearer",
+      "status": 401,
+      "expected": 401,
+      "passed": true
+    },
+    {
+      "case": "anonymous delegation revoke",
+      "status": 401,
+      "expected": 401,
+      "passed": true
+    },
+    {
+      "case": "signed audit positive control",
+      "status": 201,
+      "expected": 201,
+      "passed": true
+    },
+    {
+      "case": "audit provenance",
+      "status": 200,
+      "expected": 200,
+      "passed": true
+    },
+    {
+      "case": "unsigned producer substitution",
+      "status": 401,
+      "expected": 401,
+      "passed": true
+    },
+    {
+      "case": "signed replay",
+      "status": 401,
+      "expected": 401,
+      "passed": true
+    },
+    {
+      "case": "signed TS cannot impersonate voting",
+      "status": 403,
+      "expected": 403,
+      "passed": true
+    },
+    {
+      "case": "signed oversized body",
+      "status": 413,
+      "expected": 413,
+      "passed": true
+    },
+    {
+      "case": "invalid audit page size",
+      "status": 400,
+      "expected": 400,
+      "passed": true
+    },
+    {
+      "case": "chain verifies after rejected attacks",
+      "status": 200,
+      "expected": 200,
+      "passed": true
+    },
+    {
+      "case": "anonymous /identity/duplicates/scan",
+      "status": 401,
+      "expected": 401,
+      "passed": true
+    },
+    {
+      "case": "anonymous /identity/registrations/burst-check",
+      "status": 401,
+      "expected": 401,
+      "passed": true
+    },
+    {
+      "case": "signed worker scan",
+      "status": 200,
+      "expected": 200,
+      "passed": true
+    },
+    {
+      "case": "TS signed replay",
+      "status": 401,
+      "expected": 401,
+      "passed": true
+    }
+  ],
+  "passed": 27,
+  "failed": 0
+}

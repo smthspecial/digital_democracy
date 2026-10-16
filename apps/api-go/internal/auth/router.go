@@ -1,13 +1,18 @@
 package auth
 
 import (
+	"github.com/digital-democracy/api-go/internal/security"
 	"log/slog"
 	"net/http"
 )
 
 // NewRouter wires the HTTP surface (GET /healthz + GET /readyz contract).
-func NewRouter(svc *Service, logger *slog.Logger, internalSharedSecret string) *http.ServeMux {
-	h := &Handler{svc: svc, internalSharedSecret: []byte(internalSharedSecret)}
+func NewRouter(svc *Service, logger *slog.Logger, internalSharedSecret string, replayStores ...*security.ReplayStore) *http.ServeMux {
+	replays := &security.ReplayStore{}
+	if len(replayStores) > 0 {
+		replays = replayStores[0]
+	}
+	h := &Handler{svc: svc, internalSharedSecret: []byte(internalSharedSecret), replays: replays}
 	h.passkeys, _ = newPasskeyVerifier()
 	mux := http.NewServeMux()
 

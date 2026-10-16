@@ -249,7 +249,7 @@ func (q *Queries) InsertProtocolChange(ctx context.Context, arg InsertProtocolCh
 }
 
 const listAllReviews = `-- name: ListAllReviews :many
-SELECT id, proposal_id, right_id, result, reviewer_ref, created_at FROM constitutional_review ORDER BY created_at, id
+SELECT id, proposal_id, right_id, result, reviewer_ref, created_at FROM constitutional_review ORDER BY created_at, id LIMIT 1000
 `
 
 func (q *Queries) ListAllReviews(ctx context.Context) ([]ConstitutionalReview, error) {
@@ -314,7 +314,7 @@ func (q *Queries) ListAuditEntries(ctx context.Context, dollar_1 interface{}) ([
 }
 
 const listConstitutionalRights = `-- name: ListConstitutionalRights :many
-SELECT id, name, description, protected FROM constitutional_right ORDER BY id
+SELECT id, name, description, protected FROM constitutional_right ORDER BY id LIMIT 1001
 `
 
 func (q *Queries) ListConstitutionalRights(ctx context.Context) ([]ConstitutionalRight, error) {
@@ -343,7 +343,7 @@ func (q *Queries) ListConstitutionalRights(ctx context.Context) ([]Constitutiona
 }
 
 const listProtocolChanges = `-- name: ListProtocolChanges :many
-SELECT id, change_ref, required_approval_refs, approvals, delay_until, visible_since, status, created_at, released_at FROM protocol_change ORDER BY created_at, id
+SELECT id, change_ref, required_approval_refs, approvals, delay_until, visible_since, status, created_at, released_at FROM protocol_change ORDER BY created_at, id LIMIT 1000
 `
 
 func (q *Queries) ListProtocolChanges(ctx context.Context) ([]ProtocolChange, error) {
@@ -377,7 +377,7 @@ func (q *Queries) ListProtocolChanges(ctx context.Context) ([]ProtocolChange, er
 }
 
 const listReviewsByProposal = `-- name: ListReviewsByProposal :many
-SELECT id, proposal_id, right_id, result, reviewer_ref, created_at FROM constitutional_review WHERE proposal_id = $1 ORDER BY created_at, id
+SELECT id, proposal_id, right_id, result, reviewer_ref, created_at FROM constitutional_review WHERE proposal_id = $1 ORDER BY created_at, id LIMIT 1000
 `
 
 func (q *Queries) ListReviewsByProposal(ctx context.Context, proposalID pgtype.UUID) ([]ConstitutionalReview, error) {
@@ -409,7 +409,7 @@ func (q *Queries) ListReviewsByProposal(ctx context.Context, proposalID pgtype.U
 
 const updateProtocolChange = `-- name: UpdateProtocolChange :one
 UPDATE protocol_change SET approvals = $2, status = $3, released_at = $4
-WHERE id = $1
+WHERE id = $1 AND status = 'pending'
 RETURNING id, change_ref, required_approval_refs, approvals, delay_until, visible_since, status, created_at, released_at
 `
 

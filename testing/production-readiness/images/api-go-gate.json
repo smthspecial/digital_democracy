@@ -1,0 +1,14 @@
+{
+  "passed": true,
+  "blocking": [],
+  "reviewRequired": [
+    {
+      "VulnerabilityID": "GO-2026-5932",
+      "PkgName": "golang.org/x/crypto",
+      "InstalledVersion": "v0.57.0",
+      "FixedVersion": null,
+      "Severity": "UNKNOWN",
+      "target": "app/api-go"
+    }
+  ]
+}

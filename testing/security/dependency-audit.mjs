@@ -1,0 +1,13 @@
+import { spawnSync } from 'node:child_process';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { validateExceptions, unmitigatedAdvisories } from './dependency-policy.mjs';
+const patches = spawnSync(process.execPath, ['testing/security/dependency-patches.mjs'], { stdio: 'inherit' });
+assert.equal(patches.status, 0, 'Dependency security patch regressions failed');
+const audit = spawnSync('pnpm', ['audit', '--json'], { encoding: 'utf8', maxBuffer: 20 * 1024 * 1024 });
+const report = JSON.parse(audit.stdout);
+assert(report.metadata && report.advisories, 'Dependency advisory scan did not return a valid report');
+const mitigated = validateExceptions(JSON.parse(readFileSync('testing/security/dependency-exceptions.json', 'utf8')));
+const unresolved = unmitigatedAdvisories(report, mitigated);
+console.log(JSON.stringify({ versionBasedAudit: report.metadata.vulnerabilities, locallyPatchedAdvisories: Object.values(report.advisories).length - unresolved.length, unresolved: unresolved.map(a => a.github_advisory_id) }));
+assert.equal(unresolved.length, 0, 'Unmitigated dependency advisories remain');

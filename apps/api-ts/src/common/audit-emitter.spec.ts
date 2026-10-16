@@ -67,10 +67,12 @@ describe("HttpAuditEmitter (HTTP)", () => {
     }
     baseUrl = `http://127.0.0.1:${addr.port}`;
     process.env.AUDIT_SERVICE_URL = baseUrl;
+ process.env.INTERNAL_SERVICE_SHARED_SECRET = "test-audit-secret";
   });
 
   afterEach(async () => {
     delete process.env.AUDIT_SERVICE_URL;
+ delete process.env.INTERNAL_SERVICE_SHARED_SECRET;
     await new Promise<void>((resolve) => server.close(() => resolve()));
   });
 

@@ -1,0 +1,2 @@
+REVOKE DELETE ON session FROM api_worker;
+REVOKE USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public FROM api_worker;

@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { createHash, createHmac } from "node:crypto";
+import { serviceHeaders } from "../common/internal-service.guard.js";
 
 export const SESSION_REVOKER = Symbol("SESSION_REVOKER");
 
@@ -29,21 +29,14 @@ export class HttpSessionRevoker implements SessionRevoker {
     }
     const path = "/auth/revoke-all";
     const body = JSON.stringify({ citizen_id: citizenId });
-    const timestamp = Math.floor(Date.now() / 1000).toString();
-    const bodyHash = createHash("sha256").update(body).digest("hex");
-    const signature = createHmac("sha256", this.internalSharedSecret)
-      .update(`POST\n${path}\n${timestamp}\n${bodyHash}`)
-      .digest("hex");
     try {
       const response = await fetch(`${this.authServiceUrl}${path}`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          "x-dd-service": "api-ts",
-          "x-dd-timestamp": timestamp,
-          "x-dd-signature": signature,
+          ...serviceHeaders("POST", path, body),
         },
-        body,
+        body, signal: AbortSignal.timeout(3000),
       });
       if (!response.ok) {
         this.logger.error(`session revoke-all failed: HTTP ${response.status} for citizen ${citizenId}`);

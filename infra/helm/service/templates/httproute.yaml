@@ -1,18 +1,22 @@
-{{- if .Values.route.prefix }}
+{{- if or .Values.route.prefix .Values.route.prefixes }}
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
+  namespace: {{ .Release.Namespace }}
   name: {{ include "service.fullname" . }}
   labels:
     {{- include "service.labels" . | nindent 4 }}
 spec:
   parentRefs:
     - name: {{ .Values.gatewayName }}
+      sectionName: https
   rules:
     - matches:
+        {{- range (.Values.route.prefixes | default (list .Values.route.prefix)) }}
         - path:
             type: PathPrefix
-            value: {{ .Values.route.prefix }}
+            value: {{ . }}
+        {{- end }}
       backendRefs:
         - name: {{ include "service.fullname" . }}
           port: 80

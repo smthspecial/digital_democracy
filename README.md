@@ -56,22 +56,55 @@ Go and TS run as standalone apps, outside the pnpm/turbo dev loop:
 
 ```bash
 cd apps/api-go && go run .        # :5000 (in-memory; DATABASE_URL+NATS_URL to wire up)
-cd apps/api-ts && node src/index.js  # :4000 (routing shell)
+cd apps/api-ts && pnpm dev       # :4000 (NestJS; requires migrated Postgres)
 ```
 
 ### Running everything together
 
-One compose file runs the whole backend — both apps, real NATS JetStream,
-and one Postgres per app (ADR-026, ADR-027, ADR-028, ARCH-025 §4):
+Start the local development stack with both APIs, web, real NATS JetStream,
+and one database per app (ADR-026, ADR-027, ADR-028, ARCH-025 §4):
 
 ```bash
-podman compose up --build   # or: docker compose up --build
+python3 infra/compose/local.py up
+# Docker alternative: append --engine docker
 ```
 
-This is the fast local inner-loop alternative to the k3s target ARCH-025
-describes — no cluster required. api-go migrates and connects to its
-`api_go` database automatically (`DATABASE_URL`); api-ts serves its routing
-shell against an empty `api_ts` database until its services land.
+The launcher creates a private, ignored `.env.local` with random development
+secrets. It builds images, stops local writers, waits for Postgres, applies
+both migration jobs separately, and starts the APIs together. A failed
+migration stops startup. Repeat `up` after changes; it preserves database
+volumes, JetStream storage and signing keys. Keep `.env.local` with those volumes rather than
+regenerating passwords for an existing database.
+
+Defaults bind only to loopback: Go at `http://localhost:5000`, TypeScript at
+`http://localhost:4000`, and web at `http://localhost:3001`. Postgres uses
+15432 and NATS uses 14222/18222. Adjust ports in `.env.local` if occupied.
+The web app includes identity registration, passkey enrollment/login and a
+citizen workspace for issues, proposals and voting packages. No ballot verifier
+is configured; this development stack does not qualify real elections.
+
+```bash
+python3 infra/compose/local.py status
+python3 infra/compose/local.py logs
+python3 infra/compose/local.py down  # stops this project; retains data
+```
+
+Populate the local stack with repeatable synthetic test users and scenarios:
+
+```bash
+python3 infra/compose/seed.py seed
+python3 infra/compose/seed.py users
+python3 infra/compose/seed.py enroll alice --output /tmp/dd-alice-enrollment.txt
+```
+
+To delete this project's local database, auth, broker and monitoring data and
+recreate it from migrations and seeds, run `python3 infra/compose/seed.py reset`.
+It preserves `.env.local`. See [seed users, scenarios and passkey instructions](infra/compose/SEEDS.md).
+
+Prometheus/Grafana are optional: use `podman compose --project-name dd-local
+--env-file .env.local up -d prometheus grafana`. Their local ports are 19090
+and 13001. No Kubernetes cluster or production provisioning is needed for
+this solo development workflow. Production gates remain in REL-002.
 
 ## Common commands
 

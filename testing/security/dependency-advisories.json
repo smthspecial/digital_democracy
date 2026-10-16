@@ -1,0 +1,1722 @@
+{
+  "scanner": "pnpm audit",
+  "date": "2026-10-08",
+  "metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 4,
+      "moderate": 36,
+      "high": 56,
+      "critical": 7
+    },
+    "dependencies": 1452,
+    "devDependencies": 0,
+    "optionalDependencies": 0,
+    "totalDependencies": 1452
+  },
+  "unique_advisory_count": 98,
+  "unique_severity_counts": {
+    "moderate": 33,
+    "low": 4,
+    "high": 54,
+    "critical": 7
+  },
+  "advisories": [
+    {
+      "id": 1102341,
+      "module_name": "esbuild",
+      "title": "esbuild enables any website to send any requests to the development server and read the response",
+      "severity": "moderate",
+      "vulnerable_versions": "<=0.24.2",
+      "patched_versions": ">=0.25.0",
+      "url": "https://github.com/advisories/GHSA-67mh-4wv8-2f99",
+      "findings": [
+        {
+          "version": "0.21.5",
+          "paths": [
+            "apps__api-ts>unplugin-swc>unplugin>vite>esbuild"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1109556,
+      "module_name": "send",
+      "title": "send vulnerable to template injection that can lead to XSS",
+      "severity": "low",
+      "vulnerable_versions": "<0.19.0",
+      "patched_versions": ">=0.19.0",
+      "url": "https://github.com/advisories/GHSA-m6fv-jmcg-4jfg",
+      "findings": [
+        {
+          "version": "0.18.0",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>send"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1112593,
+      "module_name": "next",
+      "title": "Next.js self-hosted applications vulnerable to DoS via Image Optimizer remotePatterns configuration",
+      "severity": "moderate",
+      "vulnerable_versions": ">=10.0.0 <15.5.10",
+      "patched_versions": ">=15.5.10",
+      "url": "https://github.com/advisories/GHSA-9g9p-9gw9-jx7f",
+      "findings": [
+        {
+          "version": "14.2.35",
+          "paths": [
+            "apps__web>next"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1112653,
+      "module_name": "next",
+      "title": "Next.js HTTP request deserialization can lead to DoS when using insecure React Server Components",
+      "severity": "high",
+      "vulnerable_versions": ">=13.0.0 <15.0.8",
+      "patched_versions": ">=15.0.8",
+      "url": "https://github.com/advisories/GHSA-h25m-26qc-wcjf",
+      "findings": [
+        {
+          "version": "14.2.35",
+          "paths": [
+            "apps__web>next"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1112659,
+      "module_name": "tar",
+      "title": "node-tar Vulnerable to Arbitrary File Creation/Overwrite via Hardlink Path Traversal",
+      "severity": "high",
+      "vulnerable_versions": "<7.5.7",
+      "patched_versions": ">=7.5.7",
+      "url": "https://github.com/advisories/GHSA-34x7-hfp2-rc4v",
+      "findings": [
+        {
+          "version": "6.2.1",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>tar"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1113300,
+      "module_name": "tar",
+      "title": "node-tar is Vulnerable to Arbitrary File Overwrite and Symlink Poisoning via Insufficient Path Sanitization",
+      "severity": "high",
+      "vulnerable_versions": "<=7.5.2",
+      "patched_versions": ">=7.5.3",
+      "url": "https://github.com/advisories/GHSA-8qq5-rm4j-mr97",
+      "findings": [
+        {
+          "version": "6.2.1",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>tar"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1113375,
+      "module_name": "tar",
+      "title": "Arbitrary File Read/Write via Hardlink Target Escape Through Symlink Chain in node-tar Extraction",
+      "severity": "high",
+      "vulnerable_versions": "<7.5.8",
+      "patched_versions": ">=7.5.8",
+      "url": "https://github.com/advisories/GHSA-83g3-92jg-28cx",
+      "findings": [
+        {
+          "version": "6.2.1",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>tar"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1114200,
+      "module_name": "tar",
+      "title": "tar has Hardlink Path Traversal via Drive-Relative Linkpath",
+      "severity": "high",
+      "vulnerable_versions": "<=7.5.9",
+      "patched_versions": ">=7.5.10",
+      "url": "https://github.com/advisories/GHSA-qffp-2rhf-9h96",
+      "findings": [
+        {
+          "version": "6.2.1",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>tar"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1114302,
+      "module_name": "tar",
+      "title": "node-tar Symlink Path Traversal via Drive-Relative Linkpath",
+      "severity": "high",
+      "vulnerable_versions": "<=7.5.10",
+      "patched_versions": ">=7.5.11",
+      "url": "https://github.com/advisories/GHSA-9ppj-qmqm-q256",
+      "findings": [
+        {
+          "version": "6.2.1",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>tar"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1114680,
+      "module_name": "tar",
+      "title": "Race Condition in node-tar Path Reservations via Unicode Ligature Collisions on macOS APFS",
+      "severity": "high",
+      "vulnerable_versions": "<=7.5.3",
+      "patched_versions": ">=7.5.4",
+      "url": "https://github.com/advisories/GHSA-r6q2-hw4h-h46w",
+      "findings": [
+        {
+          "version": "6.2.1",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>tar"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1114897,
+      "module_name": "next",
+      "title": "Next.js: HTTP request smuggling in rewrites",
+      "severity": "moderate",
+      "vulnerable_versions": ">=9.5.0 <15.5.13",
+      "patched_versions": ">=15.5.13",
+      "url": "https://github.com/advisories/GHSA-ggv3-7p47-pfv8",
+      "findings": [
+        {
+          "version": "14.2.35",
+          "paths": [
+            "apps__web>next"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1114940,
+      "module_name": "next",
+      "title": "Next.js: Unbounded next/image disk cache growth can exhaust storage",
+      "severity": "moderate",
+      "vulnerable_versions": ">=10.0.0 <15.5.14",
+      "patched_versions": ">=15.5.14",
+      "url": "https://github.com/advisories/GHSA-3x4c-7xq6-9pq8",
+      "findings": [
+        {
+          "version": "14.2.35",
+          "paths": [
+            "apps__web>next"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1116229,
+      "module_name": "vite",
+      "title": "Vite Vulnerable to Path Traversal in Optimized Deps `.map` Handling",
+      "severity": "moderate",
+      "vulnerable_versions": "<=6.4.1",
+      "patched_versions": ">=6.4.2",
+      "url": "https://github.com/advisories/GHSA-4w7w-66w2-5vf9",
+      "findings": [
+        {
+          "version": "5.4.21",
+          "paths": [
+            "apps__api-ts>unplugin-swc>unplugin>vite"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1116376,
+      "module_name": "next",
+      "title": "Next.js has a Denial of Service with Server Components",
+      "severity": "high",
+      "vulnerable_versions": ">=13.0.0 <15.5.15",
+      "patched_versions": ">=15.5.15",
+      "url": "https://github.com/advisories/GHSA-q4gf-8mx6-v5v3",
+      "findings": [
+        {
+          "version": "14.2.35",
+          "paths": [
+            "apps__web>next"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1117015,
+      "module_name": "postcss",
+      "title": "PostCSS has XSS via Unescaped </style> in its CSS Stringify Output",
+      "severity": "moderate",
+      "vulnerable_versions": "<8.5.10",
+      "patched_versions": ">=8.5.10",
+      "url": "https://github.com/advisories/GHSA-qx2v-qp2m-jg93",
+      "findings": [
+        {
+          "version": "8.4.31",
+          "paths": [
+            "apps__web>next>postcss"
+          ]
+        },
+        {
+          "version": "8.4.49",
+          "paths": [
+            "apps__mobile>expo>@expo/metro-config>postcss"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1117097,
+      "module_name": "@xmldom/xmldom",
+      "title": "xmldom: XML injection via unsafe CDATA serialization allows attacker-controlled markup insertion",
+      "severity": "high",
+      "vulnerable_versions": "<0.8.12",
+      "patched_versions": ">=0.8.12",
+      "url": "https://github.com/advisories/GHSA-wh4c-j3r5-mjhp",
+      "findings": [
+        {
+          "version": "0.7.13",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>@expo/plist>@xmldom/xmldom"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1117894,
+      "module_name": "@xmldom/xmldom",
+      "title": "xmldom: Uncontrolled recursion in XML serialization leads to DoS",
+      "severity": "high",
+      "vulnerable_versions": "<0.8.13",
+      "patched_versions": ">=0.8.13",
+      "url": "https://github.com/advisories/GHSA-2v35-w6hq-6mfw",
+      "findings": [
+        {
+          "version": "0.7.13",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>@expo/plist>@xmldom/xmldom"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1117897,
+      "module_name": "@xmldom/xmldom",
+      "title": "xmldom has XML injection through unvalidated DocumentType serialization",
+      "severity": "high",
+      "vulnerable_versions": "<0.8.13",
+      "patched_versions": ">=0.8.13",
+      "url": "https://github.com/advisories/GHSA-f6ww-3ggp-fr8h",
+      "findings": [
+        {
+          "version": "0.7.13",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>@expo/plist>@xmldom/xmldom"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1117900,
+      "module_name": "@xmldom/xmldom",
+      "title": "xmldom has XML node injection through unvalidated processing instruction serialization",
+      "severity": "high",
+      "vulnerable_versions": "<0.8.13",
+      "patched_versions": ">=0.8.13",
+      "url": "https://github.com/advisories/GHSA-x6wf-f3px-wcqx",
+      "findings": [
+        {
+          "version": "0.7.13",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>@expo/plist>@xmldom/xmldom"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1117903,
+      "module_name": "@xmldom/xmldom",
+      "title": "xmldom has XML node injection through unvalidated comment serialization",
+      "severity": "high",
+      "vulnerable_versions": "<0.8.13",
+      "patched_versions": ">=0.8.13",
+      "url": "https://github.com/advisories/GHSA-j759-j44w-7fr8",
+      "findings": [
+        {
+          "version": "0.7.13",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>@expo/plist>@xmldom/xmldom"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1117911,
+      "module_name": "fast-xml-parser",
+      "title": "fast-xml-parser XMLBuilder: XML Comment and CDATA Injection via Unescaped Delimiters",
+      "severity": "moderate",
+      "vulnerable_versions": "<5.7.0",
+      "patched_versions": ">=5.7.0",
+      "url": "https://github.com/advisories/GHSA-gh4j-gqv2-49f6",
+      "findings": [
+        {
+          "version": "4.5.7",
+          "paths": [
+            "apps__mobile>react-native>@react-native-community/cli>@react-native-community/cli-doctor>@react-native-community/cli-platform-apple>fast-xml-parser"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1117931,
+      "module_name": "next",
+      "title": "Next.js Vulnerable to Denial of Service with Server Components",
+      "severity": "high",
+      "vulnerable_versions": ">=13.0.0 <15.5.16",
+      "patched_versions": ">=15.5.16",
+      "url": "https://github.com/advisories/GHSA-8h8q-6873-q5fj",
+      "findings": [
+        {
+          "version": "14.2.35",
+          "paths": [
+            "apps__web>next"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1118942,
+      "module_name": "next",
+      "title": "Next.js's Middleware / Proxy redirects can be cache-poisoned",
+      "severity": "low",
+      "vulnerable_versions": ">=12.2.0 <15.5.16",
+      "patched_versions": ">=15.5.16",
+      "url": "https://github.com/advisories/GHSA-3g8h-86w9-wvmq",
+      "findings": [
+        {
+          "version": "14.2.35",
+          "paths": [
+            "apps__web>next"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1118944,
+      "module_name": "next",
+      "title": "Next.js vulnerable to cross-site scripting in App Router applications using CSP nonces",
+      "severity": "moderate",
+      "vulnerable_versions": ">=13.4.0 <15.5.16",
+      "patched_versions": ">=15.5.16",
+      "url": "https://github.com/advisories/GHSA-ffhc-5mcf-pf4q",
+      "findings": [
+        {
+          "version": "14.2.35",
+          "paths": [
+            "apps__web>next"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1118946,
+      "module_name": "next",
+      "title": "Next.js vulnerable to cache poisoning via collisions in React Server Component cache-busting",
+      "severity": "low",
+      "vulnerable_versions": ">=13.4.6 <15.5.16",
+      "patched_versions": ">=15.5.16",
+      "url": "https://github.com/advisories/GHSA-vfv6-92ff-j949",
+      "findings": [
+        {
+          "version": "14.2.35",
+          "paths": [
+            "apps__web>next"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1118948,
+      "module_name": "next",
+      "title": "Next.js has cross-site scripting in beforeInteractive scripts with untrusted input",
+      "severity": "moderate",
+      "vulnerable_versions": ">=13.0.0 <15.5.16",
+      "patched_versions": ">=15.5.16",
+      "url": "https://github.com/advisories/GHSA-gx5p-jg67-6x7h",
+      "findings": [
+        {
+          "version": "14.2.35",
+          "paths": [
+            "apps__web>next"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1118952,
+      "module_name": "next",
+      "title": "Next.js has a Denial of Service in the Image Optimization API",
+      "severity": "moderate",
+      "vulnerable_versions": ">=10.0.0 <15.5.16",
+      "patched_versions": ">=15.5.16",
+      "url": "https://github.com/advisories/GHSA-h64f-5h5j-jqjh",
+      "findings": [
+        {
+          "version": "14.2.35",
+          "paths": [
+            "apps__web>next"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1118954,
+      "module_name": "next",
+      "title": "Next.js vulnerable to server-side request forgery in applications using WebSocket upgrades",
+      "severity": "high",
+      "vulnerable_versions": ">=13.4.13 <15.5.16",
+      "patched_versions": ">=15.5.16",
+      "url": "https://github.com/advisories/GHSA-c4j6-fc7j-m34r",
+      "findings": [
+        {
+          "version": "14.2.35",
+          "paths": [
+            "apps__web>next"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1118958,
+      "module_name": "next",
+      "title": "Next.js vulnerable to cache poisoning in React Server Component responses",
+      "severity": "moderate",
+      "vulnerable_versions": ">=14.2.0 <15.5.16",
+      "patched_versions": ">=15.5.16",
+      "url": "https://github.com/advisories/GHSA-wfc6-r584-vfw7",
+      "findings": [
+        {
+          "version": "14.2.35",
+          "paths": [
+            "apps__web>next"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1118962,
+      "module_name": "next",
+      "title": "Next.js has a Middleware / Proxy bypass in Pages Router applications using i18n",
+      "severity": "high",
+      "vulnerable_versions": ">=12.2.0 <15.5.16",
+      "patched_versions": ">=15.5.16",
+      "url": "https://github.com/advisories/GHSA-36qx-fr4f-26g5",
+      "findings": [
+        {
+          "version": "14.2.35",
+          "paths": [
+            "apps__web>next"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1119441,
+      "module_name": "uuid",
+      "title": "uuid: Missing buffer bounds check in v3/v5/v6 when buf is provided",
+      "severity": "moderate",
+      "vulnerable_versions": "<11.1.1",
+      "patched_versions": ">=11.1.1",
+      "url": "https://github.com/advisories/GHSA-w5hq-g745-h8pq",
+      "findings": [
+        {
+          "version": "8.3.2",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>@expo/rudder-sdk-node>uuid"
+          ]
+        },
+        {
+          "version": "7.0.3",
+          "paths": [
+            "apps__mobile>expo>@expo/config-plugins>xcode>uuid"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1120782,
+      "module_name": "tar",
+      "title": "node-tar applies PAX size override to intermediary GNU long-name/long-link headers, causing tar parser interpretation differential (file smuggling)",
+      "severity": "moderate",
+      "vulnerable_versions": "<=7.5.15",
+      "patched_versions": ">=7.5.16",
+      "url": "https://github.com/advisories/GHSA-vmf3-w455-68vh",
+      "findings": [
+        {
+          "version": "6.2.1",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>tar"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1120784,
+      "module_name": "vite",
+      "title": "launch-editor: NTLMv2 hash disclosure via UNC path handling on Windows",
+      "severity": "moderate",
+      "vulnerable_versions": "<=6.4.2",
+      "patched_versions": ">=6.4.3",
+      "url": "https://github.com/advisories/GHSA-v6wh-96g9-6wx3",
+      "findings": [
+        {
+          "version": "5.4.21",
+          "paths": [
+            "apps__api-ts>unplugin-swc>unplugin>vite"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1123525,
+      "module_name": "vite",
+      "title": "vite: `server.fs.deny` bypass on Windows alternate paths",
+      "severity": "high",
+      "vulnerable_versions": "<=6.4.2",
+      "patched_versions": ">=6.4.3",
+      "url": "https://github.com/advisories/GHSA-fx2h-pf6j-xcff",
+      "findings": [
+        {
+          "version": "5.4.21",
+          "paths": [
+            "apps__api-ts>unplugin-swc>unplugin>vite"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1123939,
+      "module_name": "tar",
+      "title": "node-tar: Process crash via PAX numeric path type confusion",
+      "severity": "moderate",
+      "vulnerable_versions": "<=7.5.17",
+      "patched_versions": ">=7.5.18",
+      "url": "https://github.com/advisories/GHSA-w8wr-v893-vjvp",
+      "findings": [
+        {
+          "version": "6.2.1",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>tar"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1123940,
+      "module_name": "tar",
+      "title": "node-tar: Decompression/parse DoS via unlimited input",
+      "severity": "critical",
+      "vulnerable_versions": "<=7.5.18",
+      "patched_versions": ">=7.5.19",
+      "url": "https://github.com/advisories/GHSA-23hp-3jrh-7fpw",
+      "findings": [
+        {
+          "version": "6.2.1",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>tar"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1123941,
+      "module_name": "tar",
+      "title": "node-tar: Negative tar entry size causes infinite loop in archive replace",
+      "severity": "high",
+      "vulnerable_versions": "<=7.5.17",
+      "patched_versions": ">=7.5.18",
+      "url": "https://github.com/advisories/GHSA-8x88-c5mf-7j5w",
+      "findings": [
+        {
+          "version": "6.2.1",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>tar"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1123942,
+      "module_name": "tar",
+      "title": "node-tar: Uncaught Exception DoS via NUL byte in PAX path/linkpath records",
+      "severity": "moderate",
+      "vulnerable_versions": "<=7.5.16",
+      "patched_versions": ">=7.5.17",
+      "url": "https://github.com/advisories/GHSA-gvwx-54wh-qm9j",
+      "findings": [
+        {
+          "version": "6.2.1",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>tar"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1124172,
+      "module_name": "next",
+      "title": "Next.js: Denial of Service in App Router using Server Actions",
+      "severity": "high",
+      "vulnerable_versions": ">=13.0.0 <15.5.21",
+      "patched_versions": ">=15.5.21",
+      "url": "https://github.com/advisories/GHSA-m99w-x7hq-7vfj",
+      "findings": [
+        {
+          "version": "14.2.35",
+          "paths": [
+            "apps__web>next"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1124185,
+      "module_name": "next",
+      "title": "Next.js: Server-Side Request Forgery in Server Actions on custom servers",
+      "severity": "high",
+      "vulnerable_versions": ">=14.1.1 <15.5.21",
+      "patched_versions": ">=15.5.21",
+      "url": "https://github.com/advisories/GHSA-89xv-2m56-2m9x",
+      "findings": [
+        {
+          "version": "14.2.35",
+          "paths": [
+            "apps__web>next"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1124187,
+      "module_name": "next",
+      "title": "Next.js: Cache confusion of response bodies for requests with bodies",
+      "severity": "moderate",
+      "vulnerable_versions": ">=13.0.0 <15.5.21",
+      "patched_versions": ">=15.5.21",
+      "url": "https://github.com/advisories/GHSA-68g3-v927-f742",
+      "findings": [
+        {
+          "version": "14.2.35",
+          "paths": [
+            "apps__web>next"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1124189,
+      "module_name": "next",
+      "title": "Next.js: Cache confusion of response bodies for requests with bodies containing invalid UTF-8 byte sequences",
+      "severity": "moderate",
+      "vulnerable_versions": ">=13.0.0 <15.5.21",
+      "patched_versions": ">=15.5.21",
+      "url": "https://github.com/advisories/GHSA-4633-3j49-mh5q",
+      "findings": [
+        {
+          "version": "14.2.35",
+          "paths": [
+            "apps__web>next"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1124191,
+      "module_name": "next",
+      "title": "Next.js: Unbounded Server Action payload in Edge runtime",
+      "severity": "moderate",
+      "vulnerable_versions": ">=13.0.0 <15.5.21",
+      "patched_versions": ">=15.5.21",
+      "url": "https://github.com/advisories/GHSA-4c39-4ccg-62r3",
+      "findings": [
+        {
+          "version": "14.2.35",
+          "paths": [
+            "apps__web>next"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1124193,
+      "module_name": "next",
+      "title": "Next.js: Server-Side Request Forgery in rewrites via attacker-controlled destination hostname",
+      "severity": "high",
+      "vulnerable_versions": ">=12.0.0 <15.5.21",
+      "patched_versions": ">=15.5.21",
+      "url": "https://github.com/advisories/GHSA-p9j2-gv94-2wf4",
+      "findings": [
+        {
+          "version": "14.2.35",
+          "paths": [
+            "apps__web>next"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1124197,
+      "module_name": "next",
+      "title": "Next.js: Unauthenticated disclosure of internal Server Function endpoints",
+      "severity": "moderate",
+      "vulnerable_versions": ">=13.0.0 <15.5.21",
+      "patched_versions": ">=15.5.21",
+      "url": "https://github.com/advisories/GHSA-955p-x3mx-jcvp",
+      "findings": [
+        {
+          "version": "14.2.35",
+          "paths": [
+            "apps__web>next"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1124252,
+      "module_name": "postcss",
+      "title": "PostCSS: Arbitrary file read and information disclosure via attacker-controlled sourceMappingURL in CSS comments",
+      "severity": "high",
+      "vulnerable_versions": "<=8.5.11",
+      "patched_versions": ">=8.5.12",
+      "url": "https://github.com/advisories/GHSA-6g55-p6wh-862q",
+      "findings": [
+        {
+          "version": "8.4.31",
+          "paths": [
+            "apps__web>next>postcss"
+          ]
+        },
+        {
+          "version": "8.4.49",
+          "paths": [
+            "apps__mobile>expo>@expo/metro-config>postcss"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1130709,
+      "module_name": "postcss",
+      "title": "PostCSS: incomplete fix of GHSA-6g55-p6wh-862q \u2014 attacker-controlled sourceMappingURL reads arbitrary .map files when `from` is unset",
+      "severity": "moderate",
+      "vulnerable_versions": "<=8.5.22",
+      "patched_versions": ">=8.5.23",
+      "url": "https://github.com/advisories/GHSA-fxqj-rqcc-2cmp",
+      "findings": [
+        {
+          "version": "8.4.31",
+          "paths": [
+            "apps__web>next>postcss"
+          ]
+        },
+        {
+          "version": "8.4.49",
+          "paths": [
+            "apps__mobile>expo>@expo/metro-config>postcss"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1139510,
+      "module_name": "postcss",
+      "title": "PostCSS: Path Traversal in Previous Source Map Auto-Loading (sourceMappingURL) leads to Arbitrary .map File Disclosure",
+      "severity": "high",
+      "vulnerable_versions": "<=8.5.17",
+      "patched_versions": ">=8.5.18",
+      "url": "https://github.com/advisories/GHSA-r28c-9q8g-f849",
+      "findings": [
+        {
+          "version": "8.4.31",
+          "paths": [
+            "apps__web>next>postcss"
+          ]
+        },
+        {
+          "version": "8.4.49",
+          "paths": [
+            "apps__mobile>expo>@expo/metro-config>postcss"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1145093,
+      "module_name": "deepmerge-ts",
+      "title": "DeepmergeTS has stack exhaustion when merging recursive object graphs",
+      "severity": "high",
+      "vulnerable_versions": "<8.0.0",
+      "patched_versions": ">=8.0.0",
+      "url": "https://github.com/advisories/GHSA-ggr8-5vv4-36mx",
+      "findings": [
+        {
+          "version": "7.1.5",
+          "paths": [
+            "apps__api-ts>prisma>@prisma/config>deepmerge-ts"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1145647,
+      "module_name": "tar",
+      "title": "node-tar: Uncontrolled recursion in mapHas/filesFilter allows uncatchable stack-overflow DoS via crafted long-path tar with member selection",
+      "severity": "high",
+      "vulnerable_versions": "<=7.5.20",
+      "patched_versions": ">=7.5.21",
+      "url": "https://github.com/advisories/GHSA-r292-9mhp-454m",
+      "findings": [
+        {
+          "version": "6.2.1",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>tar"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1153173,
+      "module_name": "mysql2",
+      "title": "MySQL2: Auth Plugin Downgrade to mysql_clear_password Leaks Plaintext Credentials",
+      "severity": "high",
+      "vulnerable_versions": "<3.22.0",
+      "patched_versions": ">=3.22.0",
+      "url": "https://github.com/advisories/GHSA-3f6p-5ww8-9rcr",
+      "findings": [
+        {
+          "version": "3.15.3",
+          "paths": [
+            "apps__api-ts>prisma>mysql2"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1158518,
+      "module_name": "@xmldom/xmldom",
+      "title": "xmldom: XML fragment injection via invalid EntityReference.nodeName during requireWellFormed serialization",
+      "severity": "moderate",
+      "vulnerable_versions": ">=0.7.0 <=0.8.14",
+      "patched_versions": ">=0.8.15",
+      "url": "https://github.com/advisories/GHSA-6gmq-8vp8-gcm6",
+      "findings": [
+        {
+          "version": "0.7.13",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>@expo/plist>@xmldom/xmldom"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1158532,
+      "module_name": "mysql2",
+      "title": "MySQL2: Unbounded zlib inflate in compressed MySQL protocol handler allows decompression-bomb DoS",
+      "severity": "moderate",
+      "vulnerable_versions": "<=3.23.0",
+      "patched_versions": ">=3.23.1",
+      "url": "https://github.com/advisories/GHSA-rgwj-5xj2-c3m3",
+      "findings": [
+        {
+          "version": "3.15.3",
+          "paths": [
+            "apps__api-ts>prisma>mysql2"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1193677,
+      "module_name": "next",
+      "title": "Next.js: Unauthenticated Remote Code Execution on windows-hosted servers",
+      "severity": "critical",
+      "vulnerable_versions": ">=13.4.0 <15.5.24",
+      "patched_versions": ">=15.5.24",
+      "url": "https://github.com/advisories/GHSA-p293-qw3h-jr36",
+      "findings": [
+        {
+          "version": "14.2.35",
+          "paths": [
+            "apps__web>next"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1193683,
+      "module_name": "vitest",
+      "title": "Vitest: Path Traversal / Arbitrary File Read via @vitest/mocker Redirect Mock",
+      "severity": "moderate",
+      "vulnerable_versions": ">=2.1.0 <4.1.11",
+      "patched_versions": ">=4.1.11",
+      "url": "https://github.com/advisories/GHSA-82fw-gwwq-j7x9",
+      "findings": [
+        {
+          "version": "3.2.7",
+          "paths": [
+            "apps__api-ts>vitest"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1193684,
+      "module_name": "@vitest/mocker",
+      "title": "Vitest: Path Traversal / Arbitrary File Read via @vitest/mocker Redirect Mock",
+      "severity": "moderate",
+      "vulnerable_versions": ">=2.1.0 <4.1.11",
+      "patched_versions": ">=4.1.11",
+      "url": "https://github.com/advisories/GHSA-82fw-gwwq-j7x9",
+      "findings": [
+        {
+          "version": "3.2.7",
+          "paths": [
+            "apps__api-ts>vitest>@vitest/mocker"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1193689,
+      "module_name": "@xmldom/xmldom",
+      "title": "xmldom: Element name injection via createElement() bypasses requireWellFormed",
+      "severity": "high",
+      "vulnerable_versions": ">=0.7.0 <=0.8.13",
+      "patched_versions": ">=0.8.14",
+      "url": "https://github.com/advisories/GHSA-w2rr-34g9-rvrj",
+      "findings": [
+        {
+          "version": "0.7.13",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>@expo/plist>@xmldom/xmldom"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1193692,
+      "module_name": "@xmldom/xmldom",
+      "title": "xmldom: Attribute name injection via setAttribute() bypasses requireWellFormed",
+      "severity": "high",
+      "vulnerable_versions": ">=0.7.0 <=0.8.13",
+      "patched_versions": ">=0.8.14",
+      "url": "https://github.com/advisories/GHSA-4w3w-2rp5-g8jm",
+      "findings": [
+        {
+          "version": "0.7.13",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>@expo/plist>@xmldom/xmldom"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1193696,
+      "module_name": "@xmldom/xmldom",
+      "title": "xmldom: Processing Instruction Target Injection Bypasses requireWellFormed",
+      "severity": "high",
+      "vulnerable_versions": ">=0.7.0 <=0.8.14",
+      "patched_versions": ">=0.8.15",
+      "url": "https://github.com/advisories/GHSA-c7q8-3ch8-vqpv",
+      "findings": [
+        {
+          "version": "0.7.13",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>@expo/plist>@xmldom/xmldom"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1193700,
+      "module_name": "@xmldom/xmldom",
+      "title": "xmldom: DocType `name` Injection Bypasses requireWellFormed",
+      "severity": "high",
+      "vulnerable_versions": ">=0.7.0 <=0.8.14",
+      "patched_versions": ">=0.8.15",
+      "url": "https://github.com/advisories/GHSA-27p8-2357-5qqv",
+      "findings": [
+        {
+          "version": "0.7.13",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>@expo/plist>@xmldom/xmldom"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1193705,
+      "module_name": "@xmldom/xmldom",
+      "title": "xmldom: Parser silently accepts a not-well-formed end tag whose name is followed by a line break and trailing content",
+      "severity": "moderate",
+      "vulnerable_versions": ">=0.7.0 <=0.8.14",
+      "patched_versions": ">=0.8.15",
+      "url": "https://github.com/advisories/GHSA-6h8r-xr42-gp59",
+      "findings": [
+        {
+          "version": "0.7.13",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>@expo/plist>@xmldom/xmldom"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1193708,
+      "module_name": "@xmldom/xmldom",
+      "title": "xmldom: Quadratic-time attribute deduplication",
+      "severity": "high",
+      "vulnerable_versions": ">=0.7.0 <=0.8.14",
+      "patched_versions": ">=0.8.15",
+      "url": "https://github.com/advisories/GHSA-8344-3jmq-59r6",
+      "findings": [
+        {
+          "version": "0.7.13",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>@expo/plist>@xmldom/xmldom"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1193709,
+      "module_name": "@xmldom/xmldom",
+      "title": "xmldom: End-tag Whitespace-Trim Regex ReDoS \u2014 quadratic backtracking in the 0.8.x end-tag parser",
+      "severity": "high",
+      "vulnerable_versions": ">=0.7.0 <=0.8.14",
+      "patched_versions": ">=0.8.15",
+      "url": "https://github.com/advisories/GHSA-x4fp-j954-r2f4",
+      "findings": [
+        {
+          "version": "0.7.13",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>@expo/plist>@xmldom/xmldom"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1193712,
+      "module_name": "@xmldom/xmldom",
+      "title": "xmldom: Quadratic-memory consumption",
+      "severity": "high",
+      "vulnerable_versions": ">=0.7.0 <=0.8.14",
+      "patched_versions": ">=0.8.15",
+      "url": "https://github.com/advisories/GHSA-965w-775f-mr7g",
+      "findings": [
+        {
+          "version": "0.7.13",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>@expo/plist>@xmldom/xmldom"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1193715,
+      "module_name": "@xmldom/xmldom",
+      "title": "xmldom: Quadratic-time parsing via the malformed-input recovery path \u2014 `parseElementStartPart` re-scan and `normalize()` adjacent-text merge",
+      "severity": "high",
+      "vulnerable_versions": ">=0.7.0 <=0.8.14",
+      "patched_versions": ">=0.8.15",
+      "url": "https://github.com/advisories/GHSA-93r5-fhx6-vmg9",
+      "findings": [
+        {
+          "version": "0.7.13",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>@expo/plist>@xmldom/xmldom"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1193726,
+      "module_name": "js-yaml",
+      "title": "js-yaml: maxTotalMergeKeys does not limit CPU use for empty merge sources",
+      "severity": "high",
+      "vulnerable_versions": ">=3.0.0 <3.15.2",
+      "patched_versions": ">=3.15.2",
+      "url": "https://github.com/advisories/GHSA-2883-xcg3-v3hh",
+      "findings": [
+        {
+          "version": "3.15.1",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>js-yaml"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1193727,
+      "module_name": "js-yaml",
+      "title": "js-yaml: maxTotalMergeKeys does not limit CPU use for empty merge sources",
+      "severity": "high",
+      "vulnerable_versions": ">=4.0.0 <4.3.2",
+      "patched_versions": ">=4.3.2",
+      "url": "https://github.com/advisories/GHSA-2883-xcg3-v3hh",
+      "findings": [
+        {
+          "version": "4.3.1",
+          "paths": [
+            ".>eslint>@eslint/eslintrc>js-yaml"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1193733,
+      "module_name": "next",
+      "title": "Next.js: Unauthenticated Remote Code Execution in Image Optimization API when AVIF files are used",
+      "severity": "critical",
+      "vulnerable_versions": ">=10.0.0 <15.5.24",
+      "patched_versions": ">=15.5.24",
+      "url": "https://github.com/advisories/GHSA-2xp9-vwfh-vxw4",
+      "findings": [
+        {
+          "version": "14.2.35",
+          "paths": [
+            "apps__web>next"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1193790,
+      "module_name": "multer",
+      "title": "multer vulnerable to Denial of Service via crafted multipart field names",
+      "severity": "high",
+      "vulnerable_versions": "<2.3.0",
+      "patched_versions": ">=2.3.0",
+      "url": "https://github.com/advisories/GHSA-wc9g-mqfw-jrwm",
+      "findings": [
+        {
+          "version": "2.2.0",
+          "paths": [
+            "apps__api-ts>@nestjs/platform-express>multer"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1193791,
+      "module_name": "multer",
+      "title": "multer vulnerable to Denial of Service via file descriptor leak on aborted uploads",
+      "severity": "high",
+      "vulnerable_versions": "=2.2.0",
+      "patched_versions": ">=2.3.0",
+      "url": "https://github.com/advisories/GHSA-qfvm-cv95-jqjf",
+      "findings": [
+        {
+          "version": "2.2.0",
+          "paths": [
+            "apps__api-ts>@nestjs/platform-express>multer"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1193792,
+      "module_name": "multer",
+      "title": "multer vulnerable to file size limit bypass via async fileFilter race condition",
+      "severity": "low",
+      "vulnerable_versions": "<2.3.0",
+      "patched_versions": ">=2.3.0",
+      "url": "https://github.com/advisories/GHSA-qvfw-j98x-7q72",
+      "findings": [
+        {
+          "version": "2.2.0",
+          "paths": [
+            "apps__api-ts>@nestjs/platform-express>multer"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1193793,
+      "module_name": "multer",
+      "title": "multer vulnerable to Denial of Service via oversized array index in field names",
+      "severity": "high",
+      "vulnerable_versions": "<2.3.0",
+      "patched_versions": ">=2.3.0",
+      "url": "https://github.com/advisories/GHSA-535w-7cp7-47q4",
+      "findings": [
+        {
+          "version": "2.2.0",
+          "paths": [
+            "apps__api-ts>@nestjs/platform-express>multer"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1239765,
+      "module_name": "image-size",
+      "title": "image-size: JXL and HEIF parsers allow denial of service through infinite loops",
+      "severity": "high",
+      "vulnerable_versions": ">=1.2.0 <=2.0.2",
+      "patched_versions": ">=2.0.3",
+      "url": "https://github.com/advisories/GHSA-5p2g-fcmc-qvqq",
+      "findings": [
+        {
+          "version": "1.2.1",
+          "paths": [
+            "apps__mobile>react-native>@react-native/community-cli-plugin>metro>image-size"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1239766,
+      "module_name": "image-size",
+      "title": "image-size: ICNS parser allows denial of service through an infinite loop",
+      "severity": "high",
+      "vulnerable_versions": ">=0.6.3 <=2.0.2",
+      "patched_versions": ">=2.0.3",
+      "url": "https://github.com/advisories/GHSA-w3rx-r6r6-pgpr",
+      "findings": [
+        {
+          "version": "1.2.1",
+          "paths": [
+            "apps__mobile>react-native>@react-native/community-cli-plugin>metro>image-size"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1239935,
+      "module_name": "multer",
+      "title": "multer vulnerable to Denial of Service via orphaned disk writes on aborted uploads",
+      "severity": "moderate",
+      "vulnerable_versions": ">=2.2.0 <2.4.0",
+      "patched_versions": ">=2.4.0",
+      "url": "https://github.com/advisories/GHSA-3pph-fpjx-jg34",
+      "findings": [
+        {
+          "version": "2.2.0",
+          "paths": [
+            "apps__api-ts>@nestjs/platform-express>multer"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1239943,
+      "module_name": "fast-uri",
+      "title": "fast-uri vulnerable to authority injection via an unvalidated port in serialize",
+      "severity": "high",
+      "vulnerable_versions": ">=3.0.0 <3.1.7",
+      "patched_versions": ">=3.1.7",
+      "url": "https://github.com/advisories/GHSA-qw65-cvwx-89v3",
+      "findings": [
+        {
+          "version": "3.1.6",
+          "paths": [
+            "apps__api-ts>prisma>@prisma/dev>@prisma/streams-local>ajv>fast-uri"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1239946,
+      "module_name": "fast-uri",
+      "title": "fast-uri vulnerable to host confusion via an unclosed bracket in the URI authority",
+      "severity": "high",
+      "vulnerable_versions": "=3.1.6",
+      "patched_versions": ">=3.1.7",
+      "url": "https://github.com/advisories/GHSA-58mr-gqgx-xq4g",
+      "findings": [
+        {
+          "version": "3.1.6",
+          "paths": [
+            "apps__api-ts>prisma>@prisma/dev>@prisma/streams-local>ajv>fast-uri"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1240091,
+      "module_name": "fast-uri",
+      "title": "fast-uri vulnerable to inconsistent host case normalization via percent-encoded octets",
+      "severity": "moderate",
+      "vulnerable_versions": ">=3.0.0 <3.1.8",
+      "patched_versions": ">=3.1.8",
+      "url": "https://github.com/advisories/GHSA-hrr3-gc8f-f4qj",
+      "findings": [
+        {
+          "version": "3.1.6",
+          "paths": [
+            "apps__api-ts>prisma>@prisma/dev>@prisma/streams-local>ajv>fast-uri"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1240100,
+      "module_name": "brace-expansion",
+      "title": "brace-expansion: Quadratic-time expansion of the `{a},b}` rewrite causes CPU denial of service",
+      "severity": "moderate",
+      "vulnerable_versions": "<1.1.21",
+      "patched_versions": ">=1.1.21",
+      "url": "https://github.com/advisories/GHSA-q2hr-2g5m-vwhr",
+      "findings": [
+        {
+          "version": "1.1.18",
+          "paths": [
+            ".>eslint>minimatch>brace-expansion"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1240101,
+      "module_name": "brace-expansion",
+      "title": "brace-expansion: Quadratic-time expansion of the `{a},b}` rewrite causes CPU denial of service",
+      "severity": "moderate",
+      "vulnerable_versions": ">=2.0.0 <2.1.7",
+      "patched_versions": ">=2.1.7",
+      "url": "https://github.com/advisories/GHSA-q2hr-2g5m-vwhr",
+      "findings": [
+        {
+          "version": "2.1.4",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>cacache>glob>minimatch>brace-expansion"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1240103,
+      "module_name": "brace-expansion",
+      "title": "brace-expansion: Quadratic-time expansion of the `{a},b}` rewrite causes CPU denial of service",
+      "severity": "moderate",
+      "vulnerable_versions": ">=4.0.0 <5.0.12",
+      "patched_versions": ">=5.0.12",
+      "url": "https://github.com/advisories/GHSA-q2hr-2g5m-vwhr",
+      "findings": [
+        {
+          "version": "5.0.9",
+          "paths": [
+            "apps__api-ts>typescript-eslint>@typescript-eslint/typescript-estree>minimatch>brace-expansion"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1240104,
+      "module_name": "brace-expansion",
+      "title": "brace-expansion: DoS via uncontrolled recursion on nested brace groups causing stack exhaustion",
+      "severity": "high",
+      "vulnerable_versions": "<1.1.20",
+      "patched_versions": ">=1.1.20",
+      "url": "https://github.com/advisories/GHSA-qhr7-859c-m2p7",
+      "findings": [
+        {
+          "version": "1.1.18",
+          "paths": [
+            ".>eslint>minimatch>brace-expansion"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1240105,
+      "module_name": "brace-expansion",
+      "title": "brace-expansion: DoS via uncontrolled recursion on nested brace groups causing stack exhaustion",
+      "severity": "high",
+      "vulnerable_versions": ">=2.0.0 <2.1.6",
+      "patched_versions": ">=2.1.6",
+      "url": "https://github.com/advisories/GHSA-qhr7-859c-m2p7",
+      "findings": [
+        {
+          "version": "2.1.4",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>cacache>glob>minimatch>brace-expansion"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1240107,
+      "module_name": "brace-expansion",
+      "title": "brace-expansion: DoS via uncontrolled recursion on nested brace groups causing stack exhaustion",
+      "severity": "high",
+      "vulnerable_versions": ">=4.0.0 <5.0.11",
+      "patched_versions": ">=5.0.11",
+      "url": "https://github.com/advisories/GHSA-qhr7-859c-m2p7",
+      "findings": [
+        {
+          "version": "5.0.9",
+          "paths": [
+            "apps__api-ts>typescript-eslint>@typescript-eslint/typescript-estree>minimatch>brace-expansion"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1240108,
+      "module_name": "brace-expansion",
+      "title": "brace-expansion: DoS via uncontrolled recursion in parseCommaParts causing stack exhaustion",
+      "severity": "high",
+      "vulnerable_versions": "<1.1.19",
+      "patched_versions": ">=1.1.19",
+      "url": "https://github.com/advisories/GHSA-6j4f-fj2g-mc7p",
+      "findings": [
+        {
+          "version": "1.1.18",
+          "paths": [
+            ".>eslint>minimatch>brace-expansion"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1240109,
+      "module_name": "brace-expansion",
+      "title": "brace-expansion: DoS via uncontrolled recursion in parseCommaParts causing stack exhaustion",
+      "severity": "high",
+      "vulnerable_versions": ">=2.0.0 <2.1.5",
+      "patched_versions": ">=2.1.5",
+      "url": "https://github.com/advisories/GHSA-6j4f-fj2g-mc7p",
+      "findings": [
+        {
+          "version": "2.1.4",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>cacache>glob>minimatch>brace-expansion"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1240111,
+      "module_name": "brace-expansion",
+      "title": "brace-expansion: DoS via uncontrolled recursion in parseCommaParts causing stack exhaustion",
+      "severity": "high",
+      "vulnerable_versions": ">=4.0.0 <5.0.10",
+      "patched_versions": ">=5.0.10",
+      "url": "https://github.com/advisories/GHSA-6j4f-fj2g-mc7p",
+      "findings": [
+        {
+          "version": "5.0.9",
+          "paths": [
+            "apps__api-ts>typescript-eslint>@typescript-eslint/typescript-estree>minimatch>brace-expansion"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1240912,
+      "module_name": "node-forge",
+      "title": "node-forge RSA PKCS#1 v1.5 signature verification accepts extra nested DigestAlgorithm elements",
+      "severity": "high",
+      "vulnerable_versions": "<=1.4.0",
+      "patched_versions": "<0.0.0",
+      "url": "https://github.com/advisories/GHSA-86w9-cpqp-85rv",
+      "findings": [
+        {
+          "version": "1.4.0",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>node-forge"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1240992,
+      "module_name": "braces",
+      "title": "braces vulnerable to stack-exhaustion denial of service through deeply nested patterns",
+      "severity": "high",
+      "vulnerable_versions": "<=3.0.3",
+      "patched_versions": "<0.0.0",
+      "url": "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+      "findings": [
+        {
+          "version": "3.0.3",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>fast-glob>micromatch>braces"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1241202,
+      "module_name": "sprintf-js",
+      "title": "sprintf-js vulnerable to denial of service through unbounded precision specifiers",
+      "severity": "moderate",
+      "vulnerable_versions": "<=1.1.3",
+      "patched_versions": "<0.0.0",
+      "url": "https://github.com/advisories/GHSA-hp3w-g68c-fv3c",
+      "findings": [
+        {
+          "version": "1.0.3",
+          "paths": [
+            "apps__mobile>expo>@expo/cli>js-yaml>argparse>sprintf-js"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1241209,
+      "module_name": "source-map-js",
+      "title": "source-map-js allows event-loop denial of service through indexed source-map section offsets",
+      "severity": "high",
+      "vulnerable_versions": ">=1.0.0 <1.2.2",
+      "patched_versions": ">=1.2.2",
+      "url": "https://github.com/advisories/GHSA-68fv-2mgg-jv7q",
+      "findings": [
+        {
+          "version": "1.2.1",
+          "paths": [
+            "apps__api-ts>unplugin-swc>unplugin>vite>postcss>source-map-js"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1241210,
+      "module_name": "proxy-addr",
+      "title": "proxy-addr vulnerable to IP spoofing via IPv4-mapped IPv6 trust subnet",
+      "severity": "critical",
+      "vulnerable_versions": ">=1.1.0 <2.0.8",
+      "patched_versions": ">=2.0.8",
+      "url": "https://github.com/advisories/GHSA-jqcg-44mw-7w3h",
+      "findings": [
+        {
+          "version": "2.0.7",
+          "paths": [
+            "apps__api-ts>@nestjs/platform-express>express>proxy-addr"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1241212,
+      "module_name": "joi",
+      "title": "joi messages compilation allows prototype replacement through __proto__ error codes",
+      "severity": "moderate",
+      "vulnerable_versions": "<17.13.8",
+      "patched_versions": ">=17.13.8",
+      "url": "https://github.com/advisories/GHSA-wr44-6hxh-3jwq",
+      "findings": [
+        {
+          "version": "17.13.6",
+          "paths": [
+            "apps__mobile>react-native>@react-native-community/cli>@react-native-community/cli-config>joi"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1241221,
+      "module_name": "compression",
+      "title": "compression vulnerable to Denial of Service via memory leak on premature response close",
+      "severity": "high",
+      "vulnerable_versions": "<1.8.2",
+      "patched_versions": ">=1.8.2",
+      "url": "https://github.com/advisories/GHSA-vc2v-76pw-4v95",
+      "findings": [
+        {
+          "version": "1.8.1",
+          "paths": [
+            "apps__mobile>react-native>@react-native-community/cli>@react-native-community/cli-server-api>compression"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1241260,
+      "module_name": "tinypool",
+      "title": "Tinypool: Prototype Pollution gadget in worker options leads to Remote Code Execution",
+      "severity": "critical",
+      "vulnerable_versions": "<=2.1.0",
+      "patched_versions": ">=2.1.1",
+      "url": "https://github.com/advisories/GHSA-5gmw-xhrv-c9v3",
+      "findings": [
+        {
+          "version": "1.1.1",
+          "paths": [
+            "apps__api-ts>vitest>tinypool"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1241261,
+      "module_name": "tinypool",
+      "title": "Tinypool: Prototype Pollution Gadget to RCE in run() options",
+      "severity": "critical",
+      "vulnerable_versions": "<2.1.2",
+      "patched_versions": ">=2.1.2",
+      "url": "https://github.com/advisories/GHSA-85c8-ppgw-ccpr",
+      "findings": [
+        {
+          "version": "1.1.1",
+          "paths": [
+            "apps__api-ts>vitest>tinypool"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1241279,
+      "module_name": "joi",
+      "title": "joi: Quadratic regular-expression backtracking in `Joi.string().isoDate()`",
+      "severity": "high",
+      "vulnerable_versions": ">=17.2.0 <17.13.7",
+      "patched_versions": ">=17.13.7",
+      "url": "https://github.com/advisories/GHSA-6h2x-m376-mqjq",
+      "findings": [
+        {
+          "version": "17.13.6",
+          "paths": [
+            "apps__mobile>react-native>@react-native-community/cli>@react-native-community/cli-config>joi"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1241332,
+      "module_name": "shell-quote",
+      "title": "shell-quote: `quote()` command injection via a line terminator in a token after a `{ comment }` token",
+      "severity": "critical",
+      "vulnerable_versions": ">=1.8.4 <1.11.0",
+      "patched_versions": ">=1.11.0",
+      "url": "https://github.com/advisories/GHSA-pqg4-j6r4-53mv",
+      "findings": [
+        {
+          "version": "1.10.0",
+          "paths": [
+            "apps__mobile>react-native>@react-native-community/cli>@react-native-community/cli-tools>shell-quote"
+          ]
+        }
+      ]
+    }
+  ]
+}

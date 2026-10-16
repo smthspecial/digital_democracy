@@ -1,0 +1,28 @@
+Legend: production dependency, optional only, dev only
+
+@dd/mobile@0.0.0 /home/roman/dev/projects/digital_democracy/apps/mobile (PRIVATE)
+
+dependencies:
+expo 57.0.27
+├─┬ @expo/cli 57.0.28
+│ ├─┬ @expo/code-signing-certificates 0.0.6
+│ │ └── node-forge 1.4.0
+│ ├─┬ @expo/metro 56.0.2
+│ │ ├─┬ metro 0.84.5
+│ │ │ └─┬ metro-file-map 0.84.5
+│ │ │   └─┬ micromatch 4.0.8
+│ │ │     └── braces 3.0.3
+│ │ └─┬ metro-file-map 0.84.5
+│ │   └─┬ micromatch 4.0.8
+│ │     └── braces 3.0.3
+│ └── node-forge 1.4.0
+└─┬ @expo/metro 56.0.2
+  └─┬ metro-file-map 0.84.5
+    └─┬ micromatch 4.0.8
+      └── braces 3.0.3
+expo-status-bar 57.0.1
+└─┬ expo 57.0.27 peer
+  └─┬ @expo/cli 57.0.28
+    ├─┬ @expo/code-signing-certificates 0.0.6
+    │ └── node-forge 1.4.0
+    └── node-forge 1.4.0

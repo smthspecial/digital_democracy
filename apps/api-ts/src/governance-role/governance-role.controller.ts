@@ -1,4 +1,5 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Post, Query } from "@nestjs/common";
+import { InternalServiceGuard } from "../common/internal-service.guard.js";
+import { UseGuards, Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Post, Query } from "@nestjs/common";
 import { RequiredCitizenId } from "../common/citizen-id.decorator.js";
 import { SubmitApprovalDto } from "./dto/submit-approval.dto.js";
 import { GovernanceRoleService } from "./governance-role.service.js";
@@ -24,7 +25,7 @@ export class GovernanceRoleController {
   // GovernanceRoleService.submitApproval's note).
   @Post("approvals")
   @HttpCode(HttpStatus.CREATED)
-  submitApproval(@RequiredCitizenId() citizenId: string, @Body() dto: SubmitApprovalDto) {
+  submitApproval(@RequiredCitizenId("T3") citizenId: string, @Body() dto: SubmitApprovalDto) {
     return this.governanceRole.submitApproval(citizenId, dto);
   }
 
@@ -33,6 +34,12 @@ export class GovernanceRoleController {
   @Get("approvals")
   listApprovals(@Query("actionRef") actionRef?: string) {
     return this.governanceRole.listApprovals(actionRef ? { actionRef } : undefined);
+  }
+
+  @Get("actions/:actionRef/protocol-approvals")
+  @UseGuards(InternalServiceGuard)
+  async protocolApprovals(@Param("actionRef") actionRef: string) {
+    return { approvals: await this.governanceRole.protocolApprovals(actionRef) };
   }
 
   @Get("actions/:actionRef/status")

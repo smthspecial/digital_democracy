@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "scope": "synthetic offline Helm bundle; no cluster writes",
+  "runtimeResources": 18,
+  "namespaces": [
+    "api-go",
+    "api-ts"
+  ],
+  "namespaceChecks": true,
+  "deploymentDigestChecks": true,
+  "releaseIdentityChecks": true
+}

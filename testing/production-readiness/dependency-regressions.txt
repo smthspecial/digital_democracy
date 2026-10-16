@@ -1,0 +1,6 @@
+
+> digital-democracy@ test:security-dependencies /home/roman/dev/projects/digital_democracy
+> node testing/security/dependency-audit.mjs
+
+{"passed":10,"packages":["node-forge","braces","sprintf-js"]}
+{"versionBasedAudit":{"info":0,"low":0,"moderate":1,"high":2,"critical":0},"locallyPatchedAdvisories":3,"unresolved":[]}

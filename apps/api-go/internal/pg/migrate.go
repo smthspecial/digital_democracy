@@ -11,7 +11,7 @@ import (
 // orderedVersions lists migrations in apply order. Later schema changes get
 // their own numbered pair under db/migrations plus an entry here
 // (ARCH-023 §1).
-var orderedVersions = []string{"0001_init", "0002_auth_ceremony"}
+var orderedVersions = []string{"0001_init", "0002_auth_ceremony", "0003_security_requests", "0004_runtime_permissions"}
 
 // migrateAdvisoryLock serializes concurrent Up runners (parallel test
 // binaries, rolled deploys) so two processes never CREATE the same objects

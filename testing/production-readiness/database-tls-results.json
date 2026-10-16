@@ -1,0 +1,22 @@
+{
+  "checks": [
+    {
+      "case": "verified TLS",
+      "passed": true
+    },
+    {
+      "case": "wrong host",
+      "passed": true
+    },
+    {
+      "case": "wrong CA",
+      "passed": true
+    },
+    {
+      "case": "plaintext rejected",
+      "passed": true
+    }
+  ],
+  "passed": 4,
+  "scope": "disposable TLS-only PostgreSQL, not production"
+}

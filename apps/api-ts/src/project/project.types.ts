@@ -5,11 +5,11 @@ export type OutcomeEvaluationResult = "successful" | "partial" | "unsuccessful";
 export interface Project {
   id: string;
   proposalId: string;
-  timelineStart: Date;
-  timelineEnd: Date;
+  timelineStart: Date | null;
+  timelineEnd: Date | null;
   budgetAllocated: number | null;
   budgetSpent: number | null;
-  contractor: string;
+  contractor: string | null;
   status: ProjectStatus;
 }
 

@@ -1,0 +1,130 @@
+{
+  "checks": [
+    {
+      "case": "nats binds loopback",
+      "passed": true
+    },
+    {
+      "case": "nats binds loopback",
+      "passed": true
+    },
+    {
+      "case": "postgres binds loopback",
+      "passed": true
+    },
+    {
+      "case": "api-go binds loopback",
+      "passed": true
+    },
+    {
+      "case": "api-ts binds loopback",
+      "passed": true
+    },
+    {
+      "case": "web binds loopback",
+      "passed": true
+    },
+    {
+      "case": "prometheus binds loopback",
+      "passed": true
+    },
+    {
+      "case": "grafana binds loopback",
+      "passed": true
+    },
+    {
+      "case": "restricted Go runtime",
+      "passed": true
+    },
+    {
+      "case": "migration credentials absent from runtime",
+      "passed": true
+    },
+    {
+      "case": "broker credentials required",
+      "passed": true
+    },
+    {
+      "case": "api-go ingress selects caller namespace and pod",
+      "passed": true
+    },
+    {
+      "case": "api-go strict workload TLS",
+      "passed": true
+    },
+    {
+      "case": "api-go explicit workload principals",
+      "passed": true
+    },
+    {
+      "case": "api-go HTTPS listener reference",
+      "passed": true
+    },
+    {
+      "case": "api-go injected workload identity",
+      "passed": true
+    },
+    {
+      "case": "api-go non-root runtime",
+      "passed": true
+    },
+    {
+      "case": "api-go producer bound to workload principal",
+      "passed": true
+    },
+    {
+      "case": "api-go gateway cannot call internal mutations",
+      "passed": true
+    },
+    {
+      "case": "api-ts ingress selects caller namespace and pod",
+      "passed": true
+    },
+    {
+      "case": "api-ts strict workload TLS",
+      "passed": true
+    },
+    {
+      "case": "api-ts explicit workload principals",
+      "passed": true
+    },
+    {
+      "case": "api-ts HTTPS listener reference",
+      "passed": true
+    },
+    {
+      "case": "api-ts injected workload identity",
+      "passed": true
+    },
+    {
+      "case": "api-ts non-root runtime",
+      "passed": true
+    },
+    {
+      "case": "api-ts producer bound to workload principal",
+      "passed": true
+    },
+    {
+      "case": "api-ts gateway cannot call internal mutations",
+      "passed": true
+    },
+    {
+      "case": "api-ts gateway excludes signed worker reads",
+      "passed": true
+    },
+    {
+      "case": "NATS rejects anonymous connections",
+      "passed": true
+    },
+    {
+      "case": "NATS accepts application credentials",
+      "passed": true
+    },
+    {
+      "case": "NATS denies unrelated publish subject",
+      "passed": true
+    }
+  ],
+  "passed": 31,
+  "liveClusterTested": false
+}

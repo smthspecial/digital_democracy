@@ -1,0 +1,20 @@
+{
+  "releaseId": "security-20261008",
+  "kubeconfig": "/absolute/path/to/staging.kubeconfig",
+  "context": "REPLACE_WITH_CONFIRMED_CONTEXT",
+  "domain": "vote.example.org",
+  "issuer": "acme-staging",
+  "gatewayNamespace": "kube-system",
+  "gatewayServiceAccount": "traefik",
+  "databaseNamespace": "infrastructure",
+  "databasePodLabel": "postgres",
+  "ballotVerifierURL": "http://ballot-verifier.ballot-verifier.svc.cluster.local:8080",
+  "images": {
+    "api-go": "ghcr.io/REPLACE/api-go@sha256:REPLACE",
+    "api-ts": "ghcr.io/REPLACE/api-ts@sha256:REPLACE",
+    "api-ts-migration": "ghcr.io/REPLACE/api-ts-migration@sha256:REPLACE"
+  },
+  "migrationSecrets": {"api-go": "api-go-migration-temporary", "api-ts": "api-ts-migration-temporary"},
+  "runtimeCASecret": "database-ca",
+  "brokerIdentitySecret": "api-go-broker-tls"
+}

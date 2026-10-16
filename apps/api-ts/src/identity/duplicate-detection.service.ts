@@ -1,4 +1,4 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, ServiceUnavailableException } from "@nestjs/common";
 import { AUDIT_EMITTER, type AuditEmitter } from "../common/audit-emitter.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 
@@ -53,14 +53,17 @@ export class DuplicateDetectionService {
   // (different legal identifiers, suspiciously similar display names).
   async scanForDuplicateSignals(): Promise<DuplicateSignal[]> {
     const citizens = await this.prisma.forWorker((tx) =>
-      tx.citizen.findMany({ where: { status: { not: "revoked" } }, select: { id: true, publicHandle: true } }),
+      tx.citizen.findMany({ where: { status: { not: "revoked" } }, select: { id: true, publicHandle: true }, take: 501 }),
     );
+    if (citizens.length > 500) throw new ServiceUnavailableException("Duplicate scan requires a bounded scheduled job for this population");
+    if (citizens.some((c) => c.publicHandle.length > 64)) throw new ServiceUnavailableException("Oversized legacy handles require offline review");
     const normalized = citizens.map((c) => ({ id: c.id, handle: normalize(c.publicHandle) }));
     const signals: DuplicateSignal[] = [];
     for (let i = 0; i < normalized.length; i++) {
       for (let j = i + 1; j < normalized.length; j++) {
         const distance = levenshtein(normalized[i].handle, normalized[j].handle);
         if (distance <= HANDLE_SIMILARITY_THRESHOLD) {
+          if (signals.length >= 1000) throw new ServiceUnavailableException("Too many duplicate signals require offline review");
           signals.push({ citizenIdA: normalized[i].id, citizenIdB: normalized[j].id, distance });
         }
       }

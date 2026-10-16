@@ -2,15 +2,14 @@ package voting
 
 import (
 	"encoding/json"
+	"errors"
+	"github.com/digital-democracy/api-go/internal/security"
+	"io"
 	"net/http"
 	"time"
 )
 
-// Handlers translate HTTP/JSON into Service calls (DP-016, DP-017, DP-025,
-// DP-026, DP-027, DP-046, DP-047). Auth is intentionally absent: every
-// route's required AUTH-010 permission (ballot:cast → T3, ballot:verify →
-// T1, system-only DP-025/026/027/046/047) is enforced by the caller holding
-// a validated auth-service token; this service checks session state only.
+// Mutations require signed service requests; ballot casting requires T3.
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
@@ -21,6 +20,10 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 func writeErr(w http.ResponseWriter, err error) {
 	code, status := "internal", http.StatusInternalServerError
 	switch err {
+	case ErrProductionCryptoUnavailable:
+		code, status = "production_ballot_cryptography_unavailable", http.StatusServiceUnavailable
+	case ErrGovernanceUnavailable:
+		code, status = "governance_completion_unavailable", http.StatusServiceUnavailable
 	case ErrNotFound:
 		code, status = "not_found", http.StatusNotFound
 	case ErrConflict:
@@ -35,14 +38,29 @@ func writeErr(w http.ResponseWriter, err error) {
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 	defer r.Body.Close()
-	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(v); err != nil {
+		var sizeError *http.MaxBytesError
+		if errors.As(err, &sizeError) {
+			security.Error(w, 413, "payload_too_large")
+			return false
+		}
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": map[string]string{"code": "invalid_request", "message": "malformed JSON body"}})
+		return false
+	}
+	if decoder.Decode(new(any)) != io.EOF {
+		security.Error(w, 400, "invalid_request")
 		return false
 	}
 	return true
 }
 
-type Handler struct{ svc *Service }
+type Handler struct {
+	svc         *Service
+	eligibility EligibilitySource
+	proofs      BallotProofVerifier
+}
 
 func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 	var in struct {
@@ -71,6 +89,9 @@ func (h *Handler) listSessions(w http.ResponseWriter, _ *http.Request) {
 	if err != nil {
 		writeErr(w, err)
 		return
+	}
+	if len(sessions) > 1000 {
+		sessions = sessions[:1000]
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"sessions": sessions})
 }
@@ -110,6 +131,19 @@ func (h *Handler) addOption(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, o)
 }
 
+func (h *Handler) listOptions(w http.ResponseWriter, r *http.Request) {
+	if _, err := h.svc.store.GetSession(r.PathValue("id")); err != nil {
+		writeErr(w, err)
+		return
+	}
+	options, err := h.svc.store.ListOptions(r.PathValue("id"))
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"options": options})
+}
+
 func (h *Handler) openSession(w http.ResponseWriter, r *http.Request) {
 	vs, err := h.svc.TryOpen(r.PathValue("id"), time.Now().UTC())
 	if err != nil {
@@ -129,36 +163,54 @@ func (h *Handler) closeSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) issueTokens(w http.ResponseWriter, r *http.Request) {
-	var in struct {
-		CitizenIDs []string `json:"citizen_ids"`
+	var input struct {
+		After string `json:"after,omitempty"`
 	}
-	if !decodeJSON(w, r, &in) {
+	if !decodeJSON(w, r, &input) {
 		return
 	}
-	if len(in.CitizenIDs) == 0 {
-		writeErr(w, ErrInvalid)
-		return
-	}
-	tokens, err := h.svc.IssueTokens(r.PathValue("id"), in.CitizenIDs)
+	session, err := h.svc.store.GetSession(r.PathValue("id"))
 	if err != nil {
 		writeErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"tokens": tokens})
+	if session.Status != SessionOpen {
+		writeErr(w, ErrInvalidState)
+		return
+	}
+	ids, next, err := h.eligibility.EligibleCitizens(session.ProposalID, session.JurisdictionID, input.After)
+	if err != nil {
+		writeErr(w, ErrInvalidState)
+		return
+	}
+	tokens, err := h.svc.IssueTokens(session.ID, ids)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, 201, map[string]any{"tokens": tokens, "next_cursor": next})
 }
 
 func (h *Handler) castBallot(w http.ResponseWriter, r *http.Request) {
+	if h.svc.productionCryptoBlocked {
+		writeErr(w, ErrProductionCryptoUnavailable)
+		return
+	}
 	var in struct {
 		SessionID       string `json:"vote_session_id"`
 		TokenID         string `json:"token_id"`
 		TokenBlind      string `json:"token_blind"`
 		EncryptedChoice string `json:"encrypted_choice"`
-		CitizenID       string `json:"citizen_id,omitempty"`
+		Proof           string `json:"proof"`
 	}
 	if !decodeJSON(w, r, &in) {
 		return
 	}
-	b, err := h.svc.CastBallot(in.SessionID, in.TokenID, in.TokenBlind, in.EncryptedChoice, in.CitizenID)
+	if len(in.EncryptedChoice) > 8192 || len(in.Proof) > 8192 || !h.proofs.Verify(in.SessionID, in.EncryptedChoice, in.Proof) {
+		writeErr(w, ErrInvalid)
+		return
+	}
+	b, err := h.svc.CastBallot(in.SessionID, in.TokenID, in.TokenBlind, in.EncryptedChoice, security.CitizenID(r))
 	if err != nil {
 		writeErr(w, err)
 		return

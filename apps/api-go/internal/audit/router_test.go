@@ -2,21 +2,21 @@ package audit
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
+	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/digital-democracy/api-go/internal/security"
 	"net/http"
 	"net/http/httptest"
 	"sync"
 	"testing"
-	"time"
 )
 
 func newTestServer(t *testing.T) (*httptest.Server, *Service) {
 	t.Helper()
 	svc := NewService(nil, nil)
-	srv := httptest.NewServer(NewRouter(svc, testLogger()))
+	srv := httptest.NewServer(NewRouter(svc, testLogger(), &security.Access{Secret: "audit-http-test-secret", Replays: &security.ReplayStore{}}))
 	t.Cleanup(srv.Close)
 	return srv, svc
 }
@@ -27,7 +27,10 @@ func postJSON(t *testing.T, url string, body any) *http.Response {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp, err := http.Post(url, "application/json", bytes.NewReader(b))
+	req, _ := http.NewRequest("POST", url, bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	security.Sign(req, "api-ts", "audit-http-test-secret", b)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +113,9 @@ func TestHTTPAppendRejectsEmptyActorRef(t *testing.T) {
 
 func TestHTTPAppendRejectsMalformedJSON(t *testing.T) {
 	srv, _ := newTestServer(t)
-	resp, err := http.Post(srv.URL+"/audit/log", "application/json", bytes.NewReader([]byte("{not json")))
+	req, _ := http.NewRequest("POST", srv.URL+"/audit/log", bytes.NewReader([]byte("{not json")))
+	security.Sign(req, "api-ts", "audit-http-test-secret", []byte("{not json"))
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,9 +139,9 @@ func TestHTTPListRejectsInvalidActionTypeFilter(t *testing.T) {
 }
 
 func TestHTTPListFiltersByActionType(t *testing.T) {
-	srv, _ := newTestServer(t)
+	srv, svc := newTestServer(t)
 	postJSON(t, srv.URL+"/audit/log", map[string]string{"action_type": ActionSystemUpdate, "actor_ref": "x", "payload": "a"})
-	postJSON(t, srv.URL+"/audit/log", map[string]string{"action_type": ActionVoteCertified, "actor_ref": "x", "payload": "b"})
+	svc.Append(ActionVoteCertified, "voting-service", "b", "")
 	postJSON(t, srv.URL+"/audit/log", map[string]string{"action_type": ActionSystemUpdate, "actor_ref": "x", "payload": "c"})
 
 	resp, err := http.Get(srv.URL + "/audit/log?action_type=" + ActionVoteCertified)
@@ -260,8 +265,7 @@ func TestHTTPConcurrentAppendsAndReadsStayConsistent(t *testing.T) {
 func TestHTTPFailedProtocolGateReleaseWritesNoAuditEntry(t *testing.T) {
 	srv, _ := newTestServer(t)
 	resp := postJSON(t, srv.URL+"/audit/protocol-changes", map[string]any{
-		"change_ref": "change-1", "required_approval_refs": []string{"approval-1"},
-		"delay_until": time.Now().Add(24 * time.Hour), "visible_since": time.Now().Add(-time.Hour),
+		"change_ref": "change-1",
 	})
 	var change struct {
 		ID string `json:"id"`
@@ -277,11 +281,8 @@ func TestHTTPFailedProtocolGateReleaseWritesNoAuditEntry(t *testing.T) {
 	}
 	decodeBody(t, before, &beforeCount)
 
-	releaseResp, err := http.Post(srv.URL+"/audit/protocol-changes/"+change.ID+"/release", "application/json", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if releaseResp.StatusCode != http.StatusUnprocessableEntity {
+	releaseResp := postJSON(t, srv.URL+"/audit/protocol-changes/"+change.ID+"/release", map[string]any{})
+	if releaseResp.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("release status = %d, want 422 (approvals incomplete)", releaseResp.StatusCode)
 	}
 
@@ -298,68 +299,49 @@ func TestHTTPFailedProtocolGateReleaseWritesNoAuditEntry(t *testing.T) {
 	}
 }
 
-// TP-013 EC-52 (ABUSE-AUDIT-1): actor_ref is a self-declared, unauthenticated
-// string. A forged entry claiming a service that never sent it still lands
-// and the chain still verifies.
-func TestHTTPForgedActorRefPassesChainVerification(t *testing.T) {
+// Security regressions: provenance, ballot privacy and real signatures.
+func TestHTTPForgedActorRejected(t *testing.T) {
 	srv, _ := newTestServer(t)
-	resp := postJSON(t, srv.URL+"/audit/log", map[string]string{
-		"action_type": ActionVoteCertified, "actor_ref": "voting-service", "payload": "session-that-was-never-certified",
-	})
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("forged-actor append status = %d, want 201", resp.StatusCode)
-	}
-
-	verifyResp, err := http.Get(srv.URL + "/audit/verify")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var v struct {
-		Valid bool `json:"valid"`
-	}
-	decodeBody(t, verifyResp, &v)
-	if !v.Valid {
-		t.Fatal("chain reported invalid for a forged-but-well-formed entry -- it should still be valid: the chain proves sequence, not authorship")
+	resp := postJSON(t, srv.URL+"/audit/log", map[string]string{"action_type": ActionVoteCertified, "actor_ref": "voting-service", "payload": "forged"})
+	defer resp.Body.Close()
+	if resp.StatusCode != 403 {
+		t.Fatalf("forged actor accepted: %d", resp.StatusCode)
 	}
 }
-
-// TP-013 EC-51: nothing inside audit-service inspects payload content --
-// NFR-001 ("ballot content is never logged") is caller-discipline only.
-func TestHTTPPayloadContentIsNeverValidated(t *testing.T) {
+func TestHTTPBallotPayloadRejected(t *testing.T) {
 	srv, _ := newTestServer(t)
-	resp := postJSON(t, srv.URL+"/audit/log", map[string]string{
-		"action_type": ActionSystemUpdate, "actor_ref": "x", "payload": "ballot_selection:candidate-42",
-	})
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("status = %d, want 201 -- audit-service accepts any payload content, including ballot-shaped strings", resp.StatusCode)
+	resp := postJSON(t, srv.URL+"/audit/log", map[string]string{"action_type": ActionSystemUpdate, "actor_ref": "x", "payload": "ballot_selection:candidate-42"})
+	defer resp.Body.Close()
+	if resp.StatusCode != 400 {
+		t.Fatalf("ballot leaked: %d", resp.StatusCode)
 	}
 }
-
-// TP-013 EC-50: Signature is a deterministic hash of public fields, not a
-// keyed HMAC -- anyone who can compute an entry's Hash can compute a
-// passing Signature with no secret.
-func TestHTTPSignatureIsPubliclyComputableNotHMAC(t *testing.T) {
-	srv, _ := newTestServer(t)
+func TestHTTPSignatureVerifiesWithPublicKey(t *testing.T) {
+	srv, svc := newTestServer(t)
 	resp := postJSON(t, srv.URL+"/audit/log", map[string]string{"action_type": ActionSystemUpdate, "actor_ref": "x", "payload": "p"})
 	var e AuditEntry
 	decodeBody(t, resp, &e)
-
-	sum := sha256.Sum256([]byte(e.Hash + ".audit-service"))
-	want := "sig:" + hex.EncodeToString(sum[:])
-	if e.Signature != want {
-		t.Fatalf("signature = %q, want %q (a real HMAC would need a secret key this formula never uses)", e.Signature, want)
+	key, _ := base64.RawURLEncoding.DecodeString(svc.store.PublicKey())
+	if len(e.Signature) <= 8 {
+		t.Fatal("signature missing")
+	}
+	sig, _ := base64.RawURLEncoding.DecodeString(e.Signature[8:])
+	if !ed25519.Verify(key, []byte(e.ID+"\n"+e.Hash), sig) {
+		t.Fatal("invalid Ed25519 signature")
+	}
+	if ed25519.Verify(key, []byte(e.ID+"\nforged"), sig) {
+		t.Fatal("tamper accepted")
 	}
 }
-
-// TP-013 EC-28 (audit-service side): neither the constitutional-review nor
-// the protocol-change-release endpoint checks caller identity at all.
-func TestHTTPTriggerReviewAndReleaseChangeHaveNoAuthCheck(t *testing.T) {
+func TestHTTPReviewRequiresAuthentication(t *testing.T) {
 	srv, _ := newTestServer(t)
-	resp := postJSON(t, srv.URL+"/audit/reviews", map[string]any{
-		"proposal_id": "p1", "affected_right_ids": []string{}, "reviewer_ref": "anyone",
-	})
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("triggerReview with no auth header status = %d, want 201 -- no caller-identity check exists", resp.StatusCode)
+	resp, err := http.Post(srv.URL+"/audit/reviews", "application/json", bytes.NewBufferString(`{"proposal_id":"p","reviewer_ref":"forged","affected_right_ids":[]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 401 {
+		t.Fatalf("anonymous review: %d", resp.StatusCode)
 	}
 }
 

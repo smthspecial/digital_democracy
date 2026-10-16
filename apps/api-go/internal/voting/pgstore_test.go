@@ -113,6 +113,10 @@ func TestPGVotingTallyCertify(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	option, err := svc.store.AddOption(&VoteOption{SessionID: vs.ID, ProposalID: newID(), Label: "A"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := svc.TryOpen(vs.ID, now); err != nil {
 		t.Fatal(err)
 	}
@@ -120,10 +124,10 @@ func TestPGVotingTallyCertify(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.CastBallot(vs.ID, tokens[0].ID, tokens[0].TokenBlind, "a", ""); err != nil {
+	if _, err := svc.CastBallot(vs.ID, tokens[0].ID, tokens[0].TokenBlind, option.ID, tokens[0].CitizenID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.CastBallot(vs.ID, tokens[1].ID, tokens[1].TokenBlind, "a", ""); err != nil {
+	if _, err := svc.CastBallot(vs.ID, tokens[1].ID, tokens[1].TokenBlind, option.ID, tokens[1].CitizenID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := svc.TryClose(vs.ID, now.Add(2*time.Hour)); err != nil {
@@ -133,7 +137,7 @@ func TestPGVotingTallyCertify(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out.Status != SessionCertified || out.TallyResult == nil || !out.TallyResult.Decided || out.TallyResult.Winner != "a" {
+	if out.Status != SessionCertified || out.TallyResult == nil || !out.TallyResult.Decided || out.TallyResult.Winner != option.ID {
 		t.Fatalf("certified = %+v", out)
 	}
 }

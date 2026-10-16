@@ -1046,15 +1046,16 @@ model Project {
   id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   proposalId      String        @unique @map("proposal_id") @db.Uuid
   proposal        Proposal      @relation(fields: [proposalId], references: [id])
-  timelineStart   DateTime      @map("timeline_start") @db.Date
-  timelineEnd     DateTime      @map("timeline_end") @db.Date
+  timelineStart   DateTime?     @map("timeline_start") @db.Date
+  timelineEnd     DateTime?     @map("timeline_end") @db.Date
   budgetAllocated Decimal?      @map("budget_allocated") @db.Decimal(14, 2)
   // No sync op in this pass ever updates this after seeding (DP-018's
   // increment-on-spend-report is a later-phase service concern) -- default
   // 0 rather than left null so a freshly seeded project reads as "nothing
   // spent yet" rather than "unknown".
   budgetSpent     Decimal?      @default(0) @map("budget_spent") @db.Decimal(14, 2)
-  contractor      String
+  contractor      String?
+  certifiedVoteSessionId String? @unique @map("certified_vote_session_id") @db.Uuid
   status          ProjectStatus @default(planned)
 
   milestones  ProjectMilestone[]

@@ -1,4 +1,5 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Post } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, ParseUUIDPipe, Post, Query, UseGuards } from "@nestjs/common";
+import { InternalServiceGuard } from "../common/internal-service.guard.js";
 import { RequiredCitizenId } from "../common/citizen-id.decorator.js";
 import { DeclareResidencyDto } from "./dto/declare-residency.dto.js";
 import { EnrollMembershipDto } from "./dto/enroll-membership.dto.js";
@@ -19,6 +20,13 @@ export class JurisdictionController {
     return this.jurisdiction.getTree();
   }
 
+  @Get("proposals/:proposalId/jurisdictions/:id/eligible-citizens")
+  @UseGuards(InternalServiceGuard)
+  eligibleCitizens(@Param("proposalId", ParseUUIDPipe) proposalId: string,
+                  @Param("id", ParseUUIDPipe) jurisdictionId: string, @Query("after") after?: string) {
+    return this.jurisdiction.eligibleCitizens(proposalId, jurisdictionId, after);
+  }
+
   // E2-04. Own-scoped write -- RLS already supported this (init migration),
   // no service method existed until now.
   @Post("residencies")
@@ -28,10 +36,16 @@ export class JurisdictionController {
     return { status: "declared" };
   }
 
+  @Get("residencies")
+  ownResidencies(@RequiredCitizenId() citizenId: string) { return this.jurisdiction.ownResidencies(citizenId); }
+
+  @Get("residencies/pending")
+  pendingResidencies(@RequiredCitizenId("T3") reviewerId: string) { return this.jurisdiction.pendingResidencies(reviewerId); }
+
   @Post("residencies/:id/review")
   @HttpCode(HttpStatus.OK)
   async reviewResidency(
-    @RequiredCitizenId() reviewerId: string,
+    @RequiredCitizenId("T3") reviewerId: string,
     @Param("id") residencyId: string,
     @Body() dto: ReviewResidencyDto,
   ) {

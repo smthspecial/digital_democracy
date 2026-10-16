@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"crypto/ed25519"
 	"sync"
 	"time"
 )
@@ -11,7 +12,8 @@ import (
 // never depend on timestamp granularity under concurrent inserts. Methods
 // return nil errors; the error exists for parity with PGStore.
 type MemoryStore struct {
-	mu sync.RWMutex
+	mu         sync.RWMutex
+	signingKey ed25519.PrivateKey
 
 	entries []*AuditEntry
 	byID    map[string]*AuditEntry
@@ -28,7 +30,7 @@ type MemoryStore struct {
 }
 
 func NewStore() *MemoryStore {
-	return &MemoryStore{
+	return &MemoryStore{signingKey: newSigningKey(),
 		byID:              make(map[string]*AuditEntry),
 		byIdempotencyKey:  make(map[string]*AuditEntry),
 		rights:            make(map[string]*ConstitutionalRight),
@@ -68,7 +70,7 @@ func (st *MemoryStore) Append(actionType, actorRef, payload, idempotencyKey stri
 	e.Hash = chainHash(e.PrevHash, e.PayloadHash, e.ActionType, e.ActorRef)
 	// Signature is a placeholder for service-key signing (KMS/HSM in
 	// production): verifiable provenance per writer, same field.
-	e.Signature = "sig:" + sha256Hex(e.Hash+".audit-service")
+	e.Signature = signEntry(st.signingKey, e.ID, e.Hash)
 	st.entries = append(st.entries, e)
 	st.byID[e.ID] = e
 	if idempotencyKey != "" {
@@ -122,7 +124,7 @@ func (st *MemoryStore) VerifyChain() (bool, int, error) {
 		if e.PrevHash != prev {
 			return false, i, nil
 		}
-		if e.Hash != chainHash(e.PrevHash, e.PayloadHash, e.ActionType, e.ActorRef) {
+		if e.Hash != chainHash(e.PrevHash, e.PayloadHash, e.ActionType, e.ActorRef) || !validEntrySignature(st.signingKey, e) {
 			return false, i, nil
 		}
 		prev = e.PayloadHash
@@ -146,6 +148,9 @@ func (st *MemoryStore) ListRights() ([]*ConstitutionalRight, error) {
 	for _, r := range st.rights {
 		c := *r
 		out = append(out, &c)
+		if len(out) >= 1001 {
+			break
+		}
 	}
 	return out, nil
 }
@@ -169,12 +174,18 @@ func (st *MemoryStore) ListReviews(proposalID string) ([]*ConstitutionalReview, 
 		for _, id := range st.reviewsByProposal[proposalID] {
 			c := *st.reviews[id]
 			out = append(out, &c)
+			if len(out) >= 1000 {
+				break
+			}
 		}
 		return out, nil
 	}
 	for _, r := range st.reviews {
 		c := *r
 		out = append(out, &c)
+		if len(out) >= 1000 {
+			break
+		}
 	}
 	return out, nil
 }
@@ -207,6 +218,9 @@ func (st *MemoryStore) ListProtocolChanges() ([]*ProtocolChange, error) {
 	for _, c := range st.changes {
 		cp := *c
 		out = append(out, &cp)
+		if len(out) >= 1000 {
+			break
+		}
 	}
 	return out, nil
 }
@@ -216,6 +230,9 @@ func (st *MemoryStore) UpdateProtocolChange(c *ProtocolChange) (*ProtocolChange,
 	defer st.mu.Unlock()
 	if _, ok := st.changes[c.ID]; !ok {
 		return nil, ErrNotFound
+	}
+	if st.changes[c.ID].Status == ChangeReleased {
+		return nil, ErrConflict
 	}
 	st.changes[c.ID] = c
 	out := *c

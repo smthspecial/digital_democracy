@@ -3,6 +3,8 @@ package audit
 import (
 	"encoding/json"
 	"errors"
+	"github.com/digital-democracy/api-go/internal/security"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -10,10 +12,7 @@ import (
 	"github.com/digital-democracy/api-go/internal/metrics"
 )
 
-// AUTH-010: audit_log:read → T1-public (unauthenticated). Writes are
-// worker/system-only: direct POST /audit/log accepts the internal
-// DP-036 shape; service identity is enforced by the mesh (AUTH-012), not by
-// these handlers.
+// Public reads remain available; mutations authenticate their producer.
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
@@ -41,8 +40,19 @@ func writeErr(w http.ResponseWriter, err error) {
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 	defer r.Body.Close()
-	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(v); err != nil {
+		var sizeError *http.MaxBytesError
+		if errors.As(err, &sizeError) {
+			security.Error(w, 413, "payload_too_large")
+			return false
+		}
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": map[string]string{"code": "invalid_request", "message": "malformed JSON body"}})
+		return false
+	}
+	if decoder.Decode(new(any)) != io.EOF {
+		security.Error(w, 400, "invalid_request")
 		return false
 	}
 	return true
@@ -60,7 +70,15 @@ func (h *Handler) append(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &in) {
 		return
 	}
-	e, err := h.svc.Append(in.ActionType, in.ActorRef, in.Payload, in.IdempotencyKey)
+	if security.ServiceID(r) != "api-go" && (in.ActorRef == "voting-service" || in.ActorRef == "audit-service" || in.ActorRef == "auth-service" || in.ActorRef == "delegation-service" || in.ActionType == ActionVoteCertified) {
+		security.Error(w, 403, "forbidden")
+		return
+	}
+	if in.ActorRef == "" {
+		writeErr(w, ErrInvalid)
+		return
+	}
+	e, err := h.svc.Append(in.ActionType, security.ServiceID(r)+":"+in.ActorRef, in.Payload, in.IdempotencyKey)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -69,10 +87,10 @@ func (h *Handler) append(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
-	limit := 0
+	limit := 100
 	if raw := r.URL.Query().Get("limit"); raw != "" {
 		n, err := strconv.Atoi(raw)
-		if err != nil || n < 0 {
+		if err != nil || n < 1 || n > 1000 {
 			writeErr(w, ErrInvalid)
 			return
 		}
@@ -85,7 +103,7 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 	}
 	fetchLimit := limit
 	if actionType != "" {
-		fetchLimit = 0
+		fetchLimit = 1000
 	}
 	entries, err := h.svc.store.ListEntries(fetchLimit)
 	if err != nil {
@@ -117,6 +135,15 @@ func (h *Handler) get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) verify(w http.ResponseWriter, _ *http.Request) {
+	countBefore, err := h.svc.store.Count()
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if countBefore > 10000 {
+		security.Error(w, 503, "verification_requires_offline_job")
+		return
+	}
 	ok, badIndex, err := h.svc.store.VerifyChain()
 	if err != nil {
 		writeErr(w, err)
@@ -146,7 +173,7 @@ func (h *Handler) createRight(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &in) {
 		return
 	}
-	if in.Name == "" {
+	if in.Name == "" || len(in.Name) > 256 || len(in.Description) > 4096 {
 		writeErr(w, ErrInvalid)
 		return
 	}
@@ -164,6 +191,10 @@ func (h *Handler) listRights(w http.ResponseWriter, _ *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	if len(rights) > 1000 {
+		security.Error(w, 503, "rights_require_offline_query")
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"rights": rights})
 }
 
@@ -176,6 +207,11 @@ func (h *Handler) triggerReview(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &in) {
 		return
 	}
+	if len(in.AffectedRightIDs) > 100 || len(in.ReviewerRef) > 256 || len(in.ProposalID) > 256 {
+		writeErr(w, ErrInvalid)
+		return
+	}
+	in.ReviewerRef = security.ServiceID(r) + ":" + in.ReviewerRef
 	reviews, blocked, err := h.svc.TriggerReview(ReviewTrigger(in))
 	if err != nil {
 		writeErr(w, err)
@@ -196,20 +232,18 @@ func (h *Handler) listReviews(w http.ResponseWriter, r *http.Request) {
 // registerChange opens the DP-043 gate for a protocol change.
 func (h *Handler) registerChange(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		ChangeRef         string    `json:"change_ref"`
-		RequiredApprovals []string  `json:"required_approval_refs"`
-		DelayUntil        time.Time `json:"delay_until"`
-		VisibleSince      time.Time `json:"visible_since"`
+		ChangeRef string `json:"change_ref"`
 	}
 	if !decodeJSON(w, r, &in) {
 		return
 	}
-	c, err := h.svc.RegisterChange(RegisterChangeInput(in))
+	now := time.Now().UTC()
+	c, err := h.svc.RegisterChange(RegisterChangeInput{ChangeRef: in.ChangeRef, RequiredApprovals: []string{"citizen_supermajority", "audit_confirmation", "body_endorsement"}, VisibleSince: now, DelayUntil: now.Add(24 * time.Hour)})
 	if err != nil {
 		writeErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, c)
+	writeJSON(w, 201, c)
 }
 
 func (h *Handler) listChanges(w http.ResponseWriter, _ *http.Request) {
@@ -247,6 +281,26 @@ func (h *Handler) recordApproval(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) releaseChange(w http.ResponseWriter, r *http.Request) {
+	change, err := h.svc.store.GetProtocolChange(r.PathValue("id"))
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if len(change.RequiredApprovals) != 3 || change.DelayUntil.Sub(change.VisibleSince) < 24*time.Hour || change.CreatedAt.Sub(change.VisibleSince) < 0 || change.CreatedAt.Sub(change.VisibleSince) > time.Second {
+		writeErr(w, ErrInvalidState("untrusted legacy gate policy"))
+		return
+	}
+	approvals, err := protocolApprovals(change.ChangeRef)
+	if err != nil {
+		security.Error(w, 503, "approval_verification_unavailable")
+		return
+	}
+	// Discard caller-recorded approvals and replace with current authoritative decisions.
+	change.Approvals = approvals
+	if _, err = h.svc.store.UpdateProtocolChange(change); err != nil {
+		writeErr(w, err)
+		return
+	}
 	c, err := h.svc.ReleaseChange(r.PathValue("id"), time.Now().UTC())
 	if err != nil {
 		writeErr(w, err)

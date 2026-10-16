@@ -1,0 +1,92 @@
+{
+  "checkedAt": "2026-10-14T08:22:48.505505+00:00",
+  "registryCommand": "pnpm view PACKAGE version",
+  "rawScan": "dependency-advisories-20261014.json",
+  "advisories": [
+    {
+      "package": "node-forge",
+      "advisory": "GHSA-86w9-cpqp-85rv",
+      "upstreamSource": "https://github.com/advisories/GHSA-86w9-cpqp-85rv",
+      "latestPublishedVersion": "1.4.0",
+      "vulnerableRange": "<=1.4.0",
+      "patchedVersions": "<0.0.0",
+      "resolvedCopies": [
+        {
+          "package": "node-forge",
+          "version": "1.4.0",
+          "copies": 1,
+          "patchSha256": "29c2e824703dd9f7a9cbd134b81e659136274e706fe70e4c599feb2889697a71"
+        }
+      ]
+    },
+    {
+      "package": "braces",
+      "advisory": "GHSA-vfj7-8cjw-p6xm",
+      "upstreamSource": "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+      "latestPublishedVersion": "3.0.3",
+      "vulnerableRange": "<=3.0.3",
+      "patchedVersions": "<0.0.0",
+      "resolvedCopies": [
+        {
+          "package": "braces",
+          "version": "3.0.3",
+          "copies": 1,
+          "patchSha256": "99f2d754a078a01ef927c0be92ca41351ff568d8ca9c20c5b15884d17eaac8b7"
+        }
+      ]
+    },
+    {
+      "package": "sprintf-js",
+      "advisory": "GHSA-hp3w-g68c-fv3c",
+      "upstreamSource": "https://github.com/advisories/GHSA-hp3w-g68c-fv3c",
+      "latestPublishedVersion": "1.1.3",
+      "vulnerableRange": "<=1.1.3",
+      "patchedVersions": "<0.0.0",
+      "resolvedCopies": [
+        {
+          "package": "sprintf-js",
+          "version": "1.0.3",
+          "copies": 1,
+          "patchSha256": "9ee9a4c30e16dd4e765cfcd3108369a1eeec7f1b68e3a21738b802d0f37c6afd"
+        }
+      ]
+    }
+  ],
+  "activeParents": {
+    "braces": [
+      {
+        "name": "micromatch",
+        "version": "4.0.8"
+      }
+    ],
+    "node-forge": [
+      {
+        "name": "@expo/cli",
+        "version": "57.0.28"
+      },
+      {
+        "name": "@expo/code-signing-certificates",
+        "version": "0.0.6"
+      }
+    ],
+    "sprintf-js": [
+      {
+        "name": "argparse",
+        "version": "1.0.10"
+      }
+    ]
+  },
+  "exposure": {
+    "mobileExports": "Absent from all four inspected Metro Android/iOS JS/Hermes module inventories; see digest reports.",
+    "build": "Expo/Metro/React Native CLI transitive dependencies remain active and patched.",
+    "tests": "Positive/exploit regressions execute each active resolved copy.",
+    "serverAndWebImages": "2026-10-08 package-inventory evidence remains historical; these images were not rebuilt or rescanned in this continuation.",
+    "signedNativePackagesAndMobileWeb": "Not qualified."
+  },
+  "policy": {
+    "unchangedReviewBy": "2026-11-07",
+    "ownership": "Existing dependency-maintainer role; named production owner remains open.",
+    "unexpectedAdvisories": 0,
+    "patchRegressionsPassed": 10
+  }
+}

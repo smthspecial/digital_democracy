@@ -1,3 +1,4 @@
+import { InternalServiceGuard, SignedRequestVerifier } from "../common/internal-service.guard.js";
 import { ForbiddenException, INestApplication, ValidationPipe } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import request from "supertest";
@@ -20,7 +21,7 @@ describe("identity verification and auth provisioning boundary", () => {
     vi.stubEnv("IDENTITY_VERIFIER_SHARED_SECRET", "test-verifier-secret");
     const module = await Test.createTestingModule({
       controllers: [IdentityController],
-      providers: [IdentityVerifierGuard, { provide: IdentityService, useValue: identity },
+      providers: [InternalServiceGuard, SignedRequestVerifier, IdentityVerifierGuard, { provide: IdentityService, useValue: identity },
         { provide: DuplicateDetectionService, useValue: {} }, { provide: AuthProvisioner, useValue: { provision } }],
     }).compile();
     app = module.createNestApplication({ rawBody: true });

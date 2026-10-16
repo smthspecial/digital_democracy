@@ -1,0 +1,88 @@
+{
+  "images": [
+    {
+      "image": "localhost/dd-readiness-api-go:20261008",
+      "imageConfigDigest": "sha256:5370332fc658a6e63391a49ceb88705575263efa52c7cffdd25cdfda712f17c3",
+      "registryDigest": null,
+      "user": "10001:10001",
+      "gatePassed": true,
+      "blocking": 0,
+      "reviewRequired": 1
+    },
+    {
+      "image": "localhost/dd-readiness-api-ts:20261008",
+      "imageConfigDigest": "sha256:4f324ca1f1b9f328f1d1b0549bd7ab211b4afdb266d2943fec8a904f1bbfd914",
+      "registryDigest": null,
+      "user": "10001:10001",
+      "gatePassed": true,
+      "blocking": 0,
+      "reviewRequired": 0
+    },
+    {
+      "image": "localhost/dd-readiness-api-ts-migration:20261008",
+      "imageConfigDigest": "sha256:a0b3dfa670254fb1ea96d23f550ed551b74ad537e90152d526f54d4a5a322999",
+      "registryDigest": null,
+      "user": "10001:10001",
+      "gatePassed": true,
+      "blocking": 0,
+      "reviewRequired": 0
+    },
+    {
+      "image": "localhost/dd-readiness-web:20261008",
+      "imageConfigDigest": "sha256:5b8dbbc75a38d2934b4a7c46d0dd4dd7241e0144d9b8044403521089284fc607",
+      "registryDigest": null,
+      "user": "node",
+      "gatePassed": true,
+      "blocking": 0,
+      "reviewRequired": 0
+    }
+  ],
+  "checks": [
+    {
+      "case": "api-go non-root",
+      "passed": true
+    },
+    {
+      "case": "api-go ready with restricted TLS database roles",
+      "passed": true
+    },
+    {
+      "case": "api-go denies unauthenticated worker request",
+      "passed": true
+    },
+    {
+      "case": "api-ts non-root",
+      "passed": true
+    },
+    {
+      "case": "api-ts excludes test source and fixtures",
+      "passed": true
+    },
+    {
+      "case": "api-ts ready with restricted TLS database roles",
+      "passed": true
+    },
+    {
+      "case": "api-ts denies unauthenticated worker request",
+      "passed": true
+    },
+    {
+      "case": "api-ts-migration non-root",
+      "passed": true
+    },
+    {
+      "case": "api-ts-migration excludes test source and fixtures",
+      "passed": true
+    },
+    {
+      "case": "web non-root",
+      "passed": true
+    },
+    {
+      "case": "web ready",
+      "passed": true
+    }
+  ],
+  "passed": 11,
+  "scope": "exact local artifact scans and disposable startup; no registry publication or production mesh qualification"
+}

@@ -2,7 +2,6 @@ package voting
 
 import (
 	"errors"
-	"sync"
 	"time"
 
 	"github.com/digital-democracy/api-go/internal/metrics"
@@ -44,26 +43,62 @@ type Store interface {
 	ListSessions() ([]*VoteSession, error)
 	UpdateSessionStatus(id, status string) (*VoteSession, error)
 	SetTally(id string, tally *TallyResult) (*VoteSession, error)
+	ListOptions(sessionID string) ([]*VoteOption, error)
 	AddOption(o *VoteOption) (*VoteOption, error)
 	// IssueToken inserts (or returns the existing row for) one citizen. A
 	// freshly created token carries the transient TokenBlind exactly once;
 	// re-issues never do — the raw value is unrecoverable by design.
 	IssueToken(sessionID, citizenID string) (*EligibilityToken, error)
 	CountTokens(sessionID string) (int, error)
-	CastBallot(sessionID, tokenID, tokenBlind, encryptedChoice string) (*Ballot, *EligibilityToken, error)
+	CastBallot(sessionID, tokenID, tokenBlind, encryptedChoice string, citizenIDs ...string) (*Ballot, *EligibilityToken, error)
 	FindBallotByVerification(code string) (*Ballot, error)
 	BallotsForSession(sessionID string) ([]*Ballot, error)
 }
 
 type Service struct {
-	store      Store
-	delegation DelegationResolver
-	audit      AuditEmitter
+	store                   Store
+	delegation              DelegationResolver
+	audit                   AuditEmitter
+	productionCryptoBlocked bool
+	certification           CertificationSink
+}
 
-	// tallyMu serializes DP-026 per session (distributed lock in production;
-	// process mutex for the in-memory store) for exactly-once semantics.
-	tallyMu sync.Mutex
-	tallied map[string]bool
+type CertificationSink interface{ Completed(sessionID string) error }
+
+// SetCertificationSink connects certified decisions to the governance runtime.
+func (s *Service) SetCertificationSink(sink CertificationSink) { s.certification = sink }
+
+// ReconcileCertified retries persisted decisions after an outage/restart.
+func (s *Service) ReconcileCertified() error {
+	if s.productionCryptoBlocked || s.certification == nil {
+		return nil
+	}
+	sessions, err := s.store.ListSessions()
+	if err != nil {
+		return err
+	}
+	if len(sessions) > 1000 {
+		return ErrGovernanceUnavailable
+	}
+	var failures []error
+	for _, session := range sessions {
+		if session.Status == SessionCertified && session.TallyResult != nil && session.TallyResult.Decided {
+			if err := s.certification.Completed(session.ID); err != nil {
+				failures = append(failures, err)
+			}
+		}
+	}
+	return errors.Join(failures...)
+}
+
+var ErrGovernanceUnavailable = errors.New("certified decision is stored; governance completion is unavailable and will be retried")
+
+var ErrProductionCryptoUnavailable = errors.New("reviewed production ballot cryptography is unavailable")
+
+// BlockUnreviewedProductionCrypto is called once at startup. Removing this gate
+// requires a reviewed protocol implementation, not an environment bypass.
+func (s *Service) BlockUnreviewedProductionCrypto() {
+	s.productionCryptoBlocked = true
 }
 
 func NewService(store Store, delegation DelegationResolver, audit AuditEmitter) *Service {
@@ -76,7 +111,7 @@ func NewService(store Store, delegation DelegationResolver, audit AuditEmitter) 
 	if audit == nil {
 		audit = noopAuditEmitter{}
 	}
-	return &Service{store: store, delegation: delegation, audit: audit, tallied: map[string]bool{}}
+	return &Service{store: store, delegation: delegation, audit: audit}
 }
 
 type CreateSessionInput struct {
@@ -94,7 +129,7 @@ type CreateSessionInput struct {
 // review clearance (DP-034) is a prerequisite checked by the caller via the
 // proposal/audit services; the session records the clearance reference.
 func (s *Service) CreateSession(in CreateSessionInput) (*VoteSession, error) {
-	if in.ProposalID == "" || in.JurisdictionID == "" {
+	if in.ProposalID == "" || in.JurisdictionID == "" || len(in.ProposalID) > 256 || len(in.JurisdictionID) > 256 {
 		return nil, ErrInvalid
 	}
 	if !validMethod(in.Method) || !validThreshold(in.ThresholdRule) {
@@ -133,6 +168,9 @@ func (s *Service) CoolingClear(vs *VoteSession, now time.Time) bool {
 // has cleared. It also represents the DP-025 trigger point: callers issue
 // eligibility tokens right after a successful open.
 func (s *Service) TryOpen(id string, now time.Time) (*VoteSession, error) {
+	if s.productionCryptoBlocked {
+		return nil, ErrProductionCryptoUnavailable
+	}
 	vs, err := s.store.GetSession(id)
 	if err != nil {
 		return nil, err
@@ -140,7 +178,7 @@ func (s *Service) TryOpen(id string, now time.Time) (*VoteSession, error) {
 	if vs.Status != SessionScheduled {
 		return nil, ErrInvalidState
 	}
-	if vs.OpensAt.After(now) || !s.CoolingClear(vs, now) {
+	if vs.OpensAt.After(now) || !now.Before(vs.ClosesAt) || !s.CoolingClear(vs, now) {
 		return nil, ErrInvalidState
 	}
 	opened, err := s.store.UpdateSessionStatus(id, SessionOpen)
@@ -175,6 +213,9 @@ func (s *Service) TryClose(id string, now time.Time) (*VoteSession, error) {
 // IssueTokens runs DP-025 for a batch of eligible citizens. The store makes
 // it idempotent on (session, citizen).
 func (s *Service) IssueTokens(sessionID string, citizenIDs []string) ([]*EligibilityToken, error) {
+	if s.productionCryptoBlocked {
+		return nil, ErrProductionCryptoUnavailable
+	}
 	if _, err := s.store.GetSession(sessionID); err != nil {
 		return nil, err
 	}
@@ -196,6 +237,9 @@ func (s *Service) IssueTokens(sessionID string, citizenIDs []string) ([]*Eligibi
 // When the voter has an active delegation chain, DP-041 resolution is
 // consulted so the ballot also applies to delegators.
 func (s *Service) CastBallot(sessionID, tokenID, tokenBlind, encryptedChoice, citizenID string) (*Ballot, error) {
+	if s.productionCryptoBlocked {
+		return nil, ErrProductionCryptoUnavailable
+	}
 	vs, err := s.store.GetSession(sessionID)
 	if err != nil {
 		return nil, err
@@ -203,10 +247,10 @@ func (s *Service) CastBallot(sessionID, tokenID, tokenBlind, encryptedChoice, ci
 	if vs.Status != SessionOpen {
 		return nil, ErrInvalidState
 	}
-	if tokenBlind == "" || encryptedChoice == "" {
+	if tokenBlind == "" || encryptedChoice == "" || len(encryptedChoice) > 8192 || len(tokenBlind) > 256 || citizenID == "" {
 		return nil, ErrInvalid
 	}
-	b, _, err := s.store.CastBallot(sessionID, tokenID, tokenBlind, encryptedChoice)
+	b, _, err := s.store.CastBallot(sessionID, tokenID, tokenBlind, encryptedChoice, citizenID)
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +260,6 @@ func (s *Service) CastBallot(sessionID, tokenID, tokenBlind, encryptedChoice, ci
 		// so failures degrade to a plain single ballot, never a lost vote.
 		_, _ = s.delegation.DelegatorsFor(sessionID, citizenID)
 	}
-	_ = s.audit.Emit("ballot_cast", "voting-service", sessionID)
 	metrics.VoteBallotsCastTotal.Inc()
 	return b, nil
 }
@@ -233,8 +276,12 @@ func (s *Service) VerifyBallot(code string) (*Ballot, error) {
 // Tally runs DP-026. Encrypted choices are grouped opaquely here: real
 // threshold decryption across key holders happens before counting in
 // production; the grouping/threshold application below is the counting step
-// that follows decryption. Exactly-once per session via the tally guard.
+// that follows decryption. The store retains the first committed result,
+// so retries and other replicas return the same public evidence.
 func (s *Service) Tally(sessionID string) (*TallyResult, error) {
+	if s.productionCryptoBlocked {
+		return nil, ErrProductionCryptoUnavailable
+	}
 	vs, err := s.store.GetSession(sessionID)
 	if err != nil {
 		return nil, err
@@ -242,17 +289,26 @@ func (s *Service) Tally(sessionID string) (*TallyResult, error) {
 	if vs.Status != SessionClosed && vs.Status != SessionCertified {
 		return nil, ErrInvalidState
 	}
-	s.tallyMu.Lock()
-	defer s.tallyMu.Unlock()
-	if s.tallied[sessionID] && vs.TallyResult != nil {
+	if vs.TallyResult != nil {
 		return vs.TallyResult, nil
 	}
 	ballots, err := s.store.BallotsForSession(sessionID)
 	if err != nil {
 		return nil, err
 	}
+	options, err := s.store.ListOptions(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	valid := map[string]bool{}
+	for _, option := range options {
+		valid[option.ID] = true
+	}
 	counts := map[string]int{}
 	for _, b := range ballots {
+		if !valid[b.EncryptedChoice] {
+			return nil, ErrInvalid
+		}
 		counts[b.EncryptedChoice]++
 	}
 	winner, decided := evaluateOutcome(vs.Method, vs.ThresholdRule, counts, len(ballots))
@@ -264,7 +320,6 @@ func (s *Service) Tally(sessionID string) (*TallyResult, error) {
 		Decided:      decided,
 		ComputedAt:   time.Now().UTC(),
 	}
-	s.tallied[sessionID] = true
 	updated, err := s.store.SetTally(sessionID, res)
 	if err != nil {
 		return nil, err
@@ -315,9 +370,20 @@ func evaluateOutcome(method, rule string, counts map[string]int, total int) (str
 // Certify runs DP-027: quorum (min_participation) decides certified vs
 // closed-failed-quorum. Participation = ballots / issued tokens.
 func (s *Service) Certify(sessionID string) (*VoteSession, error) {
+	if s.productionCryptoBlocked {
+		return nil, ErrProductionCryptoUnavailable
+	}
 	vs, err := s.store.GetSession(sessionID)
 	if err != nil {
 		return nil, err
+	}
+	if vs.Status == SessionCertified && s.certification != nil {
+		if vs.TallyResult != nil && vs.TallyResult.Decided {
+			if err := s.certification.Completed(sessionID); err != nil {
+				return nil, ErrGovernanceUnavailable
+			}
+		}
+		return vs, nil
 	}
 	if vs.Status != SessionClosed {
 		return nil, ErrInvalidState
@@ -347,6 +413,11 @@ func (s *Service) Certify(sessionID string) (*VoteSession, error) {
 		}
 		_ = s.audit.Emit("vote_certified", "voting-service", sessionID)
 		metrics.VoteSessionsClosedTotal.WithLabelValues("true").Inc()
+		if s.certification != nil && out.TallyResult != nil && out.TallyResult.Decided {
+			if err := s.certification.Completed(sessionID); err != nil {
+				return nil, ErrGovernanceUnavailable
+			}
+		}
 	} else {
 		// Quorum failure stays closed (failed quorum), never certified.
 		out, err = s.store.GetSession(sessionID)

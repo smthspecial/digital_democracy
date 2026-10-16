@@ -17,7 +17,7 @@ import (
 func Connect(ctx context.Context, url string) (*pgxpool.Pool, error) {
 	cfg, err := pgxpool.ParseConfig(url)
 	if err != nil {
-		return nil, fmt.Errorf("pg: parse DATABASE_URL: %w", err)
+		return nil, fmt.Errorf("pg: invalid database connection configuration")
 	}
 	cfg.MaxConns = 8
 	cfg.MinConns = 1

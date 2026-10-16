@@ -1,0 +1,15 @@
+.git
+.spec
+.agents
+.codex
+.aws
+**/node_modules
+**/.next
+**/.turbo
+**/dist
+**/bin
+**/*.tsbuildinfo
+**/.env
+**/.env.*
+!**/.env.example
+**/vitest-report.json

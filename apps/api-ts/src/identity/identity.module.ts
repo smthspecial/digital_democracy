@@ -1,3 +1,4 @@
+import { InternalServiceGuard, SignedRequestVerifier } from "../common/internal-service.guard.js";
 import { Module } from "@nestjs/common";
 import { AUDIT_EMITTER, HttpAuditEmitter } from "../common/audit-emitter.js";
 import { PrismaModule } from "../prisma/prisma.module.js";
@@ -16,7 +17,7 @@ import { AuthProvisioner } from "./auth-provisioner.js";
 @Module({
   imports: [PrismaModule],
   controllers: [IdentityController],
-  providers: [
+  providers: [InternalServiceGuard, SignedRequestVerifier,
     IdentityService,
     IdentityVerifierGuard,
     AuthProvisioner,

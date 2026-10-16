@@ -1,0 +1,1009 @@
+{
+  "go_storage": "postgres",
+  "ts_storage": "postgres",
+  "fixtures": "identity active, competency active; TS validator supplies valid T1/T2 contexts",
+  "results": [
+    {
+      "case": "anonymous session creation",
+      "method": "POST",
+      "path": "/voting/sessions",
+      "request": {
+        "proposal_id": "fb906566-4525-4090-833c-bf8d4d1d0448",
+        "jurisdiction_id": "fd50ef85-ee8b-4b96-9cef-41129fdf0e6f",
+        "method": "approval",
+        "threshold_rule": "simple_majority",
+        "min_participation": 0,
+        "cooling_off_until": "2026-10-08T10:34:24.286244+00:00",
+        "opens_at": "2026-10-08T10:34:34.286244+00:00",
+        "closes_at": "2026-10-08T10:34:43.286244+00:00"
+      },
+      "request_headers": {},
+      "status": 201,
+      "response": {
+        "id": "217955ee-c665-9183-15b4-075bc0a18861",
+        "proposal_id": "fb906566-4525-4090-833c-bf8d4d1d0448",
+        "jurisdiction_id": "fd50ef85-ee8b-4b96-9cef-41129fdf0e6f",
+        "method": "approval",
+        "threshold_rule": "simple_majority",
+        "min_participation": 0,
+        "cooling_off_until": "2026-10-08T12:34:24.286244+02:00",
+        "opens_at": "2026-10-08T12:34:34.286244+02:00",
+        "closes_at": "2026-10-08T12:34:43.286244+02:00",
+        "status": "scheduled",
+        "created_at": "2026-10-08T12:34:44.287727+02:00"
+      },
+      "verdict": "confirmed",
+      "finding": "SEC-01"
+    },
+    {
+      "case": "anonymous session open",
+      "method": "POST",
+      "path": "/voting/sessions/217955ee-c665-9183-15b4-075bc0a18861/open",
+      "request": {},
+      "request_headers": {},
+      "status": 200,
+      "response": {
+        "id": "217955ee-c665-9183-15b4-075bc0a18861",
+        "proposal_id": "fb906566-4525-4090-833c-bf8d4d1d0448",
+        "jurisdiction_id": "fd50ef85-ee8b-4b96-9cef-41129fdf0e6f",
+        "method": "approval",
+        "threshold_rule": "simple_majority",
+        "min_participation": 0,
+        "cooling_off_until": "2026-10-08T12:34:24.286244+02:00",
+        "opens_at": "2026-10-08T12:34:34.286244+02:00",
+        "closes_at": "2026-10-08T12:34:43.286244+02:00",
+        "status": "open",
+        "created_at": "2026-10-08T12:34:44.287727+02:00"
+      },
+      "verdict": "confirmed",
+      "finding": "SEC-01"
+    },
+    {
+      "case": "anonymous arbitrary citizen token issuance",
+      "method": "POST",
+      "path": "/voting/sessions/217955ee-c665-9183-15b4-075bc0a18861/tokens",
+      "request": {
+        "citizen_ids": [
+          "484951ad-f3fc-4dcc-90a7-90aa879acfd7"
+        ]
+      },
+      "request_headers": {},
+      "status": 201,
+      "response": {
+        "tokens": [
+          {
+            "id": "c8f92169-b21c-e5f0-b2bf-7376f7994284",
+            "vote_session_id": "217955ee-c665-9183-15b4-075bc0a18861",
+            "citizen_id": "484951ad-f3fc-4dcc-90a7-90aa879acfd7",
+            "blinded_token_hash": "[redacted]",
+            "issued_at": "2026-10-08T12:34:44.292059+02:00",
+            "used": false,
+            "token_blind": "[redacted]"
+          }
+        ]
+      },
+      "verdict": "confirmed",
+      "finding": "SEC-01"
+    },
+    {
+      "case": "anonymous cast with invalid bearer and expired voting deadline",
+      "method": "POST",
+      "path": "/voting/ballots",
+      "request": {
+        "vote_session_id": "217955ee-c665-9183-15b4-075bc0a18861",
+        "token_id": "c8f92169-b21c-e5f0-b2bf-7376f7994284",
+        "token_blind": "[redacted]",
+        "encrypted_choice": "security-choice-outside-option-set"
+      },
+      "request_headers": {
+        "Authorization": "[redacted bearer]"
+      },
+      "status": 201,
+      "response": {
+        "cast_at": "2026-10-08T12:34:44.293148+02:00",
+        "verification_code": "45169bb9cbcf114ff35f3d2fd744447b5be90caef182e2186c03eccc0e52d339",
+        "vote_session_id": "217955ee-c665-9183-15b4-075bc0a18861"
+      },
+      "verdict": "confirmed",
+      "finding": "SEC-01"
+    },
+    {
+      "case": "same eligibility token replay",
+      "method": "POST",
+      "path": "/voting/ballots",
+      "request": {
+        "vote_session_id": "217955ee-c665-9183-15b4-075bc0a18861",
+        "token_id": "c8f92169-b21c-e5f0-b2bf-7376f7994284",
+        "token_blind": "[redacted]",
+        "encrypted_choice": "security-choice-outside-option-set"
+      },
+      "request_headers": {},
+      "status": 409,
+      "response": {
+        "error": {
+          "code": "conflict",
+          "message": "conflict"
+        }
+      },
+      "verdict": "defended",
+      "finding": null
+    },
+    {
+      "case": "presence-only ballot verification",
+      "method": "GET",
+      "path": "/voting/ballots/verify?code=45169bb9cbcf114ff35f3d2fd744447b5be90caef182e2186c03eccc0e52d339",
+      "request": null,
+      "request_headers": {},
+      "status": 200,
+      "response": {
+        "cast_at": "2026-10-08T12:34:44.293148+02:00",
+        "present": true,
+        "vote_session_id": "217955ee-c665-9183-15b4-075bc0a18861"
+      },
+      "verdict": "defended",
+      "finding": null
+    },
+    {
+      "case": "anonymous option insertion after voting opened",
+      "method": "POST",
+      "path": "/voting/sessions/217955ee-c665-9183-15b4-075bc0a18861/options",
+      "request": {
+        "proposal_id": "fb906566-4525-4090-833c-bf8d4d1d0448",
+        "label": "injected option"
+      },
+      "request_headers": {},
+      "status": 201,
+      "response": {
+        "id": "a81f6cbe-15a5-051b-169c-2ce67760df31",
+        "vote_session_id": "217955ee-c665-9183-15b4-075bc0a18861",
+        "proposal_id": "fb906566-4525-4090-833c-bf8d4d1d0448",
+        "label": "injected option",
+        "description": ""
+      },
+      "verdict": "confirmed",
+      "finding": "SEC-01"
+    },
+    {
+      "case": "anonymous close",
+      "method": "POST",
+      "path": "/voting/sessions/217955ee-c665-9183-15b4-075bc0a18861/close",
+      "request": {},
+      "request_headers": {},
+      "status": 200,
+      "response": {
+        "id": "217955ee-c665-9183-15b4-075bc0a18861",
+        "proposal_id": "fb906566-4525-4090-833c-bf8d4d1d0448",
+        "jurisdiction_id": "fd50ef85-ee8b-4b96-9cef-41129fdf0e6f",
+        "method": "approval",
+        "threshold_rule": "simple_majority",
+        "min_participation": 0,
+        "cooling_off_until": "2026-10-08T12:34:24.286244+02:00",
+        "opens_at": "2026-10-08T12:34:34.286244+02:00",
+        "closes_at": "2026-10-08T12:34:43.286244+02:00",
+        "status": "closed",
+        "created_at": "2026-10-08T12:34:44.287727+02:00"
+      },
+      "verdict": "confirmed",
+      "finding": "SEC-01"
+    },
+    {
+      "case": "anonymous tally accepts out-of-option value",
+      "method": "POST",
+      "path": "/voting/sessions/217955ee-c665-9183-15b4-075bc0a18861/tally",
+      "request": {},
+      "request_headers": {},
+      "status": 200,
+      "response": {
+        "vote_session_id": "217955ee-c665-9183-15b4-075bc0a18861",
+        "counts": {
+          "security-choice-outside-option-set": 1
+        },
+        "total_ballots": 1,
+        "winner": "security-choice-outside-option-set",
+        "decided": true,
+        "computed_at": "2026-10-08T10:34:44.299393677Z"
+      },
+      "verdict": "confirmed",
+      "finding": "SEC-01"
+    },
+    {
+      "case": "anonymous certification",
+      "method": "POST",
+      "path": "/voting/sessions/217955ee-c665-9183-15b4-075bc0a18861/certify",
+      "request": {},
+      "request_headers": {},
+      "status": 200,
+      "response": {
+        "id": "217955ee-c665-9183-15b4-075bc0a18861",
+        "proposal_id": "fb906566-4525-4090-833c-bf8d4d1d0448",
+        "jurisdiction_id": "fd50ef85-ee8b-4b96-9cef-41129fdf0e6f",
+        "method": "approval",
+        "threshold_rule": "simple_majority",
+        "min_participation": 0,
+        "cooling_off_until": "2026-10-08T12:34:24.286244+02:00",
+        "opens_at": "2026-10-08T12:34:34.286244+02:00",
+        "closes_at": "2026-10-08T12:34:43.286244+02:00",
+        "status": "certified",
+        "tally_result": {
+          "vote_session_id": "217955ee-c665-9183-15b4-075bc0a18861",
+          "counts": {
+            "security-choice-outside-option-set": 1
+          },
+          "total_ballots": 1,
+          "winner": "security-choice-outside-option-set",
+          "decided": true,
+          "computed_at": "2026-10-08T10:34:44.299393677Z"
+        },
+        "created_at": "2026-10-08T12:34:44.287727+02:00"
+      },
+      "verdict": "confirmed",
+      "finding": "SEC-01"
+    },
+    {
+      "case": "anonymous late option insertion after certification",
+      "method": "POST",
+      "path": "/voting/sessions/217955ee-c665-9183-15b4-075bc0a18861/options",
+      "request": {
+        "proposal_id": "fb906566-4525-4090-833c-bf8d4d1d0448",
+        "label": "post-certification option"
+      },
+      "request_headers": {},
+      "status": 201,
+      "response": {
+        "id": "85b3c6a0-4f7b-341f-383e-f9ccfa1e4134",
+        "vote_session_id": "217955ee-c665-9183-15b4-075bc0a18861",
+        "proposal_id": "fb906566-4525-4090-833c-bf8d4d1d0448",
+        "label": "post-certification option",
+        "description": ""
+      },
+      "verdict": "confirmed",
+      "finding": "SEC-06"
+    },
+    {
+      "case": "bounded 1 MiB option description",
+      "method": "POST",
+      "path": "/voting/sessions/217955ee-c665-9183-15b4-075bc0a18861/options",
+      "request": {
+        "proposal_id": "fb906566-4525-4090-833c-bf8d4d1d0448",
+        "label": "size probe",
+        "description": "[string of 1048576 characters]"
+      },
+      "request_headers": {},
+      "status": 201,
+      "response": {
+        "id": "93e78989-11bd-7836-403a-7e8ab42de75c",
+        "vote_session_id": "217955ee-c665-9183-15b4-075bc0a18861",
+        "proposal_id": "fb906566-4525-4090-833c-bf8d4d1d0448",
+        "label": "size probe",
+        "description": "[string of 1048576 characters]"
+      },
+      "verdict": "confirmed",
+      "finding": "SEC-07"
+    },
+    {
+      "case": "forged audit author",
+      "method": "POST",
+      "path": "/audit/log",
+      "request": {
+        "action_type": "vote_certified",
+        "actor_ref": "voting-service",
+        "payload": "fabricated certification"
+      },
+      "request_headers": {},
+      "status": 201,
+      "response": {
+        "id": "3dacf9a8-9c55-0bdb-0c41-78e4cc123eb2",
+        "action_type": "vote_certified",
+        "actor_ref": "voting-service",
+        "payload_hash": "247ab5444737485b3512dcd7ec180c38052eaeab065023b616a490e36b4c7c8e",
+        "prev_hash": "3262ed09d7a71a2682ccc5f6d3ce6b27088332149af990194f16c29977e2aaf7",
+        "hash": "aeef08d2f32f6c9775721229e4d5202d8352327f8097cbe1d11177d148afc8eb",
+        "signature": "sig:1557b18bc68a9422ed463ad6434ab32f4ff8762f7328b018f10cd59fb335e6cc",
+        "created_at": "2026-10-08T12:34:44.325296+02:00"
+      },
+      "verdict": "confirmed",
+      "finding": "SEC-02"
+    },
+    {
+      "case": "forged audit event still passes chain verification",
+      "method": "GET",
+      "path": "/audit/verify",
+      "request": null,
+      "request_headers": {},
+      "status": 200,
+      "response": {
+        "bad_index": -1,
+        "entries": 7,
+        "valid": true
+      },
+      "verdict": "confirmed",
+      "finding": "SEC-02"
+    },
+    {
+      "case": "anonymous protocol registration with caller-selected delay",
+      "method": "POST",
+      "path": "/audit/protocol-changes",
+      "request": {
+        "change_ref": "security-change-217955ee-c665-9183-15b4-075bc0a18861",
+        "required_approval_refs": [
+          "audit",
+          "council"
+        ],
+        "delay_until": "2026-10-08T10:34:43.286244+00:00",
+        "visible_since": "2026-10-08T10:34:42.286244+00:00"
+      },
+      "request_headers": {},
+      "status": 201,
+      "response": {
+        "id": "424f9229-ff65-7d84-51a6-65a61e7b6e68",
+        "change_ref": "security-change-217955ee-c665-9183-15b4-075bc0a18861",
+        "required_approval_refs": [
+          "audit",
+          "council"
+        ],
+        "approvals": null,
+        "delay_until": "2026-10-08T12:34:43.286244+02:00",
+        "visible_since": "2026-10-08T12:34:42.286244+02:00",
+        "status": "pending",
+        "created_at": "2026-10-08T12:34:44.32943+02:00"
+      },
+      "verdict": "confirmed",
+      "finding": "SEC-02"
+    },
+    {
+      "case": "same actor fabricates audit approval",
+      "method": "POST",
+      "path": "/audit/protocol-changes/424f9229-ff65-7d84-51a6-65a61e7b6e68/approvals",
+      "request": {
+        "ref": "audit",
+        "approver_ref": "same-untrusted-person"
+      },
+      "request_headers": {},
+      "status": 201,
+      "response": {
+        "id": "424f9229-ff65-7d84-51a6-65a61e7b6e68",
+        "change_ref": "security-change-217955ee-c665-9183-15b4-075bc0a18861",
+        "required_approval_refs": [
+          "audit",
+          "council"
+        ],
+        "approvals": [
+          {
+            "ref": "audit",
+            "approver_ref": "same-untrusted-person",
+            "at": "2026-10-08T10:34:44.330031814Z"
+          }
+        ],
+        "delay_until": "2026-10-08T12:34:43.286244+02:00",
+        "visible_since": "2026-10-08T12:34:42.286244+02:00",
+        "status": "pending",
+        "created_at": "2026-10-08T12:34:44.32943+02:00"
+      },
+      "verdict": "confirmed",
+      "finding": "SEC-02"
+    },
+    {
+      "case": "same actor fabricates council approval",
+      "method": "POST",
+      "path": "/audit/protocol-changes/424f9229-ff65-7d84-51a6-65a61e7b6e68/approvals",
+      "request": {
+        "ref": "council",
+        "approver_ref": "same-untrusted-person"
+      },
+      "request_headers": {},
+      "status": 201,
+      "response": {
+        "id": "424f9229-ff65-7d84-51a6-65a61e7b6e68",
+        "change_ref": "security-change-217955ee-c665-9183-15b4-075bc0a18861",
+        "required_approval_refs": [
+          "audit",
+          "council"
+        ],
+        "approvals": [
+          {
+            "ref": "audit",
+            "approver_ref": "same-untrusted-person",
+            "at": "2026-10-08T10:34:44.330031814Z"
+          },
+          {
+            "ref": "council",
+            "approver_ref": "same-untrusted-person",
+            "at": "2026-10-08T10:34:44.330939445Z"
+          }
+        ],
+        "delay_until": "2026-10-08T12:34:43.286244+02:00",
+        "visible_since": "2026-10-08T12:34:42.286244+02:00",
+        "status": "pending",
+        "created_at": "2026-10-08T12:34:44.32943+02:00"
+      },
+      "verdict": "confirmed",
+      "finding": "SEC-02"
+    },
+    {
+      "case": "unilateral protocol release",
+      "method": "POST",
+      "path": "/audit/protocol-changes/424f9229-ff65-7d84-51a6-65a61e7b6e68/release",
+      "request": {},
+      "request_headers": {},
+      "status": 200,
+      "response": {
+        "id": "424f9229-ff65-7d84-51a6-65a61e7b6e68",
+        "change_ref": "security-change-217955ee-c665-9183-15b4-075bc0a18861",
+        "required_approval_refs": [
+          "audit",
+          "council"
+        ],
+        "approvals": [
+          {
+            "ref": "audit",
+            "approver_ref": "same-untrusted-person",
+            "at": "2026-10-08T10:34:44.330031814Z"
+          },
+          {
+            "ref": "council",
+            "approver_ref": "same-untrusted-person",
+            "at": "2026-10-08T10:34:44.330939445Z"
+          }
+        ],
+        "delay_until": "2026-10-08T12:34:43.286244+02:00",
+        "visible_since": "2026-10-08T12:34:42.286244+02:00",
+        "status": "released",
+        "created_at": "2026-10-08T12:34:44.32943+02:00",
+        "released_at": "2026-10-08T12:34:44.33164+02:00"
+      },
+      "verdict": "confirmed",
+      "finding": "SEC-02"
+    },
+    {
+      "case": "anonymous delegation impersonation",
+      "method": "POST",
+      "path": "/delegation/delegations",
+      "request": {
+        "delegator_id": "4986e9d0-37d2-4d54-a75f-71dbcf64c85b",
+        "delegate_id": "a56e984a-638e-4c41-af4b-3911f9caafc8",
+        "domain_id": "7eff7cdb-c19f-41df-b945-4f656205bf9f",
+        "expires_at": "2026-10-08T11:34:44.286244+00:00"
+      },
+      "request_headers": {},
+      "status": 201,
+      "response": {
+        "id": "2b8919f5-e27c-9ce2-543e-124a86d26e73",
+        "delegator_id": "4986e9d0-37d2-4d54-a75f-71dbcf64c85b",
+        "delegate_id": "a56e984a-638e-4c41-af4b-3911f9caafc8",
+        "domain_id": "7eff7cdb-c19f-41df-b945-4f656205bf9f",
+        "created_at": "2026-10-08T12:34:44.333948+02:00",
+        "expires_at": "2026-10-08T13:34:44.286244+02:00"
+      },
+      "verdict": "confirmed",
+      "finding": "SEC-03"
+    },
+    {
+      "case": "revocation without citizen header",
+      "method": "DELETE",
+      "path": "/delegation/delegations/2b8919f5-e27c-9ce2-543e-124a86d26e73",
+      "request": null,
+      "request_headers": {},
+      "status": 200,
+      "response": {
+        "id": "2b8919f5-e27c-9ce2-543e-124a86d26e73",
+        "delegator_id": "4986e9d0-37d2-4d54-a75f-71dbcf64c85b",
+        "delegate_id": "a56e984a-638e-4c41-af4b-3911f9caafc8",
+        "domain_id": "7eff7cdb-c19f-41df-b945-4f656205bf9f",
+        "created_at": "2026-10-08T12:34:44.333948+02:00",
+        "expires_at": "2026-10-08T13:34:44.286244+02:00",
+        "revoked_at": "2026-10-08T12:34:44.334436+02:00"
+      },
+      "verdict": "confirmed",
+      "finding": "SEC-03"
+    },
+    {
+      "case": "reject invalid auth /auth/login",
+      "method": "POST",
+      "path": "/auth/login",
+      "request": {
+        "citizen_id": "4986e9d0-37d2-4d54-a75f-71dbcf64c85b"
+      },
+      "request_headers": {
+        "Authorization": "[redacted bearer]"
+      },
+      "status": 401,
+      "response": {
+        "error": {
+          "code": "unauthorized",
+          "message": "unauthorized"
+        }
+      },
+      "verdict": "defended",
+      "finding": null
+    },
+    {
+      "case": "reject invalid auth /auth/factors",
+      "method": "POST",
+      "path": "/auth/factors",
+      "request": {
+        "citizen_id": "4986e9d0-37d2-4d54-a75f-71dbcf64c85b"
+      },
+      "request_headers": {
+        "Authorization": "[redacted bearer]"
+      },
+      "status": 401,
+      "response": {
+        "error": {
+          "code": "unauthorized",
+          "message": "unauthorized"
+        }
+      },
+      "verdict": "defended",
+      "finding": null
+    },
+    {
+      "case": "reject invalid auth /auth/stepup",
+      "method": "POST",
+      "path": "/auth/stepup",
+      "request": {
+        "citizen_id": "4986e9d0-37d2-4d54-a75f-71dbcf64c85b"
+      },
+      "request_headers": {
+        "Authorization": "[redacted bearer]"
+      },
+      "status": 401,
+      "response": {
+        "error": {
+          "code": "unauthorized",
+          "message": "unauthorized"
+        }
+      },
+      "verdict": "defended",
+      "finding": null
+    },
+    {
+      "case": "reject invalid auth /auth/identities/provision",
+      "method": "POST",
+      "path": "/auth/identities/provision",
+      "request": {
+        "citizen_id": "4986e9d0-37d2-4d54-a75f-71dbcf64c85b"
+      },
+      "request_headers": {
+        "Authorization": "[redacted bearer]"
+      },
+      "status": 401,
+      "response": {
+        "error": {
+          "code": "unauthorized",
+          "message": "unauthorized"
+        }
+      },
+      "verdict": "defended",
+      "finding": null
+    },
+    {
+      "case": "reject invalid auth /auth/revoke-all",
+      "method": "POST",
+      "path": "/auth/revoke-all",
+      "request": {
+        "citizen_id": "4986e9d0-37d2-4d54-a75f-71dbcf64c85b"
+      },
+      "request_headers": {
+        "Authorization": "[redacted bearer]"
+      },
+      "status": 401,
+      "response": {
+        "error": {
+          "code": "unauthorized",
+          "message": "unauthorized"
+        }
+      },
+      "verdict": "defended",
+      "finding": null
+    },
+    {
+      "case": "reject invalid auth /auth/passkeys/registration/begin",
+      "method": "POST",
+      "path": "/auth/passkeys/registration/begin",
+      "request": {
+        "citizen_id": "4986e9d0-37d2-4d54-a75f-71dbcf64c85b"
+      },
+      "request_headers": {
+        "Authorization": "[redacted bearer]"
+      },
+      "status": 401,
+      "response": {
+        "error": {
+          "code": "unauthorized",
+          "message": "unauthorized"
+        }
+      },
+      "verdict": "defended",
+      "finding": null
+    },
+    {
+      "case": "reject invalid auth /auth/passkeys/login/finish",
+      "method": "POST",
+      "path": "/auth/passkeys/login/finish",
+      "request": {
+        "citizen_id": "4986e9d0-37d2-4d54-a75f-71dbcf64c85b"
+      },
+      "request_headers": {
+        "Authorization": "[redacted bearer]"
+      },
+      "status": 401,
+      "response": {
+        "error": {
+          "code": "unauthorized",
+          "message": "unauthorized"
+        }
+      },
+      "verdict": "defended",
+      "finding": null
+    },
+    {
+      "case": "reject invalid auth /auth/refresh",
+      "method": "POST",
+      "path": "/auth/refresh",
+      "request": {
+        "citizen_id": "4986e9d0-37d2-4d54-a75f-71dbcf64c85b"
+      },
+      "request_headers": {
+        "Authorization": "[redacted bearer]"
+      },
+      "status": 401,
+      "response": {
+        "error": {
+          "code": "unauthorized",
+          "message": "unauthorized"
+        }
+      },
+      "verdict": "defended",
+      "finding": null
+    },
+    {
+      "case": "reject invalid auth /auth/logout",
+      "method": "POST",
+      "path": "/auth/logout",
+      "request": {
+        "citizen_id": "4986e9d0-37d2-4d54-a75f-71dbcf64c85b"
+      },
+      "request_headers": {
+        "Authorization": "[redacted bearer]"
+      },
+      "status": 404,
+      "response": {
+        "error": {
+          "code": "not_found",
+          "message": "not found"
+        }
+      },
+      "verdict": "defended",
+      "finding": null
+    },
+    {
+      "case": "reject invalid auth /auth/validate",
+      "method": "GET",
+      "path": "/auth/validate",
+      "request": null,
+      "request_headers": {},
+      "status": 401,
+      "response": {
+        "error": {
+          "code": "unauthorized",
+          "message": "unauthorized"
+        }
+      },
+      "verdict": "defended",
+      "finding": null
+    },
+    {
+      "case": "reject invalid auth /auth/events",
+      "method": "GET",
+      "path": "/auth/events",
+      "request": null,
+      "request_headers": {},
+      "status": 401,
+      "response": {
+        "error": {
+          "code": "unauthorized",
+          "message": "unauthorized"
+        }
+      },
+      "verdict": "defended",
+      "finding": null
+    },
+    {
+      "case": "valid signed internal control",
+      "method": "POST",
+      "path": "/auth/revoke-all",
+      "request": {
+        "citizen_id": "4986e9d0-37d2-4d54-a75f-71dbcf64c85b"
+      },
+      "request_headers": {
+        "X-DD-Service": "api-ts",
+        "X-DD-Timestamp": "1791455684",
+        "X-DD-Signature": "df881787226eee0e2832745904bafa697597575e1928494c8d9ea205a3dae97d"
+      },
+      "status": 200,
+      "response": {
+        "revoked": 0
+      },
+      "verdict": "defended",
+      "finding": null
+    },
+    {
+      "case": "signed internal request replay in timestamp window",
+      "method": "POST",
+      "path": "/auth/revoke-all",
+      "request": {
+        "citizen_id": "4986e9d0-37d2-4d54-a75f-71dbcf64c85b"
+      },
+      "request_headers": {
+        "X-DD-Service": "api-ts",
+        "X-DD-Timestamp": "1791455684",
+        "X-DD-Signature": "df881787226eee0e2832745904bafa697597575e1928494c8d9ea205a3dae97d"
+      },
+      "status": 200,
+      "response": {
+        "revoked": 0
+      },
+      "verdict": "confirmed",
+      "finding": "SEC-10"
+    },
+    {
+      "case": "TS approval rejects anonymous or spoofed citizen",
+      "method": "POST",
+      "path": "/governance-role/approvals",
+      "request": {
+        "actionRef": "security-check",
+        "approvalType": "audit_confirmation",
+        "decision": "approved"
+      },
+      "request_headers": {},
+      "status": 401,
+      "response": {
+        "message": "Missing valid bearer session",
+        "error": "Unauthorized",
+        "statusCode": 401
+      },
+      "verdict": "defended",
+      "finding": null
+    },
+    {
+      "case": "TS approval rejects anonymous or spoofed citizen",
+      "method": "POST",
+      "path": "/governance-role/approvals",
+      "request": {
+        "actionRef": "security-check",
+        "approvalType": "audit_confirmation",
+        "decision": "approved"
+      },
+      "request_headers": {
+        "X-Citizen-ID": "d8cc17e0-1790-4d50-a9cc-2d72732b21eb"
+      },
+      "status": 401,
+      "response": {
+        "message": "Missing valid bearer session",
+        "error": "Unauthorized",
+        "statusCode": 401
+      },
+      "verdict": "defended",
+      "finding": null
+    },
+    {
+      "case": "TS approval rejects anonymous or spoofed citizen",
+      "method": "POST",
+      "path": "/governance-role/approvals",
+      "request": {
+        "actionRef": "security-check",
+        "approvalType": "audit_confirmation",
+        "decision": "approved"
+      },
+      "request_headers": {
+        "Authorization": "[redacted bearer]"
+      },
+      "status": 401,
+      "response": {
+        "error": {
+          "code": "unauthorized",
+          "message": "Invalid or expired bearer token"
+        }
+      },
+      "verdict": "defended",
+      "finding": null
+    },
+    {
+      "case": "TS accepts T1 governance approval (validator fixture)",
+      "method": "POST",
+      "path": "/governance-role/approvals",
+      "request": {
+        "actionRef": "security-assurance-T1",
+        "approvalType": "audit_confirmation",
+        "decision": "approved"
+      },
+      "request_headers": {
+        "Authorization": "[redacted bearer]"
+      },
+      "status": 201,
+      "response": {
+        "id": "f9862228-d0c4-4eb0-beb0-aae465a7829f",
+        "actionRef": "security-assurance-T1",
+        "approverRoleId": "1176a525-36c7-42d4-826e-f6fbd1a0019c",
+        "approvalType": "audit_confirmation",
+        "decision": "approved",
+        "createdAt": "2026-10-08T10:34:45.382Z"
+      },
+      "verdict": "confirmed",
+      "finding": "SEC-04"
+    },
+    {
+      "case": "TS accepts T2 governance approval (validator fixture)",
+      "method": "POST",
+      "path": "/governance-role/approvals",
+      "request": {
+        "actionRef": "security-assurance-T2",
+        "approvalType": "audit_confirmation",
+        "decision": "approved"
+      },
+      "request_headers": {
+        "Authorization": "[redacted bearer]"
+      },
+      "status": 201,
+      "response": {
+        "id": "54280fe6-f6b7-4c13-819c-f437e8c44dab",
+        "actionRef": "security-assurance-T2",
+        "approverRoleId": "1176a525-36c7-42d4-826e-f6fbd1a0019c",
+        "approvalType": "audit_confirmation",
+        "decision": "approved",
+        "createdAt": "2026-10-08T10:34:45.396Z"
+      },
+      "verdict": "confirmed",
+      "finding": "SEC-04"
+    },
+    {
+      "case": "synthetic pending registration a",
+      "method": "POST",
+      "path": "/identity/citizens",
+      "request": {
+        "publicHandle": "security-near-d8cc17e0a",
+        "legalIdentifier": "72dd31bd-a801-4591-a8b5-1d01da0b827e"
+      },
+      "request_headers": {},
+      "status": 201,
+      "response": {
+        "id": "ee1dd468-ea7f-43b1-9803-3c69e2734434",
+        "publicHandle": "security-near-d8cc17e0a",
+        "citizenshipStatus": "citizen",
+        "legalIdentityHash": "892edb1fe5eb266602c38ed9cbc2d7496f62fe68515916ddce15332228161ae6",
+        "status": "pending",
+        "createdAt": "2026-10-08T10:34:45.411Z"
+      },
+      "verdict": "defended",
+      "finding": null
+    },
+    {
+      "case": "synthetic pending registration b",
+      "method": "POST",
+      "path": "/identity/citizens",
+      "request": {
+        "publicHandle": "security-near-d8cc17e0b",
+        "legalIdentifier": "59fb58d4-873f-42cd-89d6-beb6ecacfba9"
+      },
+      "request_headers": {},
+      "status": 201,
+      "response": {
+        "id": "78fbcd70-8a63-4f2b-86a6-f07d8039c355",
+        "publicHandle": "security-near-d8cc17e0b",
+        "citizenshipStatus": "citizen",
+        "legalIdentityHash": "733a0e9ba6a597735b31561dfec0b1f7204808c026de7e83e4765419505d5cc9",
+        "status": "pending",
+        "createdAt": "2026-10-08T10:34:45.415Z"
+      },
+      "verdict": "defended",
+      "finding": null
+    },
+    {
+      "case": "anonymous worker duplicate scan exposes pending identities",
+      "method": "GET",
+      "path": "/identity/duplicates/scan",
+      "request": null,
+      "request_headers": {},
+      "status": 200,
+      "response": [
+        {
+          "citizenIdA": "f8df88f6-597d-4027-a16c-0e690092dcc8",
+          "citizenIdB": "0efaec7d-0b5c-4969-8dd3-4cfbabc254c9",
+          "distance": 1
+        },
+        {
+          "citizenIdA": "ee1dd468-ea7f-43b1-9803-3c69e2734434",
+          "citizenIdB": "78fbcd70-8a63-4f2b-86a6-f07d8039c355",
+          "distance": 1
+        }
+      ],
+      "verdict": "confirmed",
+      "finding": "SEC-05"
+    },
+    {
+      "case": "anonymous registration burst worker query",
+      "method": "GET",
+      "path": "/identity/registrations/burst-check",
+      "request": null,
+      "request_headers": {},
+      "status": 200,
+      "response": {
+        "windowStart": "2026-10-08T09:34:45.420Z",
+        "count": 7,
+        "anomalous": false
+      },
+      "verdict": "confirmed",
+      "finding": "SEC-05"
+    },
+    {
+      "case": "reject unsigned verifier callback",
+      "method": "POST",
+      "path": "/identity/citizens/ee1dd468-ea7f-43b1-9803-3c69e2734434/verifications",
+      "request": {
+        "method": "national_id",
+        "evidenceRef": "synthetic",
+        "outcome": "verified"
+      },
+      "request_headers": {},
+      "status": 401,
+      "response": {
+        "message": "Authenticated identity verifier required",
+        "error": "Unauthorized",
+        "statusCode": 401
+      },
+      "verdict": "defended",
+      "finding": null
+    },
+    {
+      "case": "reject anonymous own-identity read",
+      "method": "GET",
+      "path": "/identity/citizens/ee1dd468-ea7f-43b1-9803-3c69e2734434",
+      "request": null,
+      "request_headers": {},
+      "status": 401,
+      "response": {
+        "message": "Missing valid bearer session",
+        "error": "Unauthorized",
+        "statusCode": 401
+      },
+      "verdict": "defended",
+      "finding": null
+    },
+    {
+      "case": "reject extra registration field",
+      "method": "POST",
+      "path": "/identity/citizens",
+      "request": {
+        "publicHandle": "security-extra",
+        "legalIdentifier": "b0fab7b7-cef4-4e6a-a35e-420bdeda6ca1",
+        "status": "active"
+      },
+      "request_headers": {},
+      "status": 400,
+      "response": {
+        "message": [
+          "property status should not exist"
+        ],
+        "error": "Bad Request",
+        "statusCode": 400
+      },
+      "verdict": "defended",
+      "finding": null
+    },
+    {
+      "case": "reputation direct write route absent",
+      "method": "POST",
+      "path": "/reputation/records",
+      "request": {},
+      "request_headers": {},
+      "status": 404,
+      "response": {
+        "message": "Cannot POST /reputation/records",
+        "error": "Not Found",
+        "statusCode": 404
+      },
+      "verdict": "defended",
+      "finding": null
+    }
+  ]
+}

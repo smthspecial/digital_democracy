@@ -1,0 +1,21 @@
+{
+  "checks": [
+    {
+      "case": "rollback preserves earlier ceremony delete grant",
+      "passed": true
+    },
+    {
+      "case": "rollback removes new session delete grant",
+      "passed": true
+    },
+    {
+      "case": "reapply restores session delete grant",
+      "passed": true
+    },
+    {
+      "case": "baseline factor update grant preserved",
+      "passed": true
+    }
+  ],
+  "passed": 4
+}

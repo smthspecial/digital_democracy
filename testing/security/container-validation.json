@@ -1,0 +1,43 @@
+{
+  "builds": [
+    "api-go",
+    "api-ts",
+    "web"
+  ],
+  "checks": [
+    {
+      "case": "api-go container health",
+      "passed": true
+    },
+    {
+      "case": "api-go non-root container",
+      "passed": true
+    },
+    {
+      "case": "api-go denies anonymous internal operation",
+      "passed": true
+    },
+    {
+      "case": "api-ts container health",
+      "passed": true
+    },
+    {
+      "case": "api-ts non-root container",
+      "passed": true
+    },
+    {
+      "case": "api-ts denies anonymous internal operation",
+      "passed": true
+    },
+    {
+      "case": "web container health",
+      "passed": true
+    },
+    {
+      "case": "web non-root container",
+      "passed": true
+    }
+  ],
+  "passed": 8,
+  "imageAdvisoryScan": false
+}

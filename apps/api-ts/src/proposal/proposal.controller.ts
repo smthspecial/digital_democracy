@@ -10,6 +10,7 @@ import { FileScopeChallengeDto } from "./dto/file-scope-challenge.dto.js";
 import { ResolveScopeChallengeDto } from "./dto/resolve-scope-challenge.dto.js";
 import { DeadlockService } from "./deadlock.service.js";
 import { ProposalService } from "./proposal.service.js";
+import { ProposalDetailsDto } from "./dto/proposal-details.dto.js";
 
 // Route prefix per ADR-027 (one prefix per hosted service); resource paths
 // realize each DP doc's literal trigger with the leading slash stripped.
@@ -25,6 +26,11 @@ export class ProposalController {
   @HttpCode(HttpStatus.CREATED)
   create(@RequiredCitizenId() citizenId: string, @Body() dto: CreateProposalDto) {
     return this.proposal.create(citizenId, dto);
+  }
+
+  @Post("proposals/:id/details")
+  updateDetails(@Param("id") id: string, @RequiredCitizenId() citizenId: string, @Body() dto: ProposalDetailsDto) {
+    return this.proposal.updateDetails(citizenId, id, dto);
   }
 
   // FR-018: competing proposals on the same problem, presented side by
@@ -81,7 +87,7 @@ export class ProposalController {
   @Post("scope-challenges/:id/resolve")
   resolveScopeChallenge(
     @Param("id") id: string,
-    @RequiredCitizenId() reviewerId: string,
+    @RequiredCitizenId("T3") reviewerId: string,
     @Body() dto: ResolveScopeChallengeDto,
   ) {
     return this.proposal.resolveScopeChallenge(reviewerId, id, dto.outcome, dto.resolution);
@@ -89,7 +95,7 @@ export class ProposalController {
 
   // ADR-038 D10/E2-05. Gated on an active review_body role.
   @Post("proposals/:id/scope")
-  assignScope(@Param("id") id: string, @RequiredCitizenId() reviewerId: string, @Body() dto: AssignScopeDto) {
+  assignScope(@Param("id") id: string, @RequiredCitizenId("T3") reviewerId: string, @Body() dto: AssignScopeDto) {
     return this.proposal.assignScope(reviewerId, id, dto.jurisdictionId, dto.rationale);
   }
 
@@ -104,17 +110,17 @@ export class ProposalController {
   // FR-034/ADR-036 D35/E5-13..15. Reviewer-gated (proposal_review assignment).
   @Post("proposals/:id/deadlock/enter")
   @HttpCode(HttpStatus.CREATED)
-  enterDeadlock(@Param("id") id: string, @RequiredCitizenId() reviewerId: string, @Body() dto: DeadlockStepDto) {
+  enterDeadlock(@Param("id") id: string, @RequiredCitizenId("T3") reviewerId: string, @Body() dto: DeadlockStepDto) {
     return this.deadlock.enter(reviewerId, id, dto.notes);
   }
 
   @Post("proposals/:id/deadlock/advance")
-  advanceDeadlock(@Param("id") id: string, @RequiredCitizenId() reviewerId: string, @Body() dto: DeadlockStepDto) {
+  advanceDeadlock(@Param("id") id: string, @RequiredCitizenId("T3") reviewerId: string, @Body() dto: DeadlockStepDto) {
     return this.deadlock.advance(reviewerId, id, dto.notes);
   }
 
   @Post("proposals/:id/deadlock/conclude")
-  concludeDeadlock(@Param("id") id: string, @RequiredCitizenId() reviewerId: string, @Body() dto: DeadlockConcludeDto) {
+  concludeDeadlock(@Param("id") id: string, @RequiredCitizenId("T3") reviewerId: string, @Body() dto: DeadlockConcludeDto) {
     return this.deadlock.conclude(reviewerId, id, dto.outcome, dto.notes);
   }
 

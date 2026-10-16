@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"strings"
 	"time"
 
 	"github.com/digital-democracy/api-go/internal/metrics"
@@ -22,6 +23,7 @@ func (noopNotifier) Notify(string, string, string) error { return nil }
 // never hidden as zero values.
 type Store interface {
 	Append(actionType, actorRef, payload, idempotencyKey string) (*AuditEntry, error)
+	PublicKey() string
 	GetEntry(id string) (*AuditEntry, error)
 	ListEntries(limit int) ([]*AuditEntry, error)
 	Count() (int, error)
@@ -61,7 +63,7 @@ func (s *Service) Append(actionType, actorRef, payload, idempotencyKey string) (
 	if !ok {
 		return nil, ErrInvalid
 	}
-	if actorRef == "" {
+	if actorRef == "" || len(actorRef) > 256 || len(payload) > 8192 || len(idempotencyKey) > 256 || actionType == "ballot_cast" || strings.Contains(strings.ToLower(payload), "ballot_selection:") || strings.Contains(strings.ToLower(payload), "encrypted_choice") || strings.Contains(strings.ToLower(payload), "token_blind") {
 		return nil, ErrInvalid
 	}
 	e, err := s.store.Append(normalized, actorRef, payload, idempotencyKey)
@@ -91,6 +93,9 @@ func (s *Service) TriggerReview(in ReviewTrigger) ([]*ConstitutionalReview, bool
 	rights, err := s.store.ListRights()
 	if err != nil {
 		return nil, false, err
+	}
+	if len(rights) > 1000 {
+		return nil, false, ErrInvalidState("constitutional review requires offline job")
 	}
 	var out []*ConstitutionalReview
 	blocked := false
@@ -141,7 +146,7 @@ type RegisterChangeInput struct {
 // delay, and public visibility are confirmed before Release lets it execute.
 // No operator can activate unilaterally — release requires every condition.
 func (s *Service) RegisterChange(in RegisterChangeInput) (*ProtocolChange, error) {
-	if in.ChangeRef == "" || len(in.RequiredApprovals) == 0 {
+	if in.ChangeRef == "" || len(in.ChangeRef)>256 || len(in.RequiredApprovals) == 0 {
 		return nil, ErrInvalid
 	}
 	if in.DelayUntil.IsZero() || in.VisibleSince.IsZero() {

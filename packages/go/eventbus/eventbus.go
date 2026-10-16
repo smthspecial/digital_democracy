@@ -87,6 +87,8 @@ type AuditEvent struct {
 	ActorRef   string    `json:"actor_ref"`
 	Payload    string    `json:"payload"`
 	OccurredAt time.Time `json:"occurred_at"`
+	Producer   string    `json:"producer"`
+	Signature  string    `json:"signature"`
 }
 
 // NewAuditEventID mints a random event/idempotency id.
@@ -107,12 +109,12 @@ type Bus struct {
 // Connect dials NATS with production reconnect behavior: infinite
 // reconnects with backoff jitter, so a broker restart never kills a service.
 // Callers share one Bus per process (it is safe for concurrent use).
-func Connect(url string) (*Bus, error) {
-	nc, err := nats.Connect(url,
+func Connect(url string, extra ...nats.Option) (*Bus, error) {
+	options := []nats.Option{
 		nats.Name("digital-democracy"),
-		nats.Timeout(5*time.Second),
+		nats.Timeout(5 * time.Second),
 		nats.MaxReconnects(-1),
-		nats.ReconnectWait(2*time.Second),
+		nats.ReconnectWait(2 * time.Second),
 		nats.ReconnectJitter(500*time.Millisecond, 2*time.Second),
 		nats.DisconnectErrHandler(func(_ *nats.Conn, err error) {
 			if err != nil {
@@ -122,9 +124,11 @@ func Connect(url string) (*Bus, error) {
 		nats.ClosedHandler(func(_ *nats.Conn) {
 			fmt.Println("eventbus: connection closed")
 		}),
-	)
+	}
+	options = append(options, extra...)
+	nc, err := nats.Connect(url, options...)
 	if err != nil {
-		return nil, fmt.Errorf("eventbus: connect %s: %w", url, err)
+		return nil, fmt.Errorf("eventbus: connection failed: %w", err)
 	}
 	js, err := nc.JetStream(nats.PublishAsyncMaxPending(256))
 	if err != nil {

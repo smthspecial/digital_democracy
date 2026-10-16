@@ -1,3 +1,4 @@
+import { InternalServiceGuard } from "../common/internal-service.guard.js";
 import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, ParseUUIDPipe, Post, UseGuards, Header } from "@nestjs/common";
 import { RequiredCitizenId } from "../common/citizen-id.decorator.js";
 import { DuplicateDetectionService } from "./duplicate-detection.service.js";
@@ -34,7 +35,7 @@ export class IdentityController {
 
   // AUTH-010 identity:read:own -- scope "own".
   @Get("citizens/:id")
-  getById(@Param("id") id: string, @RequiredCitizenId() requesterId: string) {
+  getById(@Param("id") id: string, @RequiredCitizenId("T1") requesterId: string) {
     return this.identity.getOwn(id, requesterId);
   }
 
@@ -72,11 +73,13 @@ export class IdentityController {
 
   // FR-005 AC3/ADR-034 D6 (E1-13). Review-facing, not auto-acting.
   @Get("duplicates/scan")
+  @UseGuards(InternalServiceGuard)
   scanForDuplicateSignals() {
     return this.duplicateDetection.scanForDuplicateSignals();
   }
 
   @Get("registrations/burst-check")
+  @UseGuards(InternalServiceGuard)
   detectRegistrationBurst() {
     return this.duplicateDetection.detectRegistrationBurst();
   }

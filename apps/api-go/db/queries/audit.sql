@@ -28,7 +28,7 @@ VALUES ($1, $2, $3, $4)
 RETURNING *;
 
 -- name: ListConstitutionalRights :many
-SELECT * FROM constitutional_right ORDER BY id;
+SELECT * FROM constitutional_right ORDER BY id LIMIT 1001;
 
 -- name: InsertConstitutionalReview :one
 INSERT INTO constitutional_review (id, proposal_id, right_id, result, reviewer_ref)
@@ -36,10 +36,10 @@ VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
 -- name: ListReviewsByProposal :many
-SELECT * FROM constitutional_review WHERE proposal_id = $1 ORDER BY created_at, id;
+SELECT * FROM constitutional_review WHERE proposal_id = $1 ORDER BY created_at, id LIMIT 1000;
 
 -- name: ListAllReviews :many
-SELECT * FROM constitutional_review ORDER BY created_at, id;
+SELECT * FROM constitutional_review ORDER BY created_at, id LIMIT 1000;
 
 -- Protocol change gate (DP-043).
 
@@ -52,9 +52,9 @@ RETURNING *;
 SELECT * FROM protocol_change WHERE id = $1;
 
 -- name: ListProtocolChanges :many
-SELECT * FROM protocol_change ORDER BY created_at, id;
+SELECT * FROM protocol_change ORDER BY created_at, id LIMIT 1000;
 
 -- name: UpdateProtocolChange :one
 UPDATE protocol_change SET approvals = $2, status = $3, released_at = $4
-WHERE id = $1
+WHERE id = $1 AND status = 'pending'
 RETURNING *;

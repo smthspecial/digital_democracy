@@ -22,10 +22,13 @@ a citizen identifier is never sufficient to obtain a session.
 - Registration and login use server-stored WebAuthn ceremonies in Postgres (memory in isolated tests).
 - Only a verified assertion issues a session. T3 expires after five minutes; validation and refresh recheck active identity status.
 - Legacy MFA placeholders live only in `_test.go` fixtures; their HTTP endpoints reject calls.
+- Chromium WebAuthn integration harness exercises real handlers, replay rejection,
+  refresh cookies and logout against memory and Postgres (TP-015), including CI.
 
 ## Remaining validation
 
-- Migrated Postgres ceremony/persistence checks passed; validate a real browser/platform-authenticator ceremony next.
+- Browser/virtual-authenticator and migrated Postgres checks are covered by TP-015;
+  a real platform/hardware passkey on the pilot HTTPS origin still needs validation.
 - Connect a government credential or assisted verification adapter to the trusted callback and its secure grant delivery.
 
 See ADR-040 for the ownership and authorization boundaries.

@@ -1,0 +1,61 @@
+{{- if .Values.mesh.enabled }}
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  namespace: {{ .Release.Namespace }}
+  name: {{ include "service.fullname" . }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "service.selectorLabels" . | nindent 6 }}
+  mtls:
+    mode: STRICT
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  namespace: {{ .Release.Namespace }}
+  name: {{ include "service.fullname" . }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "service.selectorLabels" . | nindent 6 }}
+  action: ALLOW
+  rules:
+    {{- range .Values.allowedIngress }}
+    - from:
+        - source:
+            principals:
+              - "cluster.local/ns/{{ .namespace }}/sa/{{ .name }}"
+      to:
+        - operation:
+            ports: [{{ $.Values.port | quote }}]
+            {{- if .publicGateway }}
+            methods: ["GET"]
+            {{- if $.Values.internalReadPaths }}
+            notPaths: {{ $.Values.internalReadPaths | toJson }}
+            {{- end }}
+            {{- else }}
+      when:
+        - key: request.headers[x-dd-service]
+          values: [{{ .name | quote }}]
+            {{- end }}
+    {{- else }}
+    []
+    {{- end }}
+    {{- range .Values.allowedIngress }}
+    {{- if .publicGateway }}
+    {{- range $.Values.publicMutations }}
+    - from:
+        - source:
+            principals: ["cluster.local/ns/{{ $.Values.gatewayNamespace }}/sa/{{ $.Values.gatewayServiceAccount }}"]
+      to:
+        - operation:
+            ports: [{{ $.Values.port | quote }}]
+            methods: [{{ .method | quote }}]
+            paths: {{ .paths | toJson }}
+    {{- end }}
+    {{- end }}
+    {{- end }}
+
+{{- end }}

@@ -29,6 +29,10 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit() {
     await Promise.all([this.app.$connect(), this.worker.$connect()]);
+    for (const connection of [this.app, this.worker]) {
+      const roles = await connection.$queryRaw<Array<{ privileged: boolean }>>`SELECT rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb AS privileged FROM pg_roles WHERE rolname=current_user`;
+      if (roles.length !== 1 || roles[0].privileged) throw new Error("Runtime database roles must not bypass RLS or administer the database");
+    }
   }
 
   async onModuleDestroy() {

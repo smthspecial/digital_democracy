@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Client } from "pg";
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ConflictDomainError, ForbiddenDomainError } from "../common/domain-errors.js";
 import type { CitizenStatusChecker } from "../identity/citizen-status.port.js";
 import { PrismaService } from "../prisma/prisma.service.js";
@@ -111,8 +111,54 @@ describe.skipIf(!urls)("GovernanceRoleService (Postgres, RLS-enforced)", () => {
     svc = new GovernanceRoleService(prisma, citizenStatus, audit);
   });
 
-  afterAll(async () => {
+  afterEach(async () => {
     await prisma?.onModuleDestroy();
+  });
+
+  describe("authoritative protocol approvals", () => {
+    async function seedProtocolApprovals() {
+      const third = randomUUID();
+      await insertCitizen(third, "protocol-third");
+      const citizens = [CITIZEN, OTHER, third];
+      const layers = ["citizen", "audit", "protocol"];
+      const roleTypes = ["reviewer", "auditor", "review_body"];
+      const types = ["citizen_supermajority", "audit_confirmation", "body_endorsement"];
+      const roles: string[] = [];
+      for (let i = 0; i < 3; i++) {
+        const role = await seedRole(citizens[i], { layer: layers[i], roleType: roleTypes[i] });
+        roles.push(role);
+        await withAdmin(async (client) => {
+          await client.query("UPDATE citizen SET status='active' WHERE id=$1", [citizens[i]]);
+          await client.query("INSERT INTO approval(action_ref,approver_role_id,approval_type,decision) VALUES('protocol-fixture',$1,$2,'approved')", [role, types[i]]);
+        });
+      }
+      return { citizens, roles };
+    }
+
+    it("returns three current independent approvals from the database", async () => {
+      const { citizens } = await seedProtocolApprovals();
+      expect((await svc.protocolApprovals("protocol-fixture")).map((a) => a.approver_ref)).toEqual(citizens);
+      await expect(svc.protocolApprovals("forged-action")).rejects.toBeInstanceOf(ForbiddenDomainError);
+    });
+
+    it("rejects one citizen or one role type supplying multiple approval types", async () => {
+      const { citizens, roles } = await seedProtocolApprovals();
+      await withAdmin((client) => client.query("UPDATE governance_role SET citizen_id=$1 WHERE id=$2", [citizens[0], roles[1]]));
+      await expect(svc.protocolApprovals("protocol-fixture")).rejects.toBeInstanceOf(ForbiddenDomainError);
+      await withAdmin((client) => client.query("UPDATE governance_role SET citizen_id=$1,role_type='reviewer' WHERE id=$2", [citizens[1], roles[1]]));
+      await expect(svc.protocolApprovals("protocol-fixture")).rejects.toBeInstanceOf(ForbiddenDomainError);
+    });
+
+    it("rejects inactive citizens and expired roles at release time", async () => {
+      const { citizens, roles } = await seedProtocolApprovals();
+      await withAdmin((client) => client.query("UPDATE citizen SET status='pending' WHERE id=$1", [citizens[0]]));
+      await expect(svc.protocolApprovals("protocol-fixture")).rejects.toBeInstanceOf(ForbiddenDomainError);
+      await withAdmin(async (client) => {
+        await client.query("UPDATE citizen SET status='active' WHERE id=$1", [citizens[0]]);
+        await client.query("UPDATE governance_role SET term_end=CURRENT_DATE-1 WHERE id=$1", [roles[0]]);
+      });
+      await expect(svc.protocolApprovals("protocol-fixture")).rejects.toBeInstanceOf(ForbiddenDomainError);
+    });
   });
 
   // DP-023: approval:submit -- AUTH-010's approval:submit:operator/:council

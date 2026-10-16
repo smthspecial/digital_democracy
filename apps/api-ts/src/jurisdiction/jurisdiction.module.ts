@@ -1,3 +1,4 @@
+import { InternalServiceGuard, SignedRequestVerifier } from "../common/internal-service.guard.js";
 import { Module } from "@nestjs/common";
 import { AUDIT_EMITTER, HttpAuditEmitter } from "../common/audit-emitter.js";
 import { GovernanceRoleModule } from "../governance-role/governance-role.module.js";
@@ -14,7 +15,7 @@ import { JurisdictionService } from "./jurisdiction.service.js";
 @Module({
   imports: [PrismaModule, GovernanceRoleModule],
   controllers: [JurisdictionController],
-  providers: [
+  providers: [InternalServiceGuard, SignedRequestVerifier,
     JurisdictionService,
     { provide: AUDIT_EMITTER, useClass: HttpAuditEmitter },
     { provide: JURISDICTION_MEMBERSHIP_CHECKER, useExisting: JurisdictionService },

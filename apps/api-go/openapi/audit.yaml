@@ -4,65 +4,176 @@ info:
   version: 0.1.0
   description: SRV-012 — append-only audit log + constitutional review. See .spec/technical/services/srv-012.md.
 servers:
-  - url: http://localhost:5000
+- url: http://localhost:5000
 paths:
   /healthz:
-    get: { summary: Liveness probe, responses: { '200': { description: OK } } }
+    get:
+      summary: Liveness probe
+      responses:
+        '200':
+          description: OK
   /readyz:
-    get: { summary: Readiness probe, responses: { '200': { description: OK } } }
+    get:
+      summary: Readiness probe
+      responses:
+        '200':
+          description: OK
   /audit/log:
     post:
       summary: DP-036 append one entry (idempotent on idempotency_key)
-      responses: { '201': { description: Created } }
+      responses:
+        '201':
+          description: Created
+        '401':
+          description: Authentication required
+      security:
+      - SignedService: []
     get:
       summary: Read the public log, append order (T1-public, FR-066 multi-reader)
       parameters:
-        - { name: limit, in: query, schema: { type: integer, minimum: 0 } }
-      responses: { '200': { description: OK } }
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 0
+      responses:
+        '200':
+          description: OK
   /audit/log/{id}:
     get:
       summary: Get one entry
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string } }
-      responses: { '200': { description: OK }, '404': { description: Not found } }
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+        '404':
+          description: Not found
   /audit/verify:
     get:
       summary: Hash-chain integrity check (gap detection)
-      responses: { '200': { description: OK } }
+      responses:
+        '200':
+          description: OK
   /audit/rights:
     post:
       summary: Register a constitutional right (worker/admin)
-      responses: { '201': { description: Created } }
+      responses:
+        '201':
+          description: Created
+        '401':
+          description: Authentication required
+      security:
+      - SignedService: []
     get:
       summary: List rights
-      responses: { '200': { description: OK } }
+      responses:
+        '200':
+          description: OK
   /audit/reviews:
     post:
       summary: DP-034 constitutional review trigger (blocked ⇒ no vote session)
-      responses: { '201': { description: Created } }
+      responses:
+        '201':
+          description: Created
+        '401':
+          description: Authentication required
+      security:
+      - SignedService: []
     get:
       summary: List reviews, optionally filtered by proposal
       parameters:
-        - { name: proposal_id, in: query, schema: { type: string } }
-      responses: { '200': { description: OK } }
+      - name: proposal_id
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
   /audit/protocol-changes:
     post:
       summary: DP-043 register a protocol change gate (approvals + delay + visibility)
-      responses: { '201': { description: Created } }
+      responses:
+        '201':
+          description: Created
+        '401':
+          description: Authentication required
+      security:
+      - SignedService: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+              - change_ref
+              properties:
+                change_ref:
+                  type: string
+                  maxLength: 256
     get:
       summary: List protocol changes (publicly visible through the delay)
-      responses: { '200': { description: OK } }
+      responses:
+        '200':
+          description: OK
   /audit/protocol-changes/{id}:
     get:
       summary: Get a protocol change gate
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string } }
-      responses: { '200': { description: OK }, '404': { description: Not found } }
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+        '404':
+          description: Not found
   /audit/protocol-changes/{id}/approvals:
     post:
-      summary: Record one independent approval (duplicate refs rejected)
-      responses: { '201': { description: Created }, '409': { description: Duplicate } }
+      summary: Caller-recorded approvals are rejected; release resolves authoritative
+        approvals
+      responses:
+        '403':
+          description: Authoritative approvals required
+      security:
+      - SignedService: []
+      deprecated: true
   /audit/protocol-changes/{id}/release:
     post:
       summary: DP-043 release (all approvals + delay elapsed + visible; exactly once)
-      responses: { '200': { description: OK }, '422': { description: Gate unmet } }
+      responses:
+        '200':
+          description: OK
+        '422':
+          description: Gate unmet
+        '401':
+          description: Authentication required
+      security:
+      - SignedService: []
+  /audit/signing-key:
+    get:
+      summary: Ed25519 audit public key (base64url)
+      responses:
+        '200':
+          description: Public key
+components:
+  securitySchemes:
+    SignedService:
+      type: apiKey
+      in: header
+      name: X-DD-Signature
+      description: 'ADR-041: nonce-bearing producer-bound HMAC of service, method,
+        path+query, timestamp, nonce and SHA256(body). X-DD-Service, X-DD-Timestamp
+        and X-DD-Nonce are also required.'
+    CitizenBearer:
+      type: http
+      scheme: bearer
+      description: Validated citizen session; assurance and ownership are enforced.

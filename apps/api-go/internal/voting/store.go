@@ -73,6 +73,9 @@ func (st *MemoryStore) ListSessions() ([]*VoteSession, error) {
 	out := make([]*VoteSession, 0, len(st.sessions))
 	for _, s := range st.sessions {
 		out = append(out, copySession(s))
+		if len(out) >= 1000 {
+			break
+		}
 	}
 	return out, nil
 }
@@ -85,6 +88,10 @@ func (st *MemoryStore) UpdateSessionStatus(id, status string) (*VoteSession, err
 	if !ok {
 		return nil, ErrNotFound
 	}
+	now := time.Now()
+	if (status == SessionOpen && (s.Status != SessionScheduled || now.Before(s.OpensAt) || now.Before(s.CoolingOffUntil) || !now.Before(s.ClosesAt))) || (status == SessionClosed && s.Status != SessionOpen) || (status == SessionCertified && s.Status != SessionClosed) {
+		return nil, ErrInvalidState
+	}
 	s.Status = status
 	return copySession(s), nil
 }
@@ -96,13 +103,25 @@ func (st *MemoryStore) SetTally(id string, tally *TallyResult) (*VoteSession, er
 	if !ok {
 		return nil, ErrNotFound
 	}
-	s.TallyResult = tally
+	if s.Status != SessionClosed && s.Status != SessionCertified {
+		return nil, ErrInvalidState
+	}
+	if s.TallyResult == nil {
+		s.TallyResult = tally
+	}
 	return copySession(s), nil
 }
 
 func (st *MemoryStore) AddOption(o *VoteOption) (*VoteOption, error) {
 	st.mu.Lock()
 	defer st.mu.Unlock()
+	session := st.sessions[o.SessionID]
+	if session == nil || session.Status != SessionScheduled {
+		return nil, ErrInvalidState
+	}
+	if len(o.Label) > 256 || len(o.Description) > 4096 {
+		return nil, ErrInvalid
+	}
 	o.ID = newID()
 	st.options[o.ID] = o
 	st.optionsBySession[o.SessionID] = append(st.optionsBySession[o.SessionID], o.ID)
@@ -172,12 +191,19 @@ func (st *MemoryStore) CountTokens(sessionID string) (int, error) {
 
 // CastBallot executes DP-016 atomically: verify token unused and bound to
 // the session, write the ballot (no citizen_id), mark token used.
-func (st *MemoryStore) CastBallot(sessionID, tokenID, tokenBlind, encryptedChoice string) (*Ballot, *EligibilityToken, error) {
+func (st *MemoryStore) CastBallot(sessionID, tokenID, tokenBlind, encryptedChoice string, citizenIDs ...string) (*Ballot, *EligibilityToken, error) {
 	st.mu.Lock()
 	defer st.mu.Unlock()
+	session := st.sessions[sessionID]
+	if session == nil || session.Status != SessionOpen || !time.Now().Before(session.ClosesAt) || time.Now().Before(session.OpensAt) {
+		return nil, nil, ErrInvalidState
+	}
 	t, ok := st.tokens[tokenID]
 	if !ok || t.SessionID != sessionID {
 		return nil, nil, ErrNotFound
+	}
+	if len(citizenIDs) > 0 && t.CitizenID != citizenIDs[0] {
+		return nil, nil, ErrInvalid
 	}
 	if t.Used {
 		return nil, nil, ErrConflict
@@ -189,7 +215,7 @@ func (st *MemoryStore) CastBallot(sessionID, tokenID, tokenBlind, encryptedChoic
 	b := &Ballot{
 		ID:               newID(),
 		SessionID:        sessionID,
-		TokenBlind:       tokenBlind,
+		TokenBlind:       newToken(),
 		EncryptedChoice:  encryptedChoice,
 		VerificationCode: newToken(),
 		CastAt:           time.Now().UTC(),

@@ -1,0 +1,35 @@
+{
+  "date": "2026-10-08",
+  "commit": "24765a0cd2c32aabbcae55c0272cf754142a6689",
+  "working_tree_included": true,
+  "go": {
+    "passed": 77,
+    "browser_memory": "passed",
+    "browser_postgres": "passed",
+    "vet": "passed",
+    "nats": "audit consumer round-trip passed against spawned real server"
+  },
+  "ts": {
+    "passed": 429,
+    "files_passed": 35,
+    "skipped": 0
+  },
+  "memory": {
+    "cases": 33,
+    "verdicts": {
+      "confirmed": 19,
+      "defended": 14
+    }
+  },
+  "postgres": {
+    "cases": 46,
+    "verdicts": {
+      "confirmed": 23,
+      "defended": 23
+    }
+  },
+  "eventbus": {
+    "suite": "passed",
+    "nats": "spawned local test servers; ACL penetration not tested"
+  }
+}

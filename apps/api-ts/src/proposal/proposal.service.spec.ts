@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Client } from "pg";
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ForbiddenDomainError, InvalidStateDomainError, NotFoundDomainError } from "../common/domain-errors.js";
 import type { GovernanceRoleChecker } from "../governance-role/governance-role-checker.port.js";
 import type { CitizenStatusChecker } from "../identity/citizen-status.port.js";
@@ -114,7 +114,7 @@ describe.skipIf(!urls)("ProposalService (Postgres, RLS-enforced)", () => {
     await insertProblem(problemId, citizenId, jurisdictionId);
   });
 
-  afterAll(async () => {
+  afterEach(async () => {
     await prisma?.onModuleDestroy();
   });
 

@@ -2,7 +2,10 @@ package auth
 
 import (
 	"encoding/json"
+	"errors"
+	"github.com/digital-democracy/api-go/internal/security"
 	"github.com/go-webauthn/webauthn/webauthn"
+	"io"
 	"net/http"
 	"time"
 )
@@ -36,8 +39,19 @@ func writeErr(w http.ResponseWriter, err error) {
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 	defer r.Body.Close()
-	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(v); err != nil {
+		var sizeError *http.MaxBytesError
+		if errors.As(err, &sizeError) {
+			security.Error(w, 413, "payload_too_large")
+			return false
+		}
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": map[string]string{"code": "invalid_request", "message": "malformed JSON body"}})
+		return false
+	}
+	if decoder.Decode(new(any)) != io.EOF {
+		security.Error(w, 400, "invalid_request")
 		return false
 	}
 	return true
@@ -58,6 +72,7 @@ func setRefreshCookie(w http.ResponseWriter, refresh string, expires time.Time) 
 }
 
 type Handler struct {
+	replays              *security.ReplayStore
 	passkeys             *webauthn.WebAuthn
 	svc                  *Service
 	internalSharedSecret []byte

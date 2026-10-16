@@ -2,10 +2,12 @@
 # infra/helm/values/<name>.yaml overrides only what differs.
 
 name: ""
+releaseId: ""
 lang: "" # ts | go -- used only for labeling/image path convention
 image:
   repository: ""
   tag: "dev"
+  digest: "" # releases use sha256 digests, never mutable tags
   pullPolicy: IfNotPresent
 
 port: 8080 # every service listens on 8080 inside its container (README.md)
@@ -43,3 +45,23 @@ serviceAccount:
   create: true
 
 gatewayName: dd-gateway # the shared Gateway API Gateway resource this service's HTTPRoute attaches to
+
+# Explicit caller namespaces and pod identities; empty means deny ingress.
+allowedIngress:
+  - namespace: kube-system
+    name: traefik
+    publicGateway: true
+# - namespace: kube-system
+#   name: traefik
+
+envSecret: ""
+configEnv: {}
+secretVolumes: [] # mount workload-specific TLS material, never migration credentials
+mesh:
+  enabled: true
+allowedDependencies: []
+
+gatewayNamespace: kube-system
+gatewayServiceAccount: traefik
+publicMutations: []
+internalReadPaths: [] # signed worker reads must also be excluded from gateway GET access

@@ -1,0 +1,124 @@
+{
+  "date": "2026-10-08",
+  "recordedAt": "2026-10-08T14:36:25.790811+00:00",
+  "baselineCommit": "24765a0cd2c32aabbcae55c0272cf754142a6689",
+  "workingTreeIncluded": true,
+  "scope": "static review, bounded disposable local penetration tests and remediation; no production deployment",
+  "tickets": [
+    "BUG-005",
+    "BUG-006",
+    "BUG-007",
+    "BUG-008",
+    "BUG-009",
+    "BUG-010",
+    "BUG-011",
+    "BUG-012",
+    "BUG-013",
+    "BUG-014"
+  ],
+  "go": {
+    "passed": 93,
+    "failed": 0,
+    "skipped": 0,
+    "postgres": "passed",
+    "browserMemory": "passed",
+    "browserPostgres": "passed",
+    "nats": "passed",
+    "vet": "passed",
+    "toolchain": "1.27.1"
+  },
+  "typescript": {
+    "passed": 437,
+    "filesPassed": 37,
+    "failed": 0,
+    "skipped": 0,
+    "database": "real Postgres with restricted app/worker roles"
+  },
+  "workspace": {
+    "lint": "passed",
+    "typecheck": "passed",
+    "build": "passed",
+    "tasks": 8
+  },
+  "regressions": {
+    "regression-memory": {
+      "passed": 23,
+      "evidence": "regression-memory.json"
+    },
+    "regression-postgres": {
+      "passed": 27,
+      "evidence": "regression-postgres.json"
+    },
+    "regression-isolated-runtime": {
+      "passed": 23,
+      "evidence": "regression-isolated-runtime.json"
+    },
+    "infra-validation": {
+      "passed": 29,
+      "evidence": "infra-validation.json"
+    },
+    "database-isolation": {
+      "passed": 6,
+      "evidence": "database-isolation.json"
+    },
+    "migration-validation": {
+      "passed": 4,
+      "evidence": "migration-validation.json"
+    },
+    "container-validation": {
+      "passed": 8,
+      "evidence": "container-validation.json"
+    }
+  },
+  "dependencies": {
+    "patchExploitRegressions": 10,
+    "gate": "passed",
+    "rawPnpmAudit": {
+      "critical": 0,
+      "high": 2,
+      "moderate": 1,
+      "locallyPatchedAdvisories": 3,
+      "unmitigated": 0
+    },
+    "go": {
+      "reachable": 0,
+      "importedPackages": 0,
+      "unusedModuleNotices": 1
+    },
+    "evidence": [
+      "dependency-audits-after.json",
+      "govulncheck-after.txt"
+    ]
+  },
+  "containers": {
+    "built": [
+      "api-go",
+      "api-ts",
+      "web"
+    ],
+    "smokeChecks": 8,
+    "imageAdvisoryScan": false
+  },
+  "commands": [
+    "REQUIRE_DB_TESTS=1 REQUIRE_NATS_TESTS=1 REQUIRE_BROWSER_TESTS=1 TEST_DATABASE_URL=<disposable-admin-url> go test -count=1 -json ./apps/api-go/... ./packages/go/eventbus/...",
+    "go vet ./apps/api-go/... ./packages/go/eventbus/...",
+    "REQUIRE_DB_TESTS=1 TEST_TS_DATABASE_URL=<restricted-app-url> TEST_TS_WORKER_DATABASE_URL=<restricted-worker-url> TEST_TS_ADMIN_DATABASE_URL=<disposable-admin-url> pnpm --filter @dd/api-ts test",
+    "pnpm turbo run lint typecheck build",
+    "pnpm test:security-dependencies",
+    "govulncheck -show verbose ./... (application and eventbus modules)",
+    "python3 testing/security/regression.py --output <evidence> [disposable database flags]",
+    "python3 testing/security/infra-checks.py",
+    "podman build -t localhost/dd-security-<app>:20261008 -f apps/<app>/Dockerfile .",
+    "python3 testing/security/container-checks.py"
+  ],
+  "fixtureNotes": [
+    "Unit tests use ephemeral audit signing keys. Reset only disposable audit fixtures before stable-key penetration probes; legacy untrusted production signatures are never re-signed.",
+    "This machine requires SWC_NATIVE_BINDING_CACHE to be a private temporary directory (mode 0700); default cache permissions were rejected by the native addon."
+  ],
+  "limits": [
+    "Production ballot proof verification and threshold decryption require a real external cryptographic component; missing verification denies casting.",
+    "Production mesh/TLS/certificates and existing-volume credential migration remain operational prerequisites. Rendered manifests were tested; no live cluster was tested.",
+    "The three raw npm advisories are mitigated by pinned reproducible local patches, not upstream version fixes. One Go OpenPGP module notice concerns a package neither imported nor shipped.",
+    "No container-image advisory scan, physical passkey test, load/flood test or production probe was performed."
+  ]
+}

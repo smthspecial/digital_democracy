@@ -18,7 +18,7 @@ export class IamController {
   // active operator/platform_operator role.
   @Post("policies")
   @HttpCode(HttpStatus.CREATED)
-  proposePolicy(@RequiredCitizenId() citizenId: string, @Body() dto: ProposePolicyDto) {
+  proposePolicy(@RequiredCitizenId("T3") citizenId: string, @Body() dto: ProposePolicyDto) {
     return this.iam.proposePolicy(citizenId, dto);
   }
 
@@ -31,7 +31,7 @@ export class IamController {
   // DP-069 (attachment half).
   @Post("attachments")
   @HttpCode(HttpStatus.CREATED)
-  proposeAttachment(@RequiredCitizenId() citizenId: string, @Body() dto: ProposeAttachmentDto) {
+  proposeAttachment(@RequiredCitizenId("T3") citizenId: string, @Body() dto: ProposeAttachmentDto) {
     return this.iam.proposeAttachment(citizenId, dto);
   }
 
@@ -49,14 +49,14 @@ export class IamController {
   // DP-070, targeting a proposed policy.
   @Post("policies/:id/endorsements")
   @HttpCode(HttpStatus.CREATED)
-  endorsePolicy(@RequiredCitizenId() citizenId: string, @Param("id") id: string, @Body() dto: SubmitEndorsementDto) {
+  endorsePolicy(@RequiredCitizenId("T3") citizenId: string, @Param("id") id: string, @Body() dto: SubmitEndorsementDto) {
     return this.iam.submitEndorsement(citizenId, { targetType: "policy", targetId: id, decision: dto.decision });
   }
 
   // DP-070, targeting a proposed attachment.
   @Post("attachments/:id/endorsements")
   @HttpCode(HttpStatus.CREATED)
-  endorseAttachment(@RequiredCitizenId() citizenId: string, @Param("id") id: string, @Body() dto: SubmitEndorsementDto) {
+  endorseAttachment(@RequiredCitizenId("T3") citizenId: string, @Param("id") id: string, @Body() dto: SubmitEndorsementDto) {
     return this.iam.submitEndorsement(citizenId, { targetType: "attachment", targetId: id, decision: dto.decision });
   }
 
@@ -68,17 +68,17 @@ export class IamController {
 
   // DP-072, targeting a policy. No dual control -- unilateral, immediate.
   @Post("policies/:id/revoke")
-  revokePolicy(@RequiredCitizenId() citizenId: string, @Param("id") id: string) {
+  revokePolicy(@RequiredCitizenId("T3") citizenId: string, @Param("id") id: string) {
     return this.iam.revoke(citizenId, { targetType: "policy", targetId: id });
   }
 
   // DP-072, targeting an attachment.
   @Post("attachments/:id/revoke")
-  revokeAttachment(@RequiredCitizenId() citizenId: string, @Param("id") id: string) {
+  revokeAttachment(@RequiredCitizenId("T3") citizenId: string, @Param("id") id: string) {
     return this.iam.revoke(citizenId, { targetType: "attachment", targetId: id });
   }
 
-  // DP-071. Not gated behind @RequiredCitizenId() -- see EvaluateAccessDto's
+  // DP-071. Not gated behind @RequiredCitizenId("T3") -- see EvaluateAccessDto's
   // own note; a caller passes the concrete principal to evaluate.
   @Post("evaluate")
   evaluate(@Body() dto: EvaluateAccessDto) {

@@ -1,0 +1,41 @@
+{
+  "checks": [
+    {
+      "user": "api_go_worker",
+      "database": "api_go",
+      "allowed": true,
+      "passed": true
+    },
+    {
+      "user": "api_go_worker",
+      "database": "api_ts",
+      "allowed": false,
+      "passed": true
+    },
+    {
+      "user": "api_ts_worker",
+      "database": "api_ts",
+      "allowed": true,
+      "passed": true
+    },
+    {
+      "user": "api_ts_worker",
+      "database": "api_go",
+      "allowed": false,
+      "passed": true
+    },
+    {
+      "user": "api_ts_app",
+      "database": "api_ts",
+      "allowed": true,
+      "passed": true
+    },
+    {
+      "user": "api_ts_app",
+      "database": "api_go",
+      "allowed": false,
+      "passed": true
+    }
+  ],
+  "passed": 6
+}

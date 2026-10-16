@@ -2,6 +2,7 @@ package audit
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/json"
 	"errors"
 	"time"
@@ -22,12 +23,13 @@ const auditAdvisoryLock = 42036001
 // (ADR-029). Append holds the advisory lock in a transaction: tip read +
 // insert are atomic, and the SQL chain trigger re-validates prev_hash.
 type PGStore struct {
-	pool *pgxpool.Pool
-	q    *auditdb.Queries
+	pool       *pgxpool.Pool
+	signingKey ed25519.PrivateKey
+	q          *auditdb.Queries
 }
 
 func NewPGStore(pool *pgxpool.Pool) *PGStore {
-	return &PGStore{pool: pool, q: auditdb.New(pool)}
+	return &PGStore{pool: pool, q: auditdb.New(pool), signingKey: newSigningKey()}
 }
 
 func opCtx() (context.Context, context.CancelFunc) {
@@ -85,13 +87,14 @@ func (s *PGStore) Append(actionType, actorRef, payload, idempotencyKey string) (
 	}
 	payloadHash := sha256Hex(payload)
 	hash := chainHash(prev, payloadHash, actionType, actorRef)
+	entryID := newID()
 	row, err := qtx.InsertAuditEntry(ctx, auditdb.InsertAuditEntryParams{
-		ID:             pgconv.MustUUID(newID()),
+		ID:             pgconv.MustUUID(entryID),
 		ActionType:     actionType,
 		ActorRef:       actorRef,
 		PayloadHash:    payloadHash,
 		PrevHash:       prev,
-		Signature:      "sig:" + sha256Hex(hash+".audit-service"),
+		Signature:      signEntry(s.signingKey, entryID, hash),
 		IdempotencyKey: pgconv.TextNull(idempotencyKey),
 	})
 	if err != nil {
@@ -151,7 +154,7 @@ func (s *PGStore) VerifyChain() (bool, int, error) {
 		if e.PrevHash != prev {
 			return false, i, nil
 		}
-		if e.Hash != chainHash(e.PrevHash, e.PayloadHash, e.ActionType, e.ActorRef) {
+		if e.Hash != chainHash(e.PrevHash, e.PayloadHash, e.ActionType, e.ActorRef) || !validEntrySignature(s.signingKey, e) {
 			return false, i, nil
 		}
 		prev = e.PayloadHash

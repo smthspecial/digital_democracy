@@ -1,0 +1,329 @@
+=== Symbol Results ===
+
+Vulnerability #1: GO-2026-6629
+    Panic parsing crafted input in x/text/secure/precis in golang.org/x/text
+  More info: https://pkg.go.dev/vuln/GO-2026-6629
+  Module: golang.org/x/text
+    Found in: golang.org/x/text@v0.40.0
+    Fixed in: golang.org/x/text@v0.41.0
+    Example traces found:
+      #1: internal/pg/pool.go:26:36: pg.Connect calls pgxpool.NewWithConfig, which eventually calls precis.Profile.Bytes
+
+Vulnerability #2: GO-2026-6218
+    Avoid quadratic complexity in resolvePath in net/url
+  More info: https://pkg.go.dev/vuln/GO-2026-6218
+  Standard library
+    Found in: net/url@go1.25
+    Fixed in: net/url@go1.25.13
+    Example traces found:
+      #1: internal/voting/seams_http.go:34:26: voting.httpDelegationResolver.DelegatorsFor calls http.Client.Do, which eventually calls url.URL.Parse
+
+Vulnerability #3: GO-2026-6090
+    Limit handshake messages we are willing to accept post-handshake in
+    crypto/tls
+  More info: https://pkg.go.dev/vuln/GO-2026-6090
+  Standard library
+    Found in: crypto/tls@go1.25
+    Fixed in: crypto/tls@go1.25.13
+    Example traces found:
+      #1: main.go:52:30: api.main calls eventbus.Connect, which eventually calls tls.Conn.Handshake
+      #2: main.go:196:31: api.main calls http.Server.ListenAndServe, which eventually calls tls.Conn.HandshakeContext
+      #3: internal/auth/seams_http.go:124:2: auth.httpNotifier.Notify calls http.body.Close, which eventually calls tls.Conn.Read
+      #4: internal/auth/seams_http.go:124:2: auth.httpNotifier.Notify calls http.http2transportResponseBody.Close, which eventually calls tls.Conn.Write
+      #5: internal/voting/seams_http.go:34:26: voting.httpDelegationResolver.DelegatorsFor calls http.Client.Do, which eventually calls tls.Dialer.DialContext
+
+Vulnerability #4: GO-2026-6089
+    Apply ReadHeaderTimeout when doing unencrypted HTTP/2 check in net/http
+  More info: https://pkg.go.dev/vuln/GO-2026-6089
+  Standard library
+    Found in: net/http@go1.25
+    Fixed in: net/http@go1.25.13
+    Example traces found:
+      #1: main.go:196:31: api.main calls http.Server.ListenAndServe
+
+Vulnerability #5: GO-2026-5972
+    Enforce maximum recursion depth in encoding/asn1
+  More info: https://pkg.go.dev/vuln/GO-2026-5972
+  Standard library
+    Found in: encoding/asn1@go1.25
+    Fixed in: encoding/asn1@go1.25.13
+    Example traces found:
+      #1: main.go:83:3: api.main calls pgxpool.Pool.Close, which eventually calls asn1.Unmarshal
+
+Vulnerability #6: GO-2026-5856
+    Invoking Encrypted Client Hello privacy leak in crypto/tls
+  More info: https://pkg.go.dev/vuln/GO-2026-5856
+  Standard library
+    Found in: crypto/tls@go1.25
+    Fixed in: crypto/tls@go1.25.12
+    Example traces found:
+      #1: main.go:52:30: api.main calls eventbus.Connect, which eventually calls tls.Conn.Handshake
+      #2: main.go:196:31: api.main calls http.Server.ListenAndServe, which eventually calls tls.Conn.HandshakeContext
+      #3: internal/auth/seams_http.go:124:2: auth.httpNotifier.Notify calls http.body.Close, which eventually calls tls.Conn.Read
+      #4: internal/auth/seams_http.go:124:2: auth.httpNotifier.Notify calls http.http2transportResponseBody.Close, which eventually calls tls.Conn.Write
+      #5: internal/voting/seams_http.go:34:26: voting.httpDelegationResolver.DelegatorsFor calls http.Client.Do, which eventually calls tls.Dialer.DialContext
+
+Vulnerability #7: GO-2026-5039
+    Arbitrary inputs are included in errors without any escaping in
+    net/textproto
+  More info: https://pkg.go.dev/vuln/GO-2026-5039
+  Standard library
+    Found in: net/textproto@go1.25
+    Fixed in: net/textproto@go1.25.11
+    Example traces found:
+      #1: main.go:196:31: api.main calls http.Server.ListenAndServe, which eventually calls textproto.Reader.ReadMIMEHeader
+
+Vulnerability #8: GO-2026-5037
+    Inefficient candidate hostname parsing in crypto/x509
+  More info: https://pkg.go.dev/vuln/GO-2026-5037
+  Standard library
+    Found in: crypto/x509@go1.25
+    Fixed in: crypto/x509@go1.25.11
+    Example traces found:
+      #1: main.go:196:31: api.main calls http.Server.ListenAndServe, which eventually calls x509.Certificate.Verify
+      #2: main.go:196:31: api.main calls http.Server.ListenAndServe, which eventually calls x509.Certificate.VerifyHostname
+      #3: internal/voting/seams_http.go:34:26: voting.httpDelegationResolver.DelegatorsFor calls http.Client.Do, which eventually calls x509.HostnameError.Error
+
+Vulnerability #9: GO-2026-5026
+    Invoking failure to reject ASCII-only Punycode-encoded labels in
+    golang.org/x/net/idna
+  More info: https://pkg.go.dev/vuln/GO-2026-5026
+  Standard library
+    Found in: net/http@go1.25
+    Fixed in: net/http@go1.25.13
+    Example traces found:
+      #1: internal/voting/seams_http.go:34:26: voting.httpDelegationResolver.DelegatorsFor calls http.Client.Do
+      #2: internal/auth/seams_http.go:37:27: auth.httpIdentityChecker.StatusOf calls http.Client.Get
+      #3: internal/auth/seams_http.go:120:28: auth.httpNotifier.Notify calls http.Client.Post
+
+Vulnerability #10: GO-2026-5004
+    SQL Injection via placeholder confusion with dollar quoted string literals
+    in github.com/jackc/pgx
+  More info: https://pkg.go.dev/vuln/GO-2026-5004
+  Module: github.com/jackc/pgx/v5
+    Found in: github.com/jackc/pgx/v5@v5.6.0
+    Fixed in: github.com/jackc/pgx/v5@v5.9.2
+    Example traces found:
+      #1: internal/pg/migrate.go:52:25: pg.Up calls pgxpool.Conn.Query, which eventually calls sanitize.SanitizeSQL
+
+Vulnerability #11: GO-2026-4971
+    Panic in Dial and LookupPort when handling NUL byte on Windows in net
+  More info: https://pkg.go.dev/vuln/GO-2026-4971
+  Standard library
+    Found in: net@go1.25
+    Fixed in: net@go1.25.10
+    Example traces found:
+      #1: main.go:52:30: api.main calls eventbus.Connect, which eventually calls net.Dialer.Dial
+      #2: internal/pg/migrate.go:38:41: pg.Up calls pgconn.PgConn.Exec, which eventually calls net.Dialer.DialContext
+      #3: main.go:196:31: api.main calls http.Server.ListenAndServe, which calls net.Listen
+      #4: main.go:52:30: api.main calls eventbus.Connect, which eventually calls net.LookupHost
+      #5: internal/pg/pool.go:26:36: pg.Connect calls pgxpool.NewWithConfig, which eventually calls net.Resolver.LookupHost
+
+Vulnerability #12: GO-2026-4947
+    Unexpected work during chain building in crypto/x509
+  More info: https://pkg.go.dev/vuln/GO-2026-4947
+  Standard library
+    Found in: crypto/x509@go1.25
+    Fixed in: crypto/x509@go1.25.9
+    Example traces found:
+      #1: main.go:196:31: api.main calls http.Server.ListenAndServe, which eventually calls x509.Certificate.Verify
+
+Vulnerability #13: GO-2026-4946
+    Inefficient policy validation in crypto/x509
+  More info: https://pkg.go.dev/vuln/GO-2026-4946
+  Standard library
+    Found in: crypto/x509@go1.25
+    Fixed in: crypto/x509@go1.25.9
+    Example traces found:
+      #1: main.go:196:31: api.main calls http.Server.ListenAndServe, which eventually calls x509.Certificate.Verify
+
+Vulnerability #14: GO-2026-4918
+    Infinite loop in HTTP/2 transport when given bad SETTINGS_MAX_FRAME_SIZE in
+    net/http/internal/http2 in golang.org/x/net
+  More info: https://pkg.go.dev/vuln/GO-2026-4918
+  Standard library
+    Found in: net/http@go1.25
+    Fixed in: net/http@go1.25.10
+    Example traces found:
+      #1: internal/voting/seams_http.go:34:26: voting.httpDelegationResolver.DelegatorsFor calls http.Client.Do
+      #2: internal/auth/seams_http.go:37:27: auth.httpIdentityChecker.StatusOf calls http.Client.Get
+      #3: internal/auth/seams_http.go:120:28: auth.httpNotifier.Notify calls http.Client.Post
+
+Vulnerability #15: GO-2026-4870
+    Unauthenticated TLS 1.3 KeyUpdate record can cause persistent connection
+    retention and DoS in crypto/tls
+  More info: https://pkg.go.dev/vuln/GO-2026-4870
+  Standard library
+    Found in: crypto/tls@go1.25
+    Fixed in: crypto/tls@go1.25.9
+    Example traces found:
+      #1: main.go:52:30: api.main calls eventbus.Connect, which eventually calls tls.Conn.Handshake
+      #2: main.go:196:31: api.main calls http.Server.ListenAndServe, which eventually calls tls.Conn.HandshakeContext
+      #3: internal/auth/seams_http.go:124:2: auth.httpNotifier.Notify calls http.body.Close, which eventually calls tls.Conn.Read
+      #4: internal/auth/seams_http.go:124:2: auth.httpNotifier.Notify calls http.http2transportResponseBody.Close, which eventually calls tls.Conn.Write
+      #5: internal/voting/seams_http.go:34:26: voting.httpDelegationResolver.DelegatorsFor calls http.Client.Do, which eventually calls tls.Dialer.DialContext
+
+Vulnerability #16: GO-2026-4602
+    FileInfo can escape from a Root in os
+  More info: https://pkg.go.dev/vuln/GO-2026-4602
+  Standard library
+    Found in: os@go1.25
+    Fixed in: os@go1.25.8
+    Example traces found:
+      #1: main.go:83:3: api.main calls pgxpool.Pool.Close, which eventually calls os.ReadDir
+
+Vulnerability #17: GO-2026-4601
+    Incorrect parsing of IPv6 host literals in net/url
+  More info: https://pkg.go.dev/vuln/GO-2026-4601
+  Standard library
+    Found in: net/url@go1.25
+    Fixed in: net/url@go1.25.8
+    Example traces found:
+      #1: internal/voting/seams_http.go:29:29: voting.httpDelegationResolver.DelegatorsFor calls http.NewRequest, which eventually calls url.Parse
+      #2: main.go:196:31: api.main calls http.Server.ListenAndServe, which eventually calls url.ParseRequestURI
+      #3: internal/voting/seams_http.go:34:26: voting.httpDelegationResolver.DelegatorsFor calls http.Client.Do, which eventually calls url.URL.Parse
+
+Vulnerability #18: GO-2026-4341
+    Memory exhaustion in query parameter parsing in net/url
+  More info: https://pkg.go.dev/vuln/GO-2026-4341
+  Standard library
+    Found in: net/url@go1.25
+    Fixed in: net/url@go1.25.6
+    Example traces found:
+      #1: internal/pg/pool.go:18:33: pg.Connect calls pgxpool.ParseConfig, which eventually calls url.URL.Query
+
+Vulnerability #19: GO-2026-4340
+    Handshake messages may be processed at the incorrect encryption level in
+    crypto/tls
+  More info: https://pkg.go.dev/vuln/GO-2026-4340
+  Standard library
+    Found in: crypto/tls@go1.25
+    Fixed in: crypto/tls@go1.25.6
+    Example traces found:
+      #1: main.go:52:30: api.main calls eventbus.Connect, which eventually calls tls.Conn.Handshake
+      #2: main.go:196:31: api.main calls http.Server.ListenAndServe, which eventually calls tls.Conn.HandshakeContext
+      #3: internal/auth/seams_http.go:124:2: auth.httpNotifier.Notify calls http.body.Close, which eventually calls tls.Conn.Read
+      #4: internal/auth/seams_http.go:124:2: auth.httpNotifier.Notify calls http.http2transportResponseBody.Close, which eventually calls tls.Conn.Write
+      #5: internal/voting/seams_http.go:34:26: voting.httpDelegationResolver.DelegatorsFor calls http.Client.Do, which eventually calls tls.Dialer.DialContext
+
+Vulnerability #20: GO-2026-4337
+    Unexpected session resumption in crypto/tls
+  More info: https://pkg.go.dev/vuln/GO-2026-4337
+  Standard library
+    Found in: crypto/tls@go1.25
+    Fixed in: crypto/tls@go1.25.7
+    Example traces found:
+      #1: main.go:52:30: api.main calls eventbus.Connect, which eventually calls tls.Conn.Handshake
+      #2: main.go:196:31: api.main calls http.Server.ListenAndServe, which eventually calls tls.Conn.HandshakeContext
+      #3: internal/auth/seams_http.go:124:2: auth.httpNotifier.Notify calls http.body.Close, which eventually calls tls.Conn.Read
+      #4: internal/auth/seams_http.go:124:2: auth.httpNotifier.Notify calls http.http2transportResponseBody.Close, which eventually calls tls.Conn.Write
+      #5: internal/voting/seams_http.go:34:26: voting.httpDelegationResolver.DelegatorsFor calls http.Client.Do, which eventually calls tls.Dialer.DialContext
+
+Vulnerability #21: GO-2025-4175
+    Improper application of excluded DNS name constraints when verifying
+    wildcard names in crypto/x509
+  More info: https://pkg.go.dev/vuln/GO-2025-4175
+  Standard library
+    Found in: crypto/x509@go1.25
+    Fixed in: crypto/x509@go1.25.5
+    Example traces found:
+      #1: main.go:196:31: api.main calls http.Server.ListenAndServe, which eventually calls x509.Certificate.Verify
+
+Vulnerability #22: GO-2025-4155
+    Excessive resource consumption when printing error string for host
+    certificate validation in crypto/x509
+  More info: https://pkg.go.dev/vuln/GO-2025-4155
+  Standard library
+    Found in: crypto/x509@go1.25
+    Fixed in: crypto/x509@go1.25.5
+    Example traces found:
+      #1: main.go:196:31: api.main calls http.Server.ListenAndServe, which eventually calls x509.Certificate.Verify
+      #2: main.go:196:31: api.main calls http.Server.ListenAndServe, which eventually calls x509.Certificate.VerifyHostname
+
+Vulnerability #23: GO-2025-4013
+    Panic when validating certificates with DSA public keys in crypto/x509
+  More info: https://pkg.go.dev/vuln/GO-2025-4013
+  Standard library
+    Found in: crypto/x509@go1.25
+    Fixed in: crypto/x509@go1.25.2
+    Example traces found:
+      #1: main.go:196:31: api.main calls http.Server.ListenAndServe, which eventually calls x509.Certificate.Verify
+
+Vulnerability #24: GO-2025-4012
+    Lack of limit when parsing cookies can cause memory exhaustion in net/http
+  More info: https://pkg.go.dev/vuln/GO-2025-4012
+  Standard library
+    Found in: net/http@go1.25
+    Fixed in: net/http@go1.25.2
+    Example traces found:
+      #1: internal/voting/seams_http.go:34:26: voting.httpDelegationResolver.DelegatorsFor calls http.Client.Do
+      #2: internal/auth/seams_http.go:37:27: auth.httpIdentityChecker.StatusOf calls http.Client.Get
+      #3: internal/auth/seams_http.go:120:28: auth.httpNotifier.Notify calls http.Client.Post
+      #4: internal/auth/handlers.go:67:25: auth.Handler.refresh calls http.Request.Cookie
+
+Vulnerability #25: GO-2025-4011
+    Parsing DER payload can cause memory exhaustion in encoding/asn1
+  More info: https://pkg.go.dev/vuln/GO-2025-4011
+  Standard library
+    Found in: encoding/asn1@go1.25
+    Fixed in: encoding/asn1@go1.25.2
+    Example traces found:
+      #1: main.go:83:3: api.main calls pgxpool.Pool.Close, which eventually calls asn1.Unmarshal
+
+Vulnerability #26: GO-2025-4010
+    Insufficient validation of bracketed IPv6 hostnames in net/url
+  More info: https://pkg.go.dev/vuln/GO-2025-4010
+  Standard library
+    Found in: net/url@go1.25
+    Fixed in: net/url@go1.25.2
+    Example traces found:
+      #1: internal/voting/seams_http.go:29:29: voting.httpDelegationResolver.DelegatorsFor calls http.NewRequest, which eventually calls url.Parse
+      #2: main.go:196:31: api.main calls http.Server.ListenAndServe, which eventually calls url.ParseRequestURI
+      #3: internal/voting/seams_http.go:34:26: voting.httpDelegationResolver.DelegatorsFor calls http.Client.Do, which eventually calls url.URL.Parse
+
+Vulnerability #27: GO-2025-4009
+    Quadratic complexity when parsing some invalid inputs in encoding/pem
+  More info: https://pkg.go.dev/vuln/GO-2025-4009
+  Standard library
+    Found in: encoding/pem@go1.25
+    Fixed in: encoding/pem@go1.25.2
+    Example traces found:
+      #1: internal/auth/passkey.go:11:2: auth.init calls protocol.init, which eventually calls pem.Decode
+
+Vulnerability #28: GO-2025-4008
+    ALPN negotiation error contains attacker controlled information in
+    crypto/tls
+  More info: https://pkg.go.dev/vuln/GO-2025-4008
+  Standard library
+    Found in: crypto/tls@go1.25
+    Fixed in: crypto/tls@go1.25.2
+    Example traces found:
+      #1: main.go:52:30: api.main calls eventbus.Connect, which eventually calls tls.Conn.Handshake
+      #2: main.go:196:31: api.main calls http.Server.ListenAndServe, which eventually calls tls.Conn.HandshakeContext
+      #3: internal/auth/seams_http.go:124:2: auth.httpNotifier.Notify calls http.body.Close, which eventually calls tls.Conn.Read
+      #4: internal/auth/seams_http.go:124:2: auth.httpNotifier.Notify calls http.http2transportResponseBody.Close, which eventually calls tls.Conn.Write
+      #5: internal/voting/seams_http.go:34:26: voting.httpDelegationResolver.DelegatorsFor calls http.Client.Do, which eventually calls tls.Dialer.DialContext
+
+Vulnerability #29: GO-2025-4007
+    Quadratic complexity when checking name constraints in crypto/x509
+  More info: https://pkg.go.dev/vuln/GO-2025-4007
+  Standard library
+    Found in: crypto/x509@go1.25
+    Fixed in: crypto/x509@go1.25.3
+    Example traces found:
+      #1: internal/pg/pool.go:18:33: pg.Connect calls pgxpool.ParseConfig, which eventually calls x509.CertPool.AppendCertsFromPEM
+      #2: internal/auth/passkey.go:148:50: auth.Handler.finishRegistration calls webauthn.WebAuthn.FinishRegistration, which eventually calls x509.Certificate.CheckSignature
+      #3: internal/auth/passkey.go:148:50: auth.Handler.finishRegistration calls webauthn.WebAuthn.FinishRegistration, which eventually calls x509.Certificate.CheckSignatureFrom
+      #4: main.go:196:31: api.main calls http.Server.ListenAndServe, which eventually calls x509.Certificate.Verify
+      #5: internal/pg/pool.go:18:33: pg.Connect calls pgxpool.ParseConfig, which eventually calls x509.DecryptPEMBlock
+      #6: main.go:83:3: api.main calls pgxpool.Pool.Close, which eventually calls x509.ParseCertificate
+      #7: internal/pg/pool.go:18:33: pg.Connect calls pgxpool.ParseConfig, which eventually calls x509.ParseECPrivateKey
+      #8: internal/pg/pool.go:18:33: pg.Connect calls pgxpool.ParseConfig, which eventually calls x509.ParsePKCS1PrivateKey
+      #9: internal/pg/pool.go:18:33: pg.Connect calls pgxpool.ParseConfig, which eventually calls x509.ParsePKCS8PrivateKey
+      #10: internal/auth/passkey.go:148:50: auth.Handler.finishRegistration calls webauthn.WebAuthn.FinishRegistration, which eventually calls x509.SystemCertPool
+
+Your code is affected by 29 vulnerabilities from 2 modules and the Go standard library.
+This scan also found 8 vulnerabilities in packages you import and 17
+vulnerabilities in modules you require, but your code doesn't appear to call
+these vulnerabilities.
+Use '-show verbose' for more details.

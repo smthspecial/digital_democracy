@@ -6,6 +6,7 @@ bus); anything else must be listed in .Values.allowedEgress.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
+  namespace: {{ .Release.Namespace }}
   name: {{ include "service.fullname" . }}
   labels:
     {{- include "service.labels" . | nindent 4 }}
@@ -17,25 +18,64 @@ spec:
     - Ingress
     - Egress
   ingress:
+    {{- range .Values.allowedIngress }}
     - from:
-        - namespaceSelector: {} # refined per-namespace by the mesh AuthorizationPolicy (ADR-018); this is the coarse NetworkPolicy backstop
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ .name }}
+      ports:
+        - protocol: TCP
+          port: {{ $.Values.port }}
+    {{- else }}
+    []
+    {{- end }}
   egress:
-    - to:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: audit-service
-    - to:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: notification-service
     {{- range .Values.allowedEgress }}
     - to:
-        - podSelector:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ . }}
+          podSelector:
             matchLabels:
               app.kubernetes.io/name: {{ . }}
+      ports:
+        - protocol: TCP
+          port: 8080
     {{- end }}
-    - to: # DNS
-        - namespaceSelector: {}
+    {{- range .Values.allowedDependencies }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ .name }}
+      ports:
+        - protocol: TCP
+          port: {{ .port }}
+    {{- end }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
       ports:
         - protocol: UDP
           port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: istio-system
+          podSelector:
+            matchLabels:
+              app: istiod
+      ports:
+        - protocol: TCP
+          port: 15012

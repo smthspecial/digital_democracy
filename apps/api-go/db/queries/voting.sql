@@ -10,14 +10,16 @@ RETURNING *;
 SELECT * FROM vote_session WHERE id = $1;
 
 -- name: ListVoteSessions :many
-SELECT * FROM vote_session ORDER BY created_at, id;
+SELECT * FROM vote_session ORDER BY created_at, id LIMIT 1000;
 
 -- name: UpdateVoteSessionStatus :one
-UPDATE vote_session SET status = $2 WHERE id = $1
+UPDATE vote_session SET status = $2 WHERE id = $1 AND (
+ (status='scheduled' AND $2='open' AND opens_at<=now() AND cooling_off_until<=now() AND closes_at>now()) OR
+ (status='open' AND $2='closed') OR (status='closed' AND $2='certified'))
 RETURNING *;
 
 -- name: SetVoteSessionTally :one
-UPDATE vote_session SET tally_result = $2 WHERE id = $1
+UPDATE vote_session SET tally_result = COALESCE(tally_result, $2) WHERE id = $1 AND status IN ('closed','certified')
 RETURNING *;
 
 -- name: CreateVoteOption :one

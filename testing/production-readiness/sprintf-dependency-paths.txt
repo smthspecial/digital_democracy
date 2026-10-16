@@ -1,0 +1,69 @@
+Legend: production dependency, optional only, dev only
+
+@dd/mobile@0.0.0 /home/roman/dev/projects/digital_democracy/apps/mobile (PRIVATE)
+
+dependencies:
+expo 57.0.27
+├─┬ @expo/cli 57.0.28
+│ ├─┬ @expo/log-box 57.0.4
+│ │ ├─┬ @expo/dom-webview 57.0.1 peer
+│ │ │ └─┬ react-native 0.86.3 peer
+│ │ │   └─┬ @react-native/community-cli-plugin 0.86.3
+│ │ │     └─┬ @react-native-community/cli 13.6.9 peer
+│ │ │       ├─┬ @react-native-community/cli-config 13.6.9
+│ │ │       │ └─┬ cosmiconfig 5.2.1
+│ │ │       │   └─┬ js-yaml 3.15.2
+│ │ │       │     └─┬ argparse 1.0.10
+│ │ │       │       └── sprintf-js 1.0.3
+│ │ │       └─┬ @react-native-community/cli-doctor 13.6.9
+│ │ │         └─┬ @react-native-community/cli-config 13.6.9
+│ │ │           └─┬ cosmiconfig 5.2.1
+│ │ │             └─┬ js-yaml 3.15.2
+│ │ │               └─┬ argparse 1.0.10
+│ │ │                 └── sprintf-js 1.0.3
+│ │ └─┬ react-native 0.86.3 peer
+│ │   └─┬ @react-native/community-cli-plugin 0.86.3
+│ │     └─┬ @react-native-community/cli 13.6.9 peer
+│ │       └─┬ @react-native-community/cli-config 13.6.9
+│ │         └─┬ cosmiconfig 5.2.1
+│ │           └─┬ js-yaml 3.15.2
+│ │             └─┬ argparse 1.0.10
+│ │               └── sprintf-js 1.0.3
+│ └─┬ react-native 0.86.3 peer
+│   └─┬ @react-native/community-cli-plugin 0.86.3
+│     └─┬ @react-native-community/cli 13.6.9 peer
+│       └─┬ @react-native-community/cli-config 13.6.9
+│         └─┬ cosmiconfig 5.2.1
+│           └─┬ js-yaml 3.15.2
+│             └─┬ argparse 1.0.10
+│               └── sprintf-js 1.0.3
+└─┬ react-native 0.86.3 peer
+  └─┬ @react-native/community-cli-plugin 0.86.3
+    └─┬ @react-native-community/cli 13.6.9 peer
+      └─┬ @react-native-community/cli-config 13.6.9
+        └─┬ cosmiconfig 5.2.1
+          └─┬ js-yaml 3.15.2
+            └─┬ argparse 1.0.10
+              └── sprintf-js 1.0.3
+expo-status-bar 57.0.1
+└─┬ expo 57.0.27 peer
+  └─┬ @expo/cli 57.0.28
+    └─┬ @expo/log-box 57.0.4
+      └─┬ @expo/dom-webview 57.0.1 peer
+        └─┬ react-native 0.86.3 peer
+          └─┬ @react-native/community-cli-plugin 0.86.3
+            └─┬ @react-native-community/cli 13.6.9 peer
+              └─┬ @react-native-community/cli-doctor 13.6.9
+                └─┬ @react-native-community/cli-config 13.6.9
+                  └─┬ cosmiconfig 5.2.1
+                    └─┬ js-yaml 3.15.2
+                      └─┬ argparse 1.0.10
+                        └── sprintf-js 1.0.3
+react-native 0.86.3
+└─┬ @react-native/community-cli-plugin 0.86.3
+  └─┬ @react-native-community/cli 13.6.9 peer
+    └─┬ @react-native-community/cli-config 13.6.9
+      └─┬ cosmiconfig 5.2.1
+        └─┬ js-yaml 3.15.2
+          └─┬ argparse 1.0.10
+            └── sprintf-js 1.0.3

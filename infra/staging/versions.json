@@ -1,0 +1,9 @@
+{
+  "kind": "0.33.0",
+  "kubernetes": "1.36.4",
+  "calico": "3.33.0",
+  "istio": "1.30.5",
+  "gatewayAPI": "1.5.1",
+  "certManager": "1.21.2",
+  "trivy": "0.75.0"
+}

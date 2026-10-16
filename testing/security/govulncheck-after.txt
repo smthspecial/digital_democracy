@@ -1,0 +1,76 @@
+Fetching vulnerabilities from the database...
+
+Checking the code against the vulnerabilities...
+
+The package pattern matched the following 15 root packages:
+  github.com/digital-democracy/api-go/db
+  github.com/digital-democracy/api-go/internal/metrics
+  github.com/digital-democracy/api-go/internal/pgconv
+  github.com/digital-democracy/api-go/internal/security
+  github.com/digital-democracy/api-go/internal/sqlc/audit
+  github.com/digital-democracy/api-go/internal/audit
+  github.com/digital-democracy/api-go/internal/sqlc/auth
+  github.com/digital-democracy/api-go/internal/auth
+  github.com/digital-democracy/api-go/internal/sqlc/delegation
+  github.com/digital-democracy/api-go/internal/delegation
+  github.com/digital-democracy/api-go/internal/pg
+  github.com/digital-democracy/api-go/internal/scheduler
+  github.com/digital-democracy/api-go/internal/sqlc/voting
+  github.com/digital-democracy/api-go/internal/voting
+  github.com/digital-democracy/api-go
+Govulncheck scanned the following 32 modules and the go1.27.1 standard library:
+  github.com/digital-democracy/api-go
+  github.com/beorn7/perks@v1.0.1
+  github.com/cespare/xxhash/v2@v2.3.0
+  github.com/digital-democracy/eventbus
+  github.com/fxamacker/cbor/v2@v2.9.1
+  github.com/go-viper/mapstructure/v2@v2.5.0
+  github.com/go-webauthn/webauthn@v0.16.5
+  github.com/go-webauthn/x@v0.2.3
+  github.com/golang-jwt/jwt/v5@v5.3.1
+  github.com/google/go-tpm@v0.9.8
+  github.com/google/uuid@v1.6.0
+  github.com/jackc/pgpassfile@v1.0.0
+  github.com/jackc/pgservicefile@v0.0.0-20240606120523-5a60cdf6a761
+  github.com/jackc/pgx/v5@v5.11.0
+  github.com/jackc/puddle/v2@v2.2.2
+  github.com/klauspost/compress@v1.19.1
+  github.com/munnerz/goautoneg@v0.0.0-20191010083416-a7dc8b61c822
+  github.com/nats-io/nats.go@v1.37.0
+  github.com/nats-io/nkeys@v0.4.7
+  github.com/nats-io/nuid@v1.0.1
+  github.com/philhofer/fwd@v1.2.0
+  github.com/prometheus/client_golang@v1.24.1
+  github.com/prometheus/client_model@v0.6.2
+  github.com/prometheus/common@v0.70.1
+  github.com/prometheus/procfs@v0.21.1
+  github.com/tinylib/msgp@v1.6.4
+  github.com/x448/float16@v0.8.4
+  golang.org/x/crypto@v0.57.0
+  golang.org/x/sync@v0.23.0
+  golang.org/x/sys@v0.48.0
+  golang.org/x/text@v0.42.0
+  google.golang.org/protobuf@v1.36.11
+
+=== Symbol Results ===
+
+No vulnerabilities found.
+
+=== Package Results ===
+
+No other vulnerabilities found.
+
+=== Module Results ===
+
+Vulnerability #1: GO-2026-5932
+    The golang.org/x/crypto/openpgp package is unmaintained, unsafe by design,
+    and has known security issues
+  More info: https://pkg.go.dev/vuln/GO-2026-5932
+  Module: golang.org/x/crypto
+    Found in: golang.org/x/crypto@v0.57.0
+    Fixed in: N/A
+
+Your code is affected by 0 vulnerabilities.
+This scan also found 0 vulnerabilities in packages you import and 1
+vulnerability in modules you require, but your code doesn't appear to call these
+vulnerabilities.

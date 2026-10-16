@@ -3,6 +3,7 @@ package auth
 import (
 	"bytes"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"net/http"
@@ -61,13 +62,17 @@ func TestRevokeAllRejectsExpiredOrWrongServiceSignature(t *testing.T) {
 func signedInternalRequest(t *testing.T, method, path string, body []byte, service, secret string, issuedAt time.Time) *http.Request {
 	t.Helper()
 	timestamp := strconv.FormatInt(issuedAt.Unix(), 10)
+	var random [16]byte
+	rand.Read(random[:])
+	nonce := hex.EncodeToString(random[:])
 	bodyHash := sha256.Sum256(body)
-	payload := method + "\n" + path + "\n" + timestamp + "\n" + hex.EncodeToString(bodyHash[:])
+	payload := service + "\n" + method + "\n" + path + "\n" + timestamp + "\n" + nonce + "\n" + hex.EncodeToString(bodyHash[:])
 	mac := hmac.New(sha256.New, []byte(secret))
 	_, _ = mac.Write([]byte(payload))
 	request := httptest.NewRequest(method, path, bytes.NewReader(body))
 	request.Header.Set("X-DD-Service", service)
 	request.Header.Set("X-DD-Timestamp", timestamp)
+	request.Header.Set("X-DD-Nonce", nonce)
 	request.Header.Set("X-DD-Signature", hex.EncodeToString(mac.Sum(nil)))
 	return request
 }

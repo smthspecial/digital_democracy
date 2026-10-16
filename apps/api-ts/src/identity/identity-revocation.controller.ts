@@ -14,7 +14,7 @@ export class IdentityRevocationController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  request(@RequiredCitizenId() actorId: string, @Body() dto: RequestRevocationDto) {
+  request(@RequiredCitizenId("T3") actorId: string, @Body() dto: RequestRevocationDto) {
     return this.revocation.request(actorId, dto);
   }
 

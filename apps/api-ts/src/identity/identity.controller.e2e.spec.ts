@@ -10,7 +10,7 @@ import { newTestPrismaService, TestDatabaseUrls, testDatabaseUrls, truncateAll }
 import { installTestAuth, testBearer } from "../test-support/auth.js";
 import { IdentityModule } from "./identity.module.js";
 import { AuthProvisioner } from "./auth-provisioner.js";
-import { testVerifierHeaders } from "../test-support/identity-verifier.js";
+import { testVerifierHeaders, testInternalHeaders } from "../test-support/identity-verifier.js";
 
 process.env.IDENTITY_HASH_SECRET ??= "test-secret";
 
@@ -26,6 +26,7 @@ describe.skipIf(!urls)("IdentityController (HTTP, Postgres-backed)", () => {
 
   beforeAll(async () => {
     process.env.IDENTITY_VERIFIER_SHARED_SECRET = "test-verifier-secret";
+ process.env.INTERNAL_SERVICE_SHARED_SECRET = "test-internal-secret";
     await truncateAll(urls as TestDatabaseUrls);
     prisma = newTestPrismaService(urls as TestDatabaseUrls);
     await prisma.onModuleInit();
@@ -164,7 +165,7 @@ describe.skipIf(!urls)("IdentityController (HTTP, Postgres-backed)", () => {
       .post("/identity/citizens")
       .send({ publicHandle: "jane doe", legalIdentifier: "id-fuzzy-2" });
 
-    const res = await request(app.getHttpServer()).get("/identity/duplicates/scan");
+    const res = await request(app.getHttpServer()).get("/identity/duplicates/scan").set(testInternalHeaders("/identity/duplicates/scan"));
     expect(res.status).toBe(200);
     const ids = [oneRes.body.id, twoRes.body.id].sort();
     expect(res.body).toContainEqual(

@@ -1,0 +1,184 @@
+{
+  "recordedDate": "2026-10-10",
+  "scope": "solo local development, synthetic probe only",
+  "productionQualified": false,
+  "passed": true,
+  "checks": [
+    {
+      "name": "HTTP readiness 5000",
+      "passed": true
+    },
+    {
+      "name": "HTTP readiness 4000",
+      "passed": true
+    },
+    {
+      "name": "HTTP readiness 3001",
+      "passed": true
+    },
+    {
+      "name": "Anonymous worker read denied /identity/duplicates/scan",
+      "passed": true,
+      "detail": {
+        "status": 401
+      }
+    },
+    {
+      "name": "Anonymous worker read denied /identity/registrations/burst-check",
+      "passed": true,
+      "detail": {
+        "status": 401
+      }
+    },
+    {
+      "name": "Anonymous worker read denied /jurisdiction/proposals/00000000-0000-0000-0000-000000000001/jurisdictions/00000000-0000-0000-0000-000000000002/eligible-citizens",
+      "passed": true,
+      "detail": {
+        "status": 401
+      }
+    },
+    {
+      "name": "Anonymous worker read denied /governance-role/actions/00000000-0000-0000-0000-000000000001/protocol-approvals",
+      "passed": true,
+      "detail": {
+        "status": 401
+      }
+    },
+    {
+      "name": "Anonymous Go identity provisioning denied",
+      "passed": true
+    },
+    {
+      "name": "TypeScript public database read works",
+      "passed": true
+    },
+    {
+      "name": "All three database logins are restricted",
+      "passed": true
+    },
+    {
+      "name": "Shared RLS policy roles cannot log in",
+      "passed": true
+    },
+    {
+      "name": "api_go_worker own database works",
+      "passed": true
+    },
+    {
+      "name": "api_go_worker cross-database denied",
+      "passed": true
+    },
+    {
+      "name": "api_ts_app own database works",
+      "passed": true
+    },
+    {
+      "name": "api_ts_app cross-database denied",
+      "passed": true
+    },
+    {
+      "name": "api_ts_worker own database works",
+      "passed": true
+    },
+    {
+      "name": "api_ts_worker cross-database denied",
+      "passed": true
+    },
+    {
+      "name": "api-go binds only loopback",
+      "passed": true
+    },
+    {
+      "name": "api-go runtime excludes migration URL",
+      "passed": true
+    },
+    {
+      "name": "api-ts binds only loopback",
+      "passed": true
+    },
+    {
+      "name": "api-ts runtime excludes migration URL",
+      "passed": true
+    },
+    {
+      "name": "web binds only loopback",
+      "passed": true
+    },
+    {
+      "name": "postgres binds only loopback",
+      "passed": true
+    },
+    {
+      "name": "nats binds only loopback",
+      "passed": true
+    },
+    {
+      "name": "Both schemas migrated",
+      "passed": true
+    },
+    {
+      "name": "Disposable restart probe database absent",
+      "passed": true
+    },
+    {
+      "name": "Database data survives complete local restart",
+      "passed": true
+    },
+    {
+      "name": "Migration history preserved",
+      "passed": true
+    },
+    {
+      "name": "Stable local secrets and audit key preserved",
+      "passed": true
+    },
+    {
+      "name": "Restart probe database removed",
+      "passed": true
+    },
+    {
+      "name": "Readiness after restart 5000",
+      "passed": true
+    },
+    {
+      "name": "Readiness after restart 4000",
+      "passed": true
+    },
+    {
+      "name": "Readiness after restart 3001",
+      "passed": true
+    },
+    {
+      "name": "Private local secrets file",
+      "passed": true
+    },
+    {
+      "name": "JetStream has a persistent named volume",
+      "passed": true
+    }
+  ],
+  "checkCount": 35,
+  "images": [
+    {
+      "name": "api-go",
+      "imageConfigDigest": "1252d97086684cdb8f66d6a52d817f821abcafe971f39337fb29ee46daa7518b"
+    },
+    {
+      "name": "api-ts",
+      "imageConfigDigest": "05c505e2c131c5414d326acd01f9e51d724559bab438700e7870ef3ae8f9eae8"
+    },
+    {
+      "name": "api-ts-migration",
+      "imageConfigDigest": "dce763afcc43b2ab05620f5812bf4932937445ee5eb509080dd13e90149ec4b2"
+    },
+    {
+      "name": "web",
+      "imageConfigDigest": "309d7d931cf6a910bd0376d989de1be3cf44fa848e72ac869af2438f205d0002"
+    }
+  ],
+  "migrationCounts": {
+    "go": 4,
+    "prisma": 13
+  },
+  "failureSequencingUnitTests": 2
+}

@@ -10,7 +10,7 @@ RETURNING *;
 SELECT * FROM delegation WHERE id = $1;
 
 -- name: ListAllDelegations :many
-SELECT * FROM delegation ORDER BY created_at, id;
+SELECT * FROM delegation ORDER BY created_at, id LIMIT 1000;
 
 -- name: RevokeDelegation :one
 -- GREATEST keeps the revoked_at >= created_at invariant under app/DB clock

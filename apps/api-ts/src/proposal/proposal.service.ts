@@ -110,6 +110,20 @@ export class ProposalService implements ProposalSupportRecomputer {
     return proposal;
   }
 
+  async updateDetails(citizenId: string, proposalId: string, details: {
+    objectives: string; measurableOutcomes: string; implementationTimeline: string;
+  }): Promise<Proposal> {
+    await assertActiveCitizen(this.citizenStatus, citizenId);
+    const proposal = await this.getProposalOrThrow(proposalId);
+    this.assertAuthor(proposal, citizenId);
+    if (!CONSTRAINT_ADDABLE_STATUSES.includes(proposal.status)) {
+      throw new InvalidStateDomainError("Proposal details are frozen once voting starts");
+    }
+    return this.prisma.forWorker((tx) => tx.proposal.update({
+      where: { id: proposalId, authorId: citizenId, status: { in: [...CONSTRAINT_ADDABLE_STATUSES] } }, data: details,
+    }));
+  }
+
   // DP-006: proposal:constraint:add -- scope proposal:author, conditions
   // citizen.active + proposal.status:draft,gathering_support,development.
   // No audit emit (DP-006's doc text doesn't say "Emits DP-036").

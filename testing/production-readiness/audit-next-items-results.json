@@ -1,0 +1,565 @@
+{
+  "generatedAt": "2026-10-14T08:22:48.505505+00:00",
+  "scope": "Local continuation of TP-016/REL-002: TASK-016 and bounded TASK-019 checks. No deployment or live electorate.",
+  "fixture": {
+    "database": "Disposable loopback Postgres 16 container; existing app migrations; test owner role (not a restricted-role qualification).",
+    "imageConfigurationDigest": "sha256:87e04d274d186c7331d0e13c7c90c8b9f63b0d7ae94476c98a229a94d62c9745",
+    "schemaVersions": [
+      "0001_init",
+      "0002_auth_ceremony",
+      "0003_security_requests",
+      "0004_runtime_permissions"
+    ],
+    "removed": true
+  },
+  "preFixFailures": [
+    {
+      "ticket": "BUG-021",
+      "test": "TestTallySurvivesServiceRestart / TestPGVotingReplicaTally",
+      "observed": "Reconstructed service overwrote persisted computation timestamp."
+    },
+    {
+      "ticket": "BUG-022",
+      "test": "TestPGVotingIndependentBallotsShareSessionLock",
+      "observed": "Independent ballot timed out under shared session lock after five seconds."
+    }
+  ],
+  "go": {
+    "command": "TEST_DATABASE_URL=<disposable fixture> REQUIRE_DB_TESTS=1 REQUIRE_NATS_TESTS=1 go test -race ./... -count=1 -json",
+    "passedTopLevelTests": 95,
+    "skipped": [
+      {
+        "package": "github.com/digital-democracy/api-go/internal/auth",
+        "test": "TestBrowserPasskeyMemory"
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/auth",
+        "test": "TestBrowserPasskeyPostgres"
+      }
+    ],
+    "testResults": [
+      {
+        "package": "github.com/digital-democracy/api-go/internal/pgconv",
+        "test": "TestUUIDRoundTrip",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/pgconv",
+        "test": "TestFloat64Exact",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/pgconv",
+        "test": "TestNullHelpers",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/security",
+        "test": "TestSignedBoundaryRejectsReplayAndTampering",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/security",
+        "test": "TestCitizenAssuranceAndSpoofedHeaders",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/security",
+        "test": "TestRateLimitIgnoresForwardedAddresses",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/auth",
+        "test": "TestRevokeAllRequiresSignedIdentityServiceRequest",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/auth",
+        "test": "TestRevokeAllRejectsExpiredOrWrongServiceSignature",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/auth",
+        "test": "TestPasskeyProvisionRegisterAndLogin",
+        "elapsedSeconds": 0.01
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/metrics",
+        "test": "TestMiddlewareRecordsRequestsAndDuration",
+        "elapsedSeconds": 0.01
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/delegation",
+        "test": "TestPGDelegationLifecycle",
+        "elapsedSeconds": 0.02
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/metrics",
+        "test": "TestCriticalProcessCountersAreScraped",
+        "elapsedSeconds": 0.01
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/delegation",
+        "test": "TestHTTPDelegationOwnership",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/delegation",
+        "test": "TestMissingCompetencyFailsClosed",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/delegation",
+        "test": "TestCreateValidation",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/delegation",
+        "test": "TestCreateRejectsIncompetentDelegate",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/delegation",
+        "test": "TestCycleRejected",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/delegation",
+        "test": "TestResolveChain",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/delegation",
+        "test": "TestRevoke",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/delegation",
+        "test": "TestExpireDue",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/delegation",
+        "test": "TestHealthz",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/scheduler",
+        "test": "TestStartRunsJobRepeatedlyUntilCancelled",
+        "elapsedSeconds": 0.05
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/security",
+        "test": "TestRestrictedPostgresReplayAndAppendOnlyAudit",
+        "elapsedSeconds": 0.04
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/security",
+        "test": "TestProductionConfigRejectsUnsafeDefaults",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/security",
+        "test": "TestDatabaseTLSModeIsUnambiguous",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/scheduler",
+        "test": "TestStartDoesNotRunImmediately",
+        "elapsedSeconds": 0.02
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/scheduler",
+        "test": "TestFailedRunDoesNotStopFutureTicks",
+        "elapsedSeconds": 0.02
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/audit",
+        "test": "TestAuditConsumerRoundTrip",
+        "elapsedSeconds": 0.17
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/auth",
+        "test": "TestPGPasskeyProvisionRegisterAndLogin",
+        "elapsedSeconds": 0.07
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/auth",
+        "test": "TestPasskeyFailsClosedAndLegacyEndpointsReject",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/auth",
+        "test": "TestCeremonyConsumptionExpiryAndPurpose",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/auth",
+        "test": "TestPGCeremonyConsumptionAndCredentialUpdates",
+        "elapsedSeconds": 0.03
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/audit",
+        "test": "TestPGAuditAppendFlow",
+        "elapsedSeconds": 0.06
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/auth",
+        "test": "TestPGAuthLoginRefreshStepUp",
+        "elapsedSeconds": 0.05
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/audit",
+        "test": "TestPGAuditReviewAndGate",
+        "elapsedSeconds": 0.06
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/audit",
+        "test": "TestHTTPAppendFiveEntriesChainAndVerify",
+        "elapsedSeconds": 0.01
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/audit",
+        "test": "TestHTTPAppendRejectsInvalidActionType",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/audit",
+        "test": "TestHTTPAppendRejectsEmptyActorRef",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/audit",
+        "test": "TestHTTPAppendRejectsMalformedJSON",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/audit",
+        "test": "TestHTTPListRejectsInvalidActionTypeFilter",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/audit",
+        "test": "TestHTTPListFiltersByActionType",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/audit",
+        "test": "TestHTTPCreateRightRejectsEmptyName",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/audit",
+        "test": "TestHTTPFirstEntryHasGenesisPrevHash",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/audit",
+        "test": "TestHTTPIdempotencyFirstPayloadWins",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/auth",
+        "test": "TestPGAuthAnomalyAndPurge",
+        "elapsedSeconds": 0.06
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/auth",
+        "test": "TestLoginTiers",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/auth",
+        "test": "TestLoginStatusGates",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/auth",
+        "test": "TestLoginStatusGateRequiresActiveIdentity",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/auth",
+        "test": "TestLoginFailsClosedWhenIdentityCheckerErrors",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/auth",
+        "test": "TestRefreshRotationAndBinding",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/auth",
+        "test": "TestEnrollValidation",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/auth",
+        "test": "TestStepUpTiersAndBruteForce",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/auth",
+        "test": "TestRevokeAll",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/auth",
+        "test": "TestPurge",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/auth",
+        "test": "TestHealthz",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/audit",
+        "test": "TestHTTPConcurrentAppendsAndReadsStayConsistent",
+        "elapsedSeconds": 0.05
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/audit",
+        "test": "TestHTTPFailedProtocolGateReleaseWritesNoAuditEntry",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/audit",
+        "test": "TestHTTPForgedActorRejected",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/audit",
+        "test": "TestHTTPBallotPayloadRejected",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/audit",
+        "test": "TestHTTPSignatureVerifiesWithPublicKey",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/audit",
+        "test": "TestHTTPReviewRequiresAuthentication",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/audit",
+        "test": "TestHTTPTriggerReviewTrustsCallerDeclaredAffectedRightsWithNoContentCheck",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/audit",
+        "test": "TestProtocolHTTPUsesAuthoritativeIndependentApprovals",
+        "elapsedSeconds": 0.01
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/audit",
+        "test": "TestAppendAndVerify",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/audit",
+        "test": "TestAppendRejectsUnknownAction",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/audit",
+        "test": "TestActionAliases",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/audit",
+        "test": "TestAppendIdempotent",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/audit",
+        "test": "TestConstitutionalReview",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/audit",
+        "test": "TestReviewEmitsAudit",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/audit",
+        "test": "TestProtocolChangeGate",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/audit",
+        "test": "TestAppendAcceptsEveryActionTypeApiTsCanSend",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/audit",
+        "test": "TestHealthz",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/voting",
+        "test": "TestPGVotingCastFlow",
+        "elapsedSeconds": 0.04
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/voting",
+        "test": "TestPGVotingTallyCertify",
+        "elapsedSeconds": 0.05
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/voting",
+        "test": "TestProductionCryptoGate",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/voting",
+        "test": "TestPGVotingReplicaIssueAndSpend",
+        "elapsedSeconds": 0.09
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/voting",
+        "test": "TestPGVotingIndependentBallotsShareSessionLock",
+        "elapsedSeconds": 0.17
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/voting",
+        "test": "TestTallySurvivesServiceRestart",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/voting",
+        "test": "TestPGVotingReplicaTally",
+        "elapsedSeconds": 0.09
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/voting",
+        "test": "TestPGVotingFailedSpendRollsBackBallot",
+        "elapsedSeconds": 0.06
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/voting",
+        "test": "TestPGVotingUnavailablePoolDoesNotSpend",
+        "elapsedSeconds": 0.05
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/voting",
+        "test": "TestPGVotingSessionListBounded",
+        "elapsedSeconds": 0.06
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/voting",
+        "test": "TestBallotHTTPBoundary",
+        "elapsedSeconds": 0.01
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/voting",
+        "test": "TestDeadlineAndFrozenOptions",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/voting",
+        "test": "TestPGDeadlineOptionsAndAnonymousStorage",
+        "elapsedSeconds": 0.05
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/voting",
+        "test": "TestOpenBlockedByCooling",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/voting",
+        "test": "TestIssueTokensIdempotent",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/voting",
+        "test": "TestCastBallotAtomicAndSingleUse",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/voting",
+        "test": "TestVerifyBallotHidesChoice",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/voting",
+        "test": "TestCertifyQuorum",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/voting",
+        "test": "TestCertifyQuorumFailureStaysClosed",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/voting",
+        "test": "TestTallyIdempotent",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/voting",
+        "test": "TestStateMachineViolations",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/voting",
+        "test": "TestEvaluateOutcome",
+        "elapsedSeconds": 0
+      },
+      {
+        "package": "github.com/digital-democracy/api-go/internal/voting",
+        "test": "TestHealthz",
+        "elapsedSeconds": 0
+      }
+    ],
+    "vet": "passed",
+    "build": "passed"
+  },
+  "dependencyGate": {
+    "command": "pnpm test:security-dependencies",
+    "passed": true,
+    "patchRegressions": 10,
+    "rawVulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 1,
+      "high": 2,
+      "critical": 0
+    },
+    "exactPatchedAdvisories": 3,
+    "unmitigatedAdvisories": 0
+  },
+  "mobileBundleGate": {
+    "testsPassed": 7,
+    "reports": [
+      "mobile-hermes-bundle-results.json",
+      "mobile-javascript-bundle-results.json"
+    ],
+    "ciAdded": true,
+    "remoteCIExecuted": false,
+    "mobileLint": "passed",
+    "mobileTypecheck": "passed"
+  },
+  "releaseAndLocalUnitTestsPassed": 13,
+  "sourceSha256": {
+    "apps/api-go/internal/voting/service.go": "63445c71174be87e622cfe180eac331726e2d77873eb6c03614c6b46b066efd5",
+    "apps/api-go/internal/voting/pgstore.go": "db424a9162e51c7fab18270cb8b627827406599b73b6804b27e0b84f06409ae0",
+    "apps/api-go/internal/voting/store.go": "21f4e7d9b26c033b06f7817c19e4a26d72e3ef5e1b158b228e7dcbc0bb1b26c1",
+    "apps/api-go/internal/voting/replica_test.go": "1a5f42350e87add51ee84006c6a1760e4100203e40e1e611690de4a406375482",
+    "apps/api-go/db/queries/voting.sql": "9f4e124ff2e0be0494237f8b0b955f8c9c65c91364fb62e870a3577a01d4cfc1",
+    "apps/api-go/internal/sqlc/voting/voting.sql.go": "d2d78ea06e3771406d325712ee11cae9a9f9758a855955f3a4a9c78b7938c58b",
+    "testing/security/mobile-bundle-audit.mjs": "a6268c8036e153cac1d4e364f4883d0a08dc9c99db018cd0be7977c6c2316167",
+    "testing/security/mobile-bundle-audit.test.mjs": "47e21cd1891b6b670c6be3efa93dac6038547f3d79cf613d02546abe5b5d0b44",
+    "testing/security/dependency-patches.mjs": "0c907e7d5d36ccecd93af8e0cd1adcf556a6c532c54cc27ae53bf169733b331a",
+    ".github/workflows/ci.yml": "ed2f3316724a37f5f86ea19af5cbdf4943750cf15673d9f221c7008819bf7758"
+  },
+  "limitations": [
+    "Browser passkey tests were skipped; no auth flow changes.",
+    "Replica/restart checks reconstruct independent Services/PG pools, not separate deployed API processes.",
+    "Closed-pool recovery and transactional failure injection do not qualify database host failover.",
+    "Concurrent local tally computation can occur before the first immutable result commits; distributed workers remain open.",
+    "No load measurement, reviewed anonymous credentials/encrypted tally, live mesh/TLS, new image scan, production owner assignment or final native package qualification."
+  ]
+}

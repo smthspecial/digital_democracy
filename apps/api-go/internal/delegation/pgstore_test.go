@@ -29,7 +29,7 @@ func pgTestStore(t *testing.T) *PGStore {
 // chain resolution, expiry sweep.
 func TestPGDelegationLifecycle(t *testing.T) {
 	pg := pgTestStore(t)
-	svc := NewService(pg, nil, nil)
+	svc := NewService(pg, CompetencyCheckerFunc(func(string, string) (bool, error) { return true, nil }), nil)
 	now := time.Now().UTC()
 	domain := newID()
 	a, b, c := newID(), newID(), newID()

@@ -1,0 +1,35 @@
+[
+  {
+    "package": "node-forge",
+    "version": "1.4.0",
+    "advisory": "GHSA-86w9-cpqp-85rv",
+    "cve": "CVE-2026-85393",
+    "patch": "patches/node-forge@1.4.0.patch",
+    "sha256": "29c2e824703dd9f7a9cbd134b81e659136274e706fe70e4c599feb2889697a71",
+    "owner": "dependency-maintainer",
+    "reviewBy": "2026-11-07",
+    "reason": "No upstream fixed version in the assessment; local patch rejects the recorded exploit. Recheck upstream and retire this exception when a verified fix or consumer removal is available."
+  },
+  {
+    "package": "braces",
+    "version": "3.0.3",
+    "advisory": "GHSA-vfj7-8cjw-p6xm",
+    "cve": "CVE-2026-93687",
+    "patch": "patches/braces@3.0.3.patch",
+    "sha256": "99f2d754a078a01ef927c0be92ca41351ff568d8ca9c20c5b15884d17eaac8b7",
+    "owner": "dependency-maintainer",
+    "reviewBy": "2026-11-07",
+    "reason": "No upstream fixed version in the assessment; local patch rejects the recorded exploit. Recheck upstream and retire this exception when a verified fix or consumer removal is available."
+  },
+  {
+    "package": "sprintf-js",
+    "version": "1.0.3",
+    "advisory": "GHSA-hp3w-g68c-fv3c",
+    "cve": "CVE-2026-97058",
+    "patch": "patches/sprintf-js@1.0.3.patch",
+    "sha256": "9ee9a4c30e16dd4e765cfcd3108369a1eeec7f1b68e3a21738b802d0f37c6afd",
+    "owner": "dependency-maintainer",
+    "reviewBy": "2026-11-07",
+    "reason": "No upstream fixed version in the assessment; local patch rejects the recorded exploit. Recheck upstream and retire this exception when a verified fix or consumer removal is available."
+  }
+]

@@ -301,11 +301,11 @@ export class ProjectService {
 function toProject(row: {
   id: string;
   proposalId: string;
-  timelineStart: Date;
-  timelineEnd: Date;
+  timelineStart: Date | null;
+  timelineEnd: Date | null;
   budgetAllocated: Prisma.Decimal | null;
   budgetSpent: Prisma.Decimal | null;
-  contractor: string;
+  contractor: string | null;
   status: Project["status"];
 }): Project {
   return {

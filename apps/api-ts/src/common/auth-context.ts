@@ -61,7 +61,8 @@ export function createAuthContextMiddleware(fetchImpl: FetchLike = fetch, authSe
         typeof body !== "object" ||
         typeof (body as Record<string, unknown>).citizen_id !== "string" ||
         typeof (body as Record<string, unknown>).session_id !== "string" ||
-        typeof (body as Record<string, unknown>).assurance_tier !== "string"
+        typeof (body as Record<string, unknown>).assurance_tier !== "string" ||
+        !["T1", "T2", "T3"].includes((body as Record<string, string>).assurance_tier)
       ) {
         writeAuthError(response, 503, "authentication_unavailable", "Authentication service returned an invalid response");
         return;

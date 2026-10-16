@@ -1,0 +1,68 @@
+name: api-ts
+lang: ts
+image:
+  repository: ghcr.io/digital-democracy/api-ts
+port: 8080
+envSecret: api-ts-runtime
+route:
+  prefixes:
+  - /identity
+  - /jurisdiction
+  - /problem
+  - /proposal
+  - /competency
+  - /deliberation
+  - /budget
+  - /governance-role
+  - /civic-duty
+  - /reputation
+  - /project
+  - /iam
+allowedIngress:
+- namespace: kube-system
+  name: traefik
+  publicGateway: true
+- namespace: api-go
+  name: api-go
+- namespace: identity-verifier
+  name: identity-verifier
+allowedEgress:
+- api-go
+allowedDependencies:
+- namespace: infrastructure
+  name: postgres
+  port: 5432
+configEnv:
+  APP_ENV: production
+  AUTH_SERVICE_URL: http://api-go.api-go.svc.cluster.local:8080
+  AUDIT_SERVICE_URL: http://api-go.api-go.svc.cluster.local:8080
+internalReadPaths:
+- /identity/duplicates/scan
+- /identity/registrations/burst-check
+- /jurisdiction/proposals/{*}/jurisdictions/{*}/eligible-citizens
+- /governance-role/actions/{*}/protocol-approvals
+publicMutations:
+- method: POST
+  paths:
+  - /identity/citizens
+  - /identity/revocations*
+  - /jurisdiction/residencies*
+  - /jurisdiction/memberships
+  - /problem/*
+  - /proposal/*
+  - /competency/*
+  - /deliberation/*
+  - /budget/*
+  - /governance-role/approvals
+  - /civic-duty/*
+  - /reputation/*
+  - /project/*
+  - /iam/*
+- method: DELETE
+  paths:
+  - /problem/*
+  - /competency/*
+  - /iam/*
+- method: PATCH
+  paths:
+  - /project/milestones/*

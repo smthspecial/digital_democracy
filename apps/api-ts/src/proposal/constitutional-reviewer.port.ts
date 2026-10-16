@@ -1,4 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
+import { serviceHeaders } from "../common/internal-service.guard.js";
 
 export const CONSTITUTIONAL_REVIEWER = Symbol("CONSTITUTIONAL_REVIEWER");
 
@@ -35,21 +36,20 @@ export class HttpConstitutionalReviewer implements ConstitutionalReviewer {
       return false;
     }
     try {
-      const response = await fetch(`${this.auditServiceUrl}/audit/reviews`, {
+      const path = "/audit/reviews";
+      const body = JSON.stringify({ proposal_id: proposalId, affected_right_ids: [], reviewer_ref: "proposal-service" });
+      const response = await fetch(`${this.auditServiceUrl}${path}`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          proposal_id: proposalId,
-          affected_right_ids: [],
-          reviewer_ref: "proposal-service",
-        }),
+        headers: { "content-type": "application/json", ...serviceHeaders("POST", path, body) },
+        body,
+        signal: AbortSignal.timeout(3000),
       });
       if (!response.ok) {
         this.logger.error(`constitutional review failed: HTTP ${response.status} for proposal ${proposalId}`);
         return false;
       }
-      const body = (await response.json()) as { blocked: boolean };
-      return !body.blocked;
+      const result = (await response.json()) as { blocked?: unknown };
+      return result?.blocked === false;
     } catch (err) {
       this.logger.error(`constitutional review failed: ${(err as Error).message} for proposal ${proposalId}`);
       return false;

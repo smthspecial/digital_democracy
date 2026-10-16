@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { JourneyModule } from "./journey/journey.module.js";
 import { ScheduleModule } from "@nestjs/schedule";
 import { BudgetModule } from "./budget/budget.module.js";
 import { CivicDutyModule } from "./civic-duty/civic-duty.module.js";
@@ -30,6 +31,7 @@ import { ReputationModule } from "./reputation/reputation.module.js";
 @Module({
   imports: [
     ScheduleModule.forRoot(),
+    JourneyModule,
     PrismaModule,
     HealthModule,
     MetricsModule,

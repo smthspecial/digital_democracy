@@ -1,0 +1,1043 @@
+{
+  "SchemaVersion": 2,
+  "Trivy": {
+    "Version": "0.75.0"
+  },
+  "ReportID": "01a11cac-a01a-70f5-96a8-05df16e3a6a8",
+  "CreatedAt": "2026-10-08T20:00:37.658063546+02:00",
+  "ArtifactID": "sha256:d3444b4106ff256136fe6068d9dba0b8bf517a92451092d686076caf708ad005",
+  "ArtifactName": "/tmp/dd-readiness-final-api-ts-migration.tar",
+  "ArtifactType": "container_image",
+  "Metadata": {
+    "Size": 957718016,
+    "OS": {
+      "Family": "alpine",
+      "Name": "3.24.2"
+    },
+    "ImageID": "sha256:a0b3dfa670254fb1ea96d23f550ed551b74ad537e90152d526f54d4a5a322999",
+    "DiffIDs": [
+      "sha256:74d97c428c51a828f9051a7a40a53ff1fc99e54fc30323ce36760701b0b7f711",
+      "sha256:7c732ed82ebdb575d2af70ebb84786b7421107ae929359e8e180c636040cbe88",
+      "sha256:6f3bd0caa7c25469ef663d37b3d333f7cda0b2887c78a1653af1f7bc6babef2d",
+      "sha256:a3b40bc0bbc6fc169200dd4069eac2195573e96112b64ad82c795d6ef3636719",
+      "sha256:78203b6095a9c4949b291fc45513b4d447a162c78c31a0d5e13a3f1514f18a43",
+      "sha256:fb2d219a81ab7396eaf4dfcafc1977d8c361c9afd9a641db9abe5ea1c08f1411",
+      "sha256:00cf351cae652707c69d4bd24a3d8b7cb831ece77f27a1dd71e6f346cf841e95",
+      "sha256:a57c453ce95ddd8098b2af30c07820e37dd05eb25df18972e3efdbf3b06d029a",
+      "sha256:55e293dd4902965ffb025cfdeca35c7286176342b7d57ede4b629ff867261679",
+      "sha256:b268a90a754072553110883a27b5bb46575fc9686a579aaf388e74de83b76a6b",
+      "sha256:0dca469d159da363206b898720132454895305c23a350fb9e29e6c04082578f0",
+      "sha256:9b89d41e0374ed61998c718dbed6df6219c07de3f44b79d3b5a7a257a81288d3",
+      "sha256:126fb0e9a261edf314a9bcd20617761d41aaed9cf582b63d728db27863506de7",
+      "sha256:84d9e5e4796df33d1f06fb19a855b365ae5588b21155d2a503c65eeac6153f2a",
+      "sha256:d27c8b111b345a5a8b9042862340404bda9ebcc4278319e8baceb36f66a06e69",
+      "sha256:252ac902114378957849be447b5d6607e465c0788f05f4dd87df097c0d7cec58",
+      "sha256:dd4c88bd59b18b61f417f94da66a0e96d79629825583edcc792eeb36ad4e2826",
+      "sha256:968361031c8f0af6db881be2688c6be2816686930d6651d93848a56a9b16bd45"
+    ],
+    "RepoTags": [
+      "localhost/dd-readiness-api-ts-migration:20261008"
+    ],
+    "Reference": "localhost/dd-readiness-api-ts-migration:20261008",
+    "ImageConfig": {
+      "architecture": "amd64",
+      "created": "2026-10-08T17:58:22.616822487Z",
+      "history": [
+        {
+          "created": "2026-09-17T20:37:20.889221879Z",
+          "created_by": "ADD alpine-minirootfs-3.24.2-x86_64.tar.gz / # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-09-17T20:37:20.889221879Z",
+          "created_by": "CMD [\"/bin/sh\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-09-17T21:47:23.804075229Z",
+          "created_by": "ENV NODE_VERSION=24.21.0",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-09-17T21:47:23.804075229Z",
+          "created_by": "RUN /bin/sh -c addgroup -g 1000 node     \u0026\u0026 adduser -u 1000 -G node -s /bin/sh -D node     \u0026\u0026 apk add --no-cache         libstdc++     \u0026\u0026 apk add --no-cache --virtual .build-deps         curl     \u0026\u0026 ARCH= OPENSSL_ARCH='linux*' \u0026\u0026 alpineArch=\"$(apk --print-arch)\"       \u0026\u0026 case \"${alpineArch##*-}\" in         x86_64) ARCH='x64' CHECKSUM=\"dd5ca647e656c8200c873f45098a16623129c47f2387829f0a15a6de1dac1220\" OPENSSL_ARCH=linux-x86_64;;         aarch64) OPENSSL_ARCH=linux-aarch64;;         s390x) OPENSSL_ARCH=linux-s390x;;         *) echo \"unsupported architecture\"; exit 1 ;;       esac   \u0026\u0026 if [ -n \"${CHECKSUM}\" ]; then     set -eu;     curl -fsSLO --compressed \"https://unofficial-builds.nodejs.org/download/release/v$NODE_VERSION/node-v$NODE_VERSION-linux-$ARCH-musl.tar.xz\";     echo \"$CHECKSUM  node-v$NODE_VERSION-linux-$ARCH-musl.tar.xz\" | sha256sum -c -       \u0026\u0026 tar -xJf \"node-v$NODE_VERSION-linux-$ARCH-musl.tar.xz\" -C /usr/local --strip-components=1 --no-same-owner       \u0026\u0026 ln -s /usr/local/bin/node /usr/local/bin/nodejs;   else     echo \"Building from source\"     \u0026\u0026 apk add --no-cache --virtual .build-deps-full         binutils-gold         g++         gcc         gnupg         libgcc         linux-headers         make         python3         py-setuptools     \u0026\u0026 export GNUPGHOME=\"$(mktemp -d)\"     \u0026\u0026 for key in       5BE8A3F6C8A5C01D106C0AD820B1A390B168D356       DD792F5973C6DE52C432CBDAC77ABFA00DDBF2B7       CC68F5A3106FF448322E48ED27F5E38D5B0A215F       890C08DB8579162FEE0DF9DB8BEAB4DFCF555EF4       C82FA3AE1CBEDC6BE46B9360C43CEC45C17AB93C       108F52B48DB57BB0CC439B2997B01419BD92F80A       655F3B5C1FB3FA8D1A0CA6BDE4A7D232B936D2FD       A363A499291CBBC940DD62E41F10027AF002F8B0     ; do       { gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys \"$key\" \u0026\u0026 gpg --batch --fingerprint \"$key\"; } ||       { gpg --batch --keyserver keyserver.ubuntu.com --recv-keys \"$key\" \u0026\u0026 gpg --batch --fingerprint \"$key\"; } ;     done     \u0026\u0026 curl -fsSLO --compressed \"https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION.tar.xz\"     \u0026\u0026 curl -fsSLO --compressed \"https://nodejs.org/dist/v$NODE_VERSION/SHASUMS256.txt.asc\"     \u0026\u0026 gpg --batch --decrypt --output SHASUMS256.txt SHASUMS256.txt.asc     \u0026\u0026 gpgconf --kill all     \u0026\u0026 rm -rf \"$GNUPGHOME\"     \u0026\u0026 grep \" node-v$NODE_VERSION.tar.xz\\$\" SHASUMS256.txt | sha256sum -c -     \u0026\u0026 tar -xf \"node-v$NODE_VERSION.tar.xz\"     \u0026\u0026 cd \"node-v$NODE_VERSION\"     \u0026\u0026 ./configure     \u0026\u0026 make -j$(getconf _NPROCESSORS_ONLN) V=     \u0026\u0026 make install     \u0026\u0026 apk del .build-deps-full     \u0026\u0026 cd ..     \u0026\u0026 rm -Rf \"node-v$NODE_VERSION\"     \u0026\u0026 rm \"node-v$NODE_VERSION.tar.xz\" SHASUMS256.txt.asc SHASUMS256.txt;   fi   \u0026\u0026 rm -f \"node-v$NODE_VERSION-linux-$ARCH-musl.tar.xz\"   \u0026\u0026 find /usr/local/include/node/openssl/archs -mindepth 1 -maxdepth 1 ! -name \"$OPENSSL_ARCH\" -exec rm -rf {} \\;   \u0026\u0026 apk del .build-deps   \u0026\u0026 node --version   \u0026\u0026 npm --version   \u0026\u0026 rm -rf /tmp/* # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-09-17T21:47:23.804075229Z",
+          "created_by": "ENV YARN_VERSION=1.22.22",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-09-17T21:47:27.81726335Z",
+          "created_by": "RUN /bin/sh -c apk add --no-cache --virtual .build-deps-yarn curl gnupg tar   \u0026\u0026 export GNUPGHOME=\"$(mktemp -d)\"   \u0026\u0026 for key in     6A010C5166006599AA17F08146C2130DFD2497F5   ; do     { gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys \"$key\" \u0026\u0026 gpg --batch --fingerprint \"$key\"; } ||     { gpg --batch --keyserver keyserver.ubuntu.com --recv-keys \"$key\" \u0026\u0026 gpg --batch --fingerprint \"$key\"; } ;   done   \u0026\u0026 curl -fsSLO --compressed \"https://yarnpkg.com/downloads/$YARN_VERSION/yarn-v$YARN_VERSION.tar.gz\"   \u0026\u0026 curl -fsSLO --compressed \"https://yarnpkg.com/downloads/$YARN_VERSION/yarn-v$YARN_VERSION.tar.gz.asc\"   \u0026\u0026 gpg --batch --verify yarn-v$YARN_VERSION.tar.gz.asc yarn-v$YARN_VERSION.tar.gz   \u0026\u0026 gpgconf --kill all   \u0026\u0026 rm -rf \"$GNUPGHOME\"   \u0026\u0026 mkdir -p /opt   \u0026\u0026 tar -xzf yarn-v$YARN_VERSION.tar.gz -C /opt/   \u0026\u0026 ln -s /opt/yarn-v$YARN_VERSION/bin/yarn /usr/local/bin/yarn   \u0026\u0026 ln -s /opt/yarn-v$YARN_VERSION/bin/yarnpkg /usr/local/bin/yarnpkg   \u0026\u0026 rm yarn-v$YARN_VERSION.tar.gz.asc yarn-v$YARN_VERSION.tar.gz   \u0026\u0026 apk del .build-deps-yarn   \u0026\u0026 yarn --version   \u0026\u0026 rm -rf /tmp/* # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-09-17T21:47:27.838317214Z",
+          "created_by": "COPY docker-entrypoint.sh /usr/local/bin/ # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-09-17T21:47:27.838317214Z",
+          "created_by": "ENTRYPOINT [\"docker-entrypoint.sh\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-09-17T21:47:27.838317214Z",
+          "created_by": "CMD [\"node\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-10-08T14:27:43.838356974Z",
+          "created_by": "/bin/sh -c #(nop) WORKDIR /src",
+          "comment": "FROM docker.io/library/node:24-alpine",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-10-08T14:27:44.107880933Z",
+          "created_by": "/bin/sh -c corepack enable",
+          "comment": "FROM 908779e15aa1"
+        },
+        {
+          "created": "2026-10-08T14:27:44.172548421Z",
+          "created_by": "/bin/sh -c #(nop) ENV CI=true",
+          "comment": "FROM afd26961b1bc",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-10-08T17:22:02.650383289Z",
+          "created_by": "/bin/sh -c #(nop) COPY multi:3e3ffd91d7e7f65f90f3218315dfdf13db0f4cd17560f3f80e69d254ba183e0a in ./ ",
+          "comment": "FROM a25ec5ae8606"
+        },
+        {
+          "created": "2026-10-08T17:22:02.78981498Z",
+          "created_by": "/bin/sh -c #(nop) COPY dir:958d503e7dfede5a5937698b59b7d8f2538921f0c5d806bf4b78eca07a4823ed in patches/ ",
+          "comment": "FROM 9b899fb02927"
+        },
+        {
+          "created": "2026-10-08T17:22:02.927276251Z",
+          "created_by": "/bin/sh -c #(nop) COPY dir:1640fea070426ac5c6c21ce56383b1d0c5a9df9cf872ba01f3f54aa87471153d in packages/tsconfig/ ",
+          "comment": "FROM b16bf71232bd"
+        },
+        {
+          "created": "2026-10-08T17:22:03.064952062Z",
+          "created_by": "/bin/sh -c #(nop) COPY dir:d98cfd251df988d5e683836adcb94036c7db7bb17e10d3424a7561c9c273a4ee in packages/eslint-config/ ",
+          "comment": "FROM a18b397a0c36"
+        },
+        {
+          "created": "2026-10-08T17:22:03.20581795Z",
+          "created_by": "/bin/sh -c #(nop) COPY file:16d14a15a529a25669bc475c6404946c93c0b96fe60e6d0b3e3ccf6ad4e2e3ad in apps/api-ts/package.json ",
+          "comment": "FROM 9451662d4d14"
+        },
+        {
+          "created": "2026-10-08T17:22:19.118772522Z",
+          "created_by": "/bin/sh -c pnpm install --frozen-lockfile",
+          "comment": "FROM 84ca68519d39"
+        },
+        {
+          "created": "2026-10-08T17:58:08.458345996Z",
+          "created_by": "/bin/sh -c #(nop) COPY dir:70bbb836ca69bcb83445d84b14ef612b7e6c0d6ab204f438153a7a34b612613e in apps/api-ts/ ",
+          "comment": "FROM 624d3fb5a763"
+        },
+        {
+          "created": "2026-10-08T17:58:12.16962081Z",
+          "created_by": "/bin/sh -c MIGRATE_DATABASE_URL=postgresql://unused:unused@localhost:5432/unused pnpm --filter @dd/api-ts exec prisma generate",
+          "comment": "FROM cef04d3d1d5d"
+        },
+        {
+          "created": "2026-10-08T17:58:18.290941325Z",
+          "created_by": "/bin/sh -c pnpm --filter @dd/api-ts build",
+          "comment": "FROM 3a61ef70b12f"
+        },
+        {
+          "created": "2026-10-08T17:58:18.674642986Z",
+          "created_by": "/bin/sh -c adduser -D -H -u 10001 appuser",
+          "comment": "FROM ab5e601efdfd"
+        },
+        {
+          "created": "2026-10-08T17:58:18.997221002Z",
+          "created_by": "/bin/sh -c rm /src/pnpm-lock.yaml",
+          "comment": "FROM d4d4feaab645"
+        },
+        {
+          "created": "2026-10-08T17:58:19.383038981Z",
+          "created_by": "/bin/sh -c rm -rf /src/apps/api-ts/src /src/apps/api-ts/dist /src/apps/api-ts/.env.example",
+          "comment": "FROM a317a7d1f87e"
+        },
+        {
+          "created": "2026-10-08T17:58:22.404372313Z",
+          "created_by": "/bin/sh -c apk upgrade --no-cache \u0026\u0026 rm -rf /root/.cache /usr/local/lib/node_modules /opt/yarn* /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/pnpm /usr/local/bin/pnpx /usr/local/bin/yarn /usr/local/bin/yarnpkg",
+          "comment": "FROM 81ee7f94c6f6"
+        },
+        {
+          "created": "2026-10-08T17:58:22.509862799Z",
+          "created_by": "/bin/sh -c #(nop) WORKDIR /src/apps/api-ts",
+          "comment": "FROM d9f950b1f08c",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-10-08T17:58:22.564072034Z",
+          "created_by": "/bin/sh -c #(nop) USER 10001:10001",
+          "comment": "FROM c47e60ef9c3f",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-10-08T17:58:22.617351456Z",
+          "created_by": "/bin/sh -c #(nop) ENTRYPOINT [\"node\", \"node_modules/prisma/build/index.js\", \"migrate\", \"deploy\"]",
+          "comment": "FROM 6836ace5679f",
+          "empty_layer": true
+        }
+      ],
+      "os": "linux",
+      "rootfs": {
+        "type": "layers",
+        "diff_ids": [
+          "sha256:74d97c428c51a828f9051a7a40a53ff1fc99e54fc30323ce36760701b0b7f711",
+          "sha256:7c732ed82ebdb575d2af70ebb84786b7421107ae929359e8e180c636040cbe88",
+          "sha256:6f3bd0caa7c25469ef663d37b3d333f7cda0b2887c78a1653af1f7bc6babef2d",
+          "sha256:a3b40bc0bbc6fc169200dd4069eac2195573e96112b64ad82c795d6ef3636719",
+          "sha256:78203b6095a9c4949b291fc45513b4d447a162c78c31a0d5e13a3f1514f18a43",
+          "sha256:fb2d219a81ab7396eaf4dfcafc1977d8c361c9afd9a641db9abe5ea1c08f1411",
+          "sha256:00cf351cae652707c69d4bd24a3d8b7cb831ece77f27a1dd71e6f346cf841e95",
+          "sha256:a57c453ce95ddd8098b2af30c07820e37dd05eb25df18972e3efdbf3b06d029a",
+          "sha256:55e293dd4902965ffb025cfdeca35c7286176342b7d57ede4b629ff867261679",
+          "sha256:b268a90a754072553110883a27b5bb46575fc9686a579aaf388e74de83b76a6b",
+          "sha256:0dca469d159da363206b898720132454895305c23a350fb9e29e6c04082578f0",
+          "sha256:9b89d41e0374ed61998c718dbed6df6219c07de3f44b79d3b5a7a257a81288d3",
+          "sha256:126fb0e9a261edf314a9bcd20617761d41aaed9cf582b63d728db27863506de7",
+          "sha256:84d9e5e4796df33d1f06fb19a855b365ae5588b21155d2a503c65eeac6153f2a",
+          "sha256:d27c8b111b345a5a8b9042862340404bda9ebcc4278319e8baceb36f66a06e69",
+          "sha256:252ac902114378957849be447b5d6607e465c0788f05f4dd87df097c0d7cec58",
+          "sha256:dd4c88bd59b18b61f417f94da66a0e96d79629825583edcc792eeb36ad4e2826",
+          "sha256:968361031c8f0af6db881be2688c6be2816686930d6651d93848a56a9b16bd45"
+        ]
+      },
+      "config": {
+        "Entrypoint": [
+          "node",
+          "node_modules/prisma/build/index.js",
+          "migrate",
+          "deploy"
+        ],
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "NODE_VERSION=24.21.0",
+          "YARN_VERSION=1.22.22",
+          "CI=true"
+        ],
+        "Labels": {
+          "io.buildah.version": "1.33.7"
+        },
+        "User": "10001:10001",
+        "WorkingDir": "/src/apps/api-ts"
+      }
+    },
+    "Layers": [
+      {
+        "Size": 8704000,
+        "DiffID": "sha256:74d97c428c51a828f9051a7a40a53ff1fc99e54fc30323ce36760701b0b7f711"
+      },
+      {
+        "Size": 159178752,
+        "DiffID": "sha256:7c732ed82ebdb575d2af70ebb84786b7421107ae929359e8e180c636040cbe88"
+      },
+      {
+        "Size": 5388288,
+        "DiffID": "sha256:6f3bd0caa7c25469ef663d37b3d333f7cda0b2887c78a1653af1f7bc6babef2d"
+      },
+      {
+        "Size": 3584,
+        "DiffID": "sha256:a3b40bc0bbc6fc169200dd4069eac2195573e96112b64ad82c795d6ef3636719"
+      },
+      {
+        "Size": 120832,
+        "DiffID": "sha256:78203b6095a9c4949b291fc45513b4d447a162c78c31a0d5e13a3f1514f18a43"
+      },
+      {
+        "Size": 371712,
+        "DiffID": "sha256:fb2d219a81ab7396eaf4dfcafc1977d8c361c9afd9a641db9abe5ea1c08f1411"
+      },
+      {
+        "Size": 10240,
+        "DiffID": "sha256:00cf351cae652707c69d4bd24a3d8b7cb831ece77f27a1dd71e6f346cf841e95"
+      },
+      {
+        "Size": 8704,
+        "DiffID": "sha256:a57c453ce95ddd8098b2af30c07820e37dd05eb25df18972e3efdbf3b06d029a"
+      },
+      {
+        "Size": 6656,
+        "DiffID": "sha256:55e293dd4902965ffb025cfdeca35c7286176342b7d57ede4b629ff867261679"
+      },
+      {
+        "Size": 6144,
+        "DiffID": "sha256:b268a90a754072553110883a27b5bb46575fc9686a579aaf388e74de83b76a6b"
+      },
+      {
+        "Size": 762361344,
+        "DiffID": "sha256:0dca469d159da363206b898720132454895305c23a350fb9e29e6c04082578f0"
+      },
+      {
+        "Size": 941568,
+        "DiffID": "sha256:9b89d41e0374ed61998c718dbed6df6219c07de3f44b79d3b5a7a257a81288d3"
+      },
+      {
+        "Size": 11833856,
+        "DiffID": "sha256:126fb0e9a261edf314a9bcd20617761d41aaed9cf582b63d728db27863506de7"
+      },
+      {
+        "Size": 2506240,
+        "DiffID": "sha256:84d9e5e4796df33d1f06fb19a855b365ae5588b21155d2a503c65eeac6153f2a"
+      },
+      {
+        "Size": 15360,
+        "DiffID": "sha256:d27c8b111b345a5a8b9042862340404bda9ebcc4278319e8baceb36f66a06e69"
+      },
+      {
+        "Size": 4608,
+        "DiffID": "sha256:252ac902114378957849be447b5d6607e465c0788f05f4dd87df097c0d7cec58"
+      },
+      {
+        "Size": 8704,
+        "DiffID": "sha256:dd4c88bd59b18b61f417f94da66a0e96d79629825583edcc792eeb36ad4e2826"
+      },
+      {
+        "Size": 6247424,
+        "DiffID": "sha256:968361031c8f0af6db881be2688c6be2816686930d6651d93848a56a9b16bd45"
+      }
+    ]
+  },
+  "Results": [
+    {
+      "Target": "/tmp/dd-readiness-final-api-ts-migration.tar (alpine 3.24.2)",
+      "Class": "os-pkgs",
+      "Type": "alpine",
+      "Packages": [
+        {
+          "ID": "alpine-baselayout@3.7.2-r1",
+          "Name": "alpine-baselayout",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/alpine-baselayout@3.7.2-r1?arch=x86_64\u0026distro=3.24.2",
+            "UID": "1b9c543300f8073e"
+          },
+          "Version": "3.7.2-r1",
+          "Arch": "x86_64",
+          "SrcName": "alpine-baselayout",
+          "SrcVersion": "3.7.2-r1",
+          "Licenses": [
+            "GPL-2.0-only"
+          ],
+          "Maintainer": "Natanael Copa \u003cncopa@alpinelinux.org\u003e",
+          "DependsOn": [
+            "alpine-baselayout-data@3.7.2-r1",
+            "busybox-binsh@1.37.0-r31"
+          ],
+          "Layer": {
+            "DiffID": "sha256:74d97c428c51a828f9051a7a40a53ff1fc99e54fc30323ce36760701b0b7f711"
+          },
+          "Digest": "sha1:f0fcfdc2f4da058af6473bc45c4eab62916225b2",
+          "InstalledFiles": [
+            "etc/motd",
+            "etc/crontabs/root",
+            "etc/modprobe.d/aliases.conf",
+            "etc/modprobe.d/blacklist.conf",
+            "etc/modprobe.d/i386.conf",
+            "etc/profile.d/20locale.sh",
+            "etc/profile.d/README",
+            "etc/profile.d/color_prompt.sh.disabled",
+            "usr/lib/sysctl.d/00-alpine.conf",
+            "var/lock",
+            "var/run",
+            "var/spool/mail",
+            "var/spool/cron/crontabs"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "alpine-baselayout-data@3.7.2-r1",
+          "Name": "alpine-baselayout-data",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/alpine-baselayout-data@3.7.2-r1?arch=x86_64\u0026distro=3.24.2",
+            "UID": "fcc3cd90122d8aa7"
+          },
+          "Version": "3.7.2-r1",
+          "Arch": "x86_64",
+          "SrcName": "alpine-baselayout",
+          "SrcVersion": "3.7.2-r1",
+          "Licenses": [
+            "GPL-2.0-only"
+          ],
+          "Maintainer": "Natanael Copa \u003cncopa@alpinelinux.org\u003e",
+          "Layer": {
+            "DiffID": "sha256:74d97c428c51a828f9051a7a40a53ff1fc99e54fc30323ce36760701b0b7f711"
+          },
+          "Digest": "sha1:c6f9bded17d844b6f1b0bb5766d2c35c0d5c8508",
+          "InstalledFiles": [
+            "etc/fstab",
+            "etc/group",
+            "etc/hostname",
+            "etc/hosts",
+            "etc/inittab",
+            "etc/modules",
+            "etc/mtab",
+            "etc/nsswitch.conf",
+            "etc/passwd",
+            "etc/profile",
+            "etc/protocols",
+            "etc/services",
+            "etc/shadow",
+            "etc/shells",
+            "etc/sysctl.conf"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "alpine-keys@2.6-r0",
+          "Name": "alpine-keys",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/alpine-keys@2.6-r0?arch=x86_64\u0026distro=3.24.2",
+            "UID": "cb1f6c8fa74713e0"
+          },
+          "Version": "2.6-r0",
+          "Arch": "x86_64",
+          "SrcName": "alpine-keys",
+          "SrcVersion": "2.6-r0",
+          "Licenses": [
+            "MIT"
+          ],
+          "Maintainer": "Natanael Copa \u003cncopa@alpinelinux.org\u003e",
+          "Layer": {
+            "DiffID": "sha256:74d97c428c51a828f9051a7a40a53ff1fc99e54fc30323ce36760701b0b7f711"
+          },
+          "Digest": "sha1:d8d6b80e53c059a77e4915da78ba964f3ffea240",
+          "InstalledFiles": [
+            "etc/apk/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub",
+            "etc/apk/keys/alpine-devel@lists.alpinelinux.org-5261cecb.rsa.pub",
+            "etc/apk/keys/alpine-devel@lists.alpinelinux.org-6165ee59.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-5243ef4b.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-524d27bb.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-5261cecb.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-58199dcc.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-58cbb476.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-58e4f17d.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-5e69ca50.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-60ac2099.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-6165ee59.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-61666e3f.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-616a9724.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-616abc23.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-616ac3bc.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-616adfeb.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-616ae350.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-616db30d.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-66ba20fe.rsa.pub",
+            "usr/share/apk/keys/aarch64/alpine-devel@lists.alpinelinux.org-58199dcc.rsa.pub",
+            "usr/share/apk/keys/aarch64/alpine-devel@lists.alpinelinux.org-616ae350.rsa.pub",
+            "usr/share/apk/keys/armhf/alpine-devel@lists.alpinelinux.org-524d27bb.rsa.pub",
+            "usr/share/apk/keys/armhf/alpine-devel@lists.alpinelinux.org-616a9724.rsa.pub",
+            "usr/share/apk/keys/armv7/alpine-devel@lists.alpinelinux.org-524d27bb.rsa.pub",
+            "usr/share/apk/keys/armv7/alpine-devel@lists.alpinelinux.org-616adfeb.rsa.pub",
+            "usr/share/apk/keys/loongarch64/alpine-devel@lists.alpinelinux.org-66ba20fe.rsa.pub",
+            "usr/share/apk/keys/mips64/alpine-devel@lists.alpinelinux.org-5e69ca50.rsa.pub",
+            "usr/share/apk/keys/ppc64le/alpine-devel@lists.alpinelinux.org-58cbb476.rsa.pub",
+            "usr/share/apk/keys/ppc64le/alpine-devel@lists.alpinelinux.org-616abc23.rsa.pub",
+            "usr/share/apk/keys/riscv64/alpine-devel@lists.alpinelinux.org-60ac2099.rsa.pub",
+            "usr/share/apk/keys/riscv64/alpine-devel@lists.alpinelinux.org-616db30d.rsa.pub",
+            "usr/share/apk/keys/s390x/alpine-devel@lists.alpinelinux.org-58e4f17d.rsa.pub",
+            "usr/share/apk/keys/s390x/alpine-devel@lists.alpinelinux.org-616ac3bc.rsa.pub",
+            "usr/share/apk/keys/x86/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub",
+            "usr/share/apk/keys/x86/alpine-devel@lists.alpinelinux.org-5243ef4b.rsa.pub",
+            "usr/share/apk/keys/x86/alpine-devel@lists.alpinelinux.org-61666e3f.rsa.pub",
+            "usr/share/apk/keys/x86_64/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub",
+            "usr/share/apk/keys/x86_64/alpine-devel@lists.alpinelinux.org-5261cecb.rsa.pub",
+            "usr/share/apk/keys/x86_64/alpine-devel@lists.alpinelinux.org-6165ee59.rsa.pub"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "alpine-release@3.24.2-r0",
+          "Name": "alpine-release",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/alpine-release@3.24.2-r0?arch=x86_64\u0026distro=3.24.2",
+            "UID": "c8c46806ee8e6495"
+          },
+          "Version": "3.24.2-r0",
+          "Arch": "x86_64",
+          "SrcName": "alpine-base",
+          "SrcVersion": "3.24.2-r0",
+          "Licenses": [
+            "MIT"
+          ],
+          "Maintainer": "Natanael Copa \u003cncopa@alpinelinux.org\u003e",
+          "DependsOn": [
+            "alpine-keys@2.6-r0"
+          ],
+          "Layer": {
+            "DiffID": "sha256:74d97c428c51a828f9051a7a40a53ff1fc99e54fc30323ce36760701b0b7f711"
+          },
+          "Digest": "sha1:6fd1be469ca235e9c62f1b73fa3e5bffafdeb6b5",
+          "InstalledFiles": [
+            "etc/alpine-release",
+            "etc/issue",
+            "etc/os-release",
+            "etc/secfixes.d/alpine",
+            "usr/lib/os-release"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "apk-tools@3.0.8-r0",
+          "Name": "apk-tools",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/apk-tools@3.0.8-r0?arch=x86_64\u0026distro=3.24.2",
+            "UID": "b31d879d87aa92c6"
+          },
+          "Version": "3.0.8-r0",
+          "Arch": "x86_64",
+          "SrcName": "apk-tools",
+          "SrcVersion": "3.0.8-r0",
+          "Licenses": [
+            "GPL-2.0-only"
+          ],
+          "Maintainer": "Natanael Copa \u003cncopa@alpinelinux.org\u003e",
+          "DependsOn": [
+            "ca-certificates-bundle@20260909-r0",
+            "libapk@3.0.8-r0",
+            "libcrypto3@3.5.9-r0",
+            "musl@1.2.6-r2",
+            "zlib@1.3.2-r1"
+          ],
+          "Layer": {
+            "DiffID": "sha256:74d97c428c51a828f9051a7a40a53ff1fc99e54fc30323ce36760701b0b7f711"
+          },
+          "Digest": "sha1:786130a8f2d3ac69fc316118757b7e8151b8b8c3",
+          "InstalledFiles": [
+            "sbin/apk"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "busybox@1.37.0-r31",
+          "Name": "busybox",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/busybox@1.37.0-r31?arch=x86_64\u0026distro=3.24.2",
+            "UID": "771020c43c8440bf"
+          },
+          "Version": "1.37.0-r31",
+          "Arch": "x86_64",
+          "SrcName": "busybox",
+          "SrcVersion": "1.37.0-r31",
+          "Licenses": [
+            "GPL-2.0-only"
+          ],
+          "Maintainer": "Sören Tempel \u003csoeren+alpine@soeren-tempel.net\u003e",
+          "DependsOn": [
+            "musl@1.2.6-r2"
+          ],
+          "Layer": {
+            "DiffID": "sha256:74d97c428c51a828f9051a7a40a53ff1fc99e54fc30323ce36760701b0b7f711"
+          },
+          "Digest": "sha1:b5405ebc02f7dd8be95b6265c54b243d5456ab8f",
+          "InstalledFiles": [
+            "bin/busybox",
+            "etc/securetty",
+            "etc/busybox-paths.d/busybox",
+            "etc/logrotate.d/acpid",
+            "etc/network/if-up.d/dad",
+            "etc/udhcpc/udhcpc.conf",
+            "usr/share/udhcpc/default.script"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "busybox-binsh@1.37.0-r31",
+          "Name": "busybox-binsh",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/busybox-binsh@1.37.0-r31?arch=x86_64\u0026distro=3.24.2",
+            "UID": "1ec8a3d5d2b63297"
+          },
+          "Version": "1.37.0-r31",
+          "Arch": "x86_64",
+          "SrcName": "busybox",
+          "SrcVersion": "1.37.0-r31",
+          "Licenses": [
+            "GPL-2.0-only"
+          ],
+          "Maintainer": "Sören Tempel \u003csoeren+alpine@soeren-tempel.net\u003e",
+          "DependsOn": [
+            "busybox@1.37.0-r31"
+          ],
+          "Layer": {
+            "DiffID": "sha256:74d97c428c51a828f9051a7a40a53ff1fc99e54fc30323ce36760701b0b7f711"
+          },
+          "Digest": "sha1:5cbd14acc6f1804c5bac6c77dc2c492f010b0fc7",
+          "InstalledFiles": [
+            "bin/sh"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "ca-certificates-bundle@20260909-r0",
+          "Name": "ca-certificates-bundle",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/ca-certificates-bundle@20260909-r0?arch=x86_64\u0026distro=3.24.2",
+            "UID": "4769f08c913e6b6c"
+          },
+          "Version": "20260909-r0",
+          "Arch": "x86_64",
+          "SrcName": "ca-certificates",
+          "SrcVersion": "20260909-r0",
+          "Licenses": [
+            "MPL-2.0",
+            "MIT"
+          ],
+          "Maintainer": "Natanael Copa \u003cncopa@alpinelinux.org\u003e",
+          "Layer": {
+            "DiffID": "sha256:74d97c428c51a828f9051a7a40a53ff1fc99e54fc30323ce36760701b0b7f711"
+          },
+          "Digest": "sha1:791237cee877988893a354b5f6c9c44f35d4edb9",
+          "InstalledFiles": [
+            "etc/ssl/cert.pem",
+            "etc/ssl/certs/ca-certificates.crt",
+            "etc/ssl1.1/cert.pem",
+            "etc/ssl1.1/certs"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "libapk@3.0.8-r0",
+          "Name": "libapk",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/libapk@3.0.8-r0?arch=x86_64\u0026distro=3.24.2",
+            "UID": "1fc10457d0e4bc0f"
+          },
+          "Version": "3.0.8-r0",
+          "Arch": "x86_64",
+          "SrcName": "apk-tools",
+          "SrcVersion": "3.0.8-r0",
+          "Licenses": [
+            "GPL-2.0-only"
+          ],
+          "Maintainer": "Natanael Copa \u003cncopa@alpinelinux.org\u003e",
+          "DependsOn": [
+            "libcrypto3@3.5.9-r0",
+            "libssl3@3.5.9-r0",
+            "musl@1.2.6-r2",
+            "zlib@1.3.2-r1"
+          ],
+          "Layer": {
+            "DiffID": "sha256:74d97c428c51a828f9051a7a40a53ff1fc99e54fc30323ce36760701b0b7f711"
+          },
+          "Digest": "sha1:b93ce9573c1d0db3eea7ce32841ad0857abc4a54",
+          "InstalledFiles": [
+            "usr/lib/libapk.so.3.0.0"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "libcrypto3@3.5.9-r0",
+          "Name": "libcrypto3",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/libcrypto3@3.5.9-r0?arch=x86_64\u0026distro=3.24.2",
+            "UID": "33f9021e6b3aac5c"
+          },
+          "Version": "3.5.9-r0",
+          "Arch": "x86_64",
+          "SrcName": "openssl",
+          "SrcVersion": "3.5.9-r0",
+          "Licenses": [
+            "Apache-2.0"
+          ],
+          "Maintainer": "Natanael Copa \u003cncopa@alpinelinux.org\u003e",
+          "DependsOn": [
+            "musl@1.2.6-r2"
+          ],
+          "Layer": {
+            "DiffID": "sha256:968361031c8f0af6db881be2688c6be2816686930d6651d93848a56a9b16bd45"
+          },
+          "Digest": "sha1:1c0dee9734cf22fc97cdd181913bbd710e6dfb08",
+          "InstalledFiles": [
+            "etc/ssl/ct_log_list.cnf",
+            "etc/ssl/ct_log_list.cnf.dist",
+            "etc/ssl/openssl.cnf",
+            "etc/ssl/openssl.cnf.dist",
+            "usr/lib/libcrypto.so.3",
+            "usr/lib/engines-3/afalg.so",
+            "usr/lib/engines-3/capi.so",
+            "usr/lib/engines-3/loader_attic.so",
+            "usr/lib/engines-3/padlock.so",
+            "usr/lib/ossl-modules/legacy.so"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "libgcc@15.2.0-r5",
+          "Name": "libgcc",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/libgcc@15.2.0-r5?arch=x86_64\u0026distro=3.24.2",
+            "UID": "8cf3d813d20beeee"
+          },
+          "Version": "15.2.0-r5",
+          "Arch": "x86_64",
+          "SrcName": "gcc",
+          "SrcVersion": "15.2.0-r5",
+          "Licenses": [
+            "GPL-2.0-or-later",
+            "LGPL-2.1-or-later"
+          ],
+          "Maintainer": "Ariadne Conill \u003cariadne@dereferenced.org\u003e",
+          "DependsOn": [
+            "musl@1.2.6-r2"
+          ],
+          "Layer": {
+            "DiffID": "sha256:7c732ed82ebdb575d2af70ebb84786b7421107ae929359e8e180c636040cbe88"
+          },
+          "Digest": "sha1:379c156c53e0cc140e87c79c0a3dd22b6ee51552",
+          "InstalledFiles": [
+            "usr/lib/libgcc_s.so.1"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "libssl3@3.5.9-r0",
+          "Name": "libssl3",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/libssl3@3.5.9-r0?arch=x86_64\u0026distro=3.24.2",
+            "UID": "be064b460aa88b23"
+          },
+          "Version": "3.5.9-r0",
+          "Arch": "x86_64",
+          "SrcName": "openssl",
+          "SrcVersion": "3.5.9-r0",
+          "Licenses": [
+            "Apache-2.0"
+          ],
+          "Maintainer": "Natanael Copa \u003cncopa@alpinelinux.org\u003e",
+          "DependsOn": [
+            "libcrypto3@3.5.9-r0",
+            "musl@1.2.6-r2"
+          ],
+          "Layer": {
+            "DiffID": "sha256:968361031c8f0af6db881be2688c6be2816686930d6651d93848a56a9b16bd45"
+          },
+          "Digest": "sha1:20c4c90ea9d20a9dd3a04deadf2c6c4f64233643",
+          "InstalledFiles": [
+            "usr/lib/libssl.so.3"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "libstdc++@15.2.0-r5",
+          "Name": "libstdc++",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/libstdc%2B%2B@15.2.0-r5?arch=x86_64\u0026distro=3.24.2",
+            "UID": "2eed307edf277aae"
+          },
+          "Version": "15.2.0-r5",
+          "Arch": "x86_64",
+          "SrcName": "gcc",
+          "SrcVersion": "15.2.0-r5",
+          "Licenses": [
+            "GPL-2.0-or-later",
+            "LGPL-2.1-or-later"
+          ],
+          "Maintainer": "Ariadne Conill \u003cariadne@dereferenced.org\u003e",
+          "DependsOn": [
+            "libgcc@15.2.0-r5",
+            "musl@1.2.6-r2"
+          ],
+          "Layer": {
+            "DiffID": "sha256:7c732ed82ebdb575d2af70ebb84786b7421107ae929359e8e180c636040cbe88"
+          },
+          "Digest": "sha1:5f7a2ad7646128ba02cc0d6fb94672b6845648d5",
+          "InstalledFiles": [
+            "usr/lib/libstdc++.so.6",
+            "usr/lib/libstdc++.so.6.0.34"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "musl@1.2.6-r2",
+          "Name": "musl",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/musl@1.2.6-r2?arch=x86_64\u0026distro=3.24.2",
+            "UID": "1f8cb44befe503d4"
+          },
+          "Version": "1.2.6-r2",
+          "Arch": "x86_64",
+          "SrcName": "musl",
+          "SrcVersion": "1.2.6-r2",
+          "Licenses": [
+            "MIT"
+          ],
+          "Maintainer": "Natanael Copa \u003cncopa@alpinelinux.org\u003e",
+          "Layer": {
+            "DiffID": "sha256:74d97c428c51a828f9051a7a40a53ff1fc99e54fc30323ce36760701b0b7f711"
+          },
+          "Digest": "sha1:0f7e5827e4e1a73631beda27b78431a8ba240e05",
+          "InstalledFiles": [
+            "lib/ld-musl-x86_64.so.1",
+            "lib/libc.musl-x86_64.so.1"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "musl-utils@1.2.6-r2",
+          "Name": "musl-utils",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/musl-utils@1.2.6-r2?arch=x86_64\u0026distro=3.24.2",
+            "UID": "4497482ec1d943e1"
+          },
+          "Version": "1.2.6-r2",
+          "Arch": "x86_64",
+          "SrcName": "musl",
+          "SrcVersion": "1.2.6-r2",
+          "Licenses": [
+            "MIT",
+            "BSD-2-Clause",
+            "GPL-2.0-or-later"
+          ],
+          "Maintainer": "Natanael Copa \u003cncopa@alpinelinux.org\u003e",
+          "DependsOn": [
+            "musl@1.2.6-r2",
+            "scanelf@1.3.9-r1"
+          ],
+          "Layer": {
+            "DiffID": "sha256:74d97c428c51a828f9051a7a40a53ff1fc99e54fc30323ce36760701b0b7f711"
+          },
+          "Digest": "sha1:75ada3c48d63ec5d87c42fdf934a3fdd11298dc5",
+          "InstalledFiles": [
+            "sbin/ldconfig",
+            "usr/bin/getconf",
+            "usr/bin/getent",
+            "usr/bin/iconv",
+            "usr/bin/ldd"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "scanelf@1.3.9-r1",
+          "Name": "scanelf",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/scanelf@1.3.9-r1?arch=x86_64\u0026distro=3.24.2",
+            "UID": "936394657a1626fb"
+          },
+          "Version": "1.3.9-r1",
+          "Arch": "x86_64",
+          "SrcName": "pax-utils",
+          "SrcVersion": "1.3.9-r1",
+          "Licenses": [
+            "GPL-2.0-only"
+          ],
+          "Maintainer": "Natanael Copa \u003cncopa@alpinelinux.org\u003e",
+          "DependsOn": [
+            "musl@1.2.6-r2"
+          ],
+          "Layer": {
+            "DiffID": "sha256:74d97c428c51a828f9051a7a40a53ff1fc99e54fc30323ce36760701b0b7f711"
+          },
+          "Digest": "sha1:013f903d0ba219673aebbdd04f74bb5ed82b01f0",
+          "InstalledFiles": [
+            "usr/bin/scanelf"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "ssl_client@1.37.0-r31",
+          "Name": "ssl_client",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/ssl_client@1.37.0-r31?arch=x86_64\u0026distro=3.24.2",
+            "UID": "d4c6622a088b9c5a"
+          },
+          "Version": "1.37.0-r31",
+          "Arch": "x86_64",
+          "SrcName": "busybox",
+          "SrcVersion": "1.37.0-r31",
+          "Licenses": [
+            "GPL-2.0-only"
+          ],
+          "Maintainer": "Sören Tempel \u003csoeren+alpine@soeren-tempel.net\u003e",
+          "DependsOn": [
+            "libcrypto3@3.5.9-r0",
+            "libssl3@3.5.9-r0",
+            "musl@1.2.6-r2"
+          ],
+          "Layer": {
+            "DiffID": "sha256:74d97c428c51a828f9051a7a40a53ff1fc99e54fc30323ce36760701b0b7f711"
+          },
+          "Digest": "sha1:c220f4a5125a313af733e98def94132bb1e9d40d",
+          "InstalledFiles": [
+            "usr/bin/ssl_client"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "zlib@1.3.2-r1",
+          "Name": "zlib",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/zlib@1.3.2-r1?arch=x86_64\u0026distro=3.24.2",
+            "UID": "1c01476a88d60a66"
+          },
+          "Version": "1.3.2-r1",
+          "Arch": "x86_64",
+          "SrcName": "zlib",
+          "SrcVersion": "1.3.2-r1",
+          "Licenses": [
+            "Zlib"
+          ],
+          "Maintainer": "Natanael Copa \u003cncopa@alpinelinux.org\u003e",
+          "DependsOn": [
+            "musl@1.2.6-r2"
+          ],
+          "Layer": {
+            "DiffID": "sha256:968361031c8f0af6db881be2688c6be2816686930d6651d93848a56a9b16bd45"
+          },
+          "Digest": "sha1:4f525c8cc204f84b8b4ca40db3be389958f056c6",
+          "InstalledFiles": [
+            "usr/lib/libz.so.1",
+            "usr/lib/libz.so.1.3.2"
+          ],
+          "AnalyzedBy": "apk"
+        }
+      ]
+    },
+    {
+      "Target": "Node.js",
+      "Class": "lang-pkgs",
+      "Type": "node-pkg",
+      "Packages": [
+        {
+          "ID": "@dd/api-ts@0.0.0",
+          "Name": "@dd/api-ts",
+          "Identifier": {
+            "PURL": "pkg:npm/%40dd/api-ts@0.0.0",
+            "UID": "1e22630a9ac6c56e"
+          },
+          "Version": "0.0.0",
+          "Layer": {
+            "DiffID": "sha256:b268a90a754072553110883a27b5bb46575fc9686a579aaf388e74de83b76a6b"
+          },
+          "FilePath": "src/apps/api-ts/package.json",
+          "AnalyzedBy": "node-pkg"
+        },
+        {
+          "ID": "@dd/eslint-config@0.0.0",
+          "Name": "@dd/eslint-config",
+          "Identifier": {
+            "PURL": "pkg:npm/%40dd/eslint-config@0.0.0",
+            "UID": "366397bb76ac0349"
+          },
+          "Version": "0.0.0",
+          "Layer": {
+            "DiffID": "sha256:55e293dd4902965ffb025cfdeca35c7286176342b7d57ede4b629ff867261679"
+          },
+          "FilePath": "src/packages/eslint-config/package.json",
+          "AnalyzedBy": "node-pkg"
+        },
+        {
+          "ID": "@dd/tsconfig@0.0.0",
+          "Name": "@dd/tsconfig",
+          "Identifier": {
+            "PURL": "pkg:npm/%40dd/tsconfig@0.0.0",
+            "UID": "ba8541df442048d8"
+          },
+          "Version": "0.0.0",
+          "Layer": {
+            "DiffID": "sha256:a57c453ce95ddd8098b2af30c07820e37dd05eb25df18972e3efdbf3b06d029a"
+          },
+          "FilePath": "src/packages/tsconfig/package.json",
+          "AnalyzedBy": "node-pkg"
+        },
+        {
+          "ID": "@prisma/engines@7.10.0",
+          "Name": "@prisma/engines",
+          "Identifier": {
+            "PURL": "pkg:npm/%40prisma/engines@7.10.0",
+            "UID": "a95f7d60d95f3459"
+          },
+          "Version": "7.10.0",
+          "Licenses": [
+            "Apache-2.0"
+          ],
+          "Layer": {
+            "DiffID": "sha256:0dca469d159da363206b898720132454895305c23a350fb9e29e6c04082578f0"
+          },
+          "FilePath": "src/node_modules/.pnpm/@prisma+engines@7.10.0/node_modules/@prisma/engines/package.json",
+          "AnalyzedBy": "node-pkg"
+        },
+        {
+          "ID": "@swc/core@1.16.13",
+          "Name": "@swc/core",
+          "Identifier": {
+            "PURL": "pkg:npm/%40swc/core@1.16.13",
+            "UID": "3317764d5d6e84b4"
+          },
+          "Version": "1.16.13",
+          "Licenses": [
+            "Apache-2.0"
+          ],
+          "Layer": {
+            "DiffID": "sha256:0dca469d159da363206b898720132454895305c23a350fb9e29e6c04082578f0"
+          },
+          "FilePath": "src/node_modules/.pnpm/@swc+core@1.16.13_@swc+helpers@0.5.23/node_modules/@swc/core/package.json",
+          "AnalyzedBy": "node-pkg"
+        },
+        {
+          "ID": "esbuild@0.28.2",
+          "Name": "esbuild",
+          "Identifier": {
+            "PURL": "pkg:npm/esbuild@0.28.2",
+            "UID": "3b45ba9fc1c55d15"
+          },
+          "Version": "0.28.2",
+          "Licenses": [
+            "MIT"
+          ],
+          "Layer": {
+            "DiffID": "sha256:0dca469d159da363206b898720132454895305c23a350fb9e29e6c04082578f0"
+          },
+          "FilePath": "src/node_modules/.pnpm/esbuild@0.28.2/node_modules/esbuild/package.json",
+          "AnalyzedBy": "node-pkg"
+        },
+        {
+          "ID": "prisma@7.10.0",
+          "Name": "prisma",
+          "Identifier": {
+            "PURL": "pkg:npm/prisma@7.10.0",
+            "UID": "154bcf997194fcf4"
+          },
+          "Version": "7.10.0",
+          "Licenses": [
+            "Apache-2.0"
+          ],
+          "Layer": {
+            "DiffID": "sha256:0dca469d159da363206b898720132454895305c23a350fb9e29e6c04082578f0"
+          },
+          "FilePath": "src/node_modules/.pnpm/prisma@7.10.0_@types+node@26.6.4_@types+react-dom@19.3.0_@types+react@19.3.0__@types+re_bef61689c162e915ab715e5913dca126/node_modules/prisma/package.json",
+          "AnalyzedBy": "node-pkg"
+        },
+        {
+          "ID": "prisma-client-134cb6a97710f9af41dd2789f1c29644e99beea326ba58bc21e0e6380b3ed4bd@7.10.0",
+          "Name": "prisma-client-134cb6a97710f9af41dd2789f1c29644e99beea326ba58bc21e0e6380b3ed4bd",
+          "Identifier": {
+            "PURL": "pkg:npm/prisma-client-134cb6a97710f9af41dd2789f1c29644e99beea326ba58bc21e0e6380b3ed4bd@7.10.0",
+            "UID": "7890239314bd9834"
+          },
+          "Version": "7.10.0",
+          "Layer": {
+            "DiffID": "sha256:126fb0e9a261edf314a9bcd20617761d41aaed9cf582b63d728db27863506de7"
+          },
+          "FilePath": "src/node_modules/.pnpm/@prisma+client@7.10.0_prisma@7.10.0_@types+node@26.6.4_@types+react-dom@19.3.0_@types+r_94208491ad00b4d235f4e6b555572ada/node_modules/.prisma/client/package.json",
+          "AnalyzedBy": "node-pkg"
+        }
+      ]
+    }
+  ]
+}

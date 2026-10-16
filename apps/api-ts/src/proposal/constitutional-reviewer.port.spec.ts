@@ -42,10 +42,12 @@ describe("HttpConstitutionalReviewer (HTTP)", () => {
     }
     baseUrl = `http://127.0.0.1:${addr.port}`;
     process.env.AUDIT_SERVICE_URL = baseUrl;
+    process.env.INTERNAL_SERVICE_SHARED_SECRET = "test-internal-review-secret";
   });
 
   afterEach(async () => {
     delete process.env.AUDIT_SERVICE_URL;
+    delete process.env.INTERNAL_SERVICE_SHARED_SECRET;
     await new Promise<void>((resolve) => server.close(() => resolve()));
   });
 
@@ -90,5 +92,10 @@ describe("HttpConstitutionalReviewer (HTTP)", () => {
     const reviewer = new HttpConstitutionalReviewer();
     expect(await reviewer.isCleared("proposal-1")).toBe(false);
     expect(received).toBeUndefined();
+  });
+
+  it("fails closed on a malformed successful response", async () => {
+    responseBody = {};
+    expect(await new HttpConstitutionalReviewer().isCleared("proposal-1")).toBe(false);
   });
 });

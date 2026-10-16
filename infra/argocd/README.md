@@ -1,20 +1,20 @@
 # `infra/argocd`
 
-GitOps entry points for this cluster. ArgoCD watches this repo and
-reconciles the cluster to match it (`selfHeal: true` everywhere in this
-directory) -- there is no out-of-band `kubectl apply`/`helm install` path
-for anything listed below.
+GitOps entry points for this cluster. Backend promotion uses the coordinated
+procedure in [the release runbook](../release/README.md). Automatic backend
+sync is disabled to prevent a mixed ADR-041 signing rollout; observability
+continues to reconcile automatically.
 
 | File | ArgoCD kind | Deploys |
 |---|---|---|
-| `applicationset.yaml` | `ApplicationSet` | Every backend service in this repo. Iterates `infra/helm/values/*.yaml`, rendering each through the generic chart at `infra/helm/service` (see its `README.md`) into its own namespace. Add a service by adding a values file -- nothing to register here. |
+| `applicationset.yaml` | `ApplicationSet` | The Go and TypeScript runtimes from `infra/helm/apps/*.yaml`, each rendered through `infra/helm/service` into its own namespace. Promotion is manual and migration-gated. |
 | `observability.yaml` | `Application` | The current-stage observability slice (ADR-026, ARCH-025 §2): the upstream `kube-prometheus-stack` chart (Prometheus + Grafana + Alertmanager) into the `monitoring` namespace. One `Application`, not an `ApplicationSet`, because it's one specific third-party chart, not N near-identical services. |
 
-Both resources share the same self-healing posture: `syncPolicy.automated:
-{ prune: true, selfHeal: true }` plus `CreateNamespace=true`, so a manual
-`kubectl edit`/`kubectl delete` against anything they manage gets
-reconciled back within one sync interval, per ADR-026's "self-healing
-comes from ArgoCD" consequence.
+Observability uses `syncPolicy.automated: { prune: true, selfHeal: true }`.
+The backend ApplicationSet uses `CreateNamespace=true` with manual sync.
+Pin its reviewed release revision and digest values before any sync; current
+development tags are not a production release. Restore automatic reconciliation
+only after a reviewed coordinator can enforce migrations and signer readiness.
 
 ## Bootstrapping
 
@@ -22,7 +22,7 @@ These are the resources ArgoCD itself reconciles, not how ArgoCD gets
 installed. On a fresh k3s cluster (ARCH-025 §1): install ArgoCD, then
 `kubectl apply -f infra/argocd/applicationset.yaml -f infra/argocd/observability.yaml`
 once, in the `argocd` namespace, to register both. Everything after that
-is a git commit.
+is a reviewed git revision followed by the required release gates.
 
 `observability.yaml` also needs one one-time manual Secret before it will
 report healthy -- Grafana's admin credentials aren't in git (see the

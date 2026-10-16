@@ -138,7 +138,7 @@ func (q *Queries) ListActiveDomainEdges(ctx context.Context, arg ListActiveDomai
 }
 
 const listAllDelegations = `-- name: ListAllDelegations :many
-SELECT id, delegator_id, delegate_id, domain_id, created_at, expires_at, revoked_at FROM delegation ORDER BY created_at, id
+SELECT id, delegator_id, delegate_id, domain_id, created_at, expires_at, revoked_at FROM delegation ORDER BY created_at, id LIMIT 1000
 `
 
 func (q *Queries) ListAllDelegations(ctx context.Context) ([]Delegation, error) {

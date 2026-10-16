@@ -193,14 +193,28 @@ func (s *PGStore) AddOption(o *VoteOption) (*VoteOption, error) {
 	if err != nil {
 		return nil, err
 	}
-	row, err := s.q.CreateVoteOption(ctx, votingdb.CreateVoteOptionParams{
-		ID:            pgconv.MustUUID(newID()),
-		VoteSessionID: sessionID,
-		ProposalID:    proposalID,
-		Label:         o.Label,
-		Description:   o.Description,
+	if len(o.Label) > 256 || len(o.Description) > 4096 {
+		return nil, ErrInvalid
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	var status string
+	if err := tx.QueryRow(ctx, "SELECT status FROM vote_session WHERE id=$1 FOR UPDATE", sessionID).Scan(&status); err != nil {
+		return nil, mapNotFound(err)
+	}
+	if status != SessionScheduled {
+		return nil, ErrInvalidState
+	}
+	row, err := s.q.WithTx(tx).CreateVoteOption(ctx, votingdb.CreateVoteOptionParams{
+		ID: pgconv.MustUUID(newID()), VoteSessionID: sessionID, ProposalID: proposalID, Label: o.Label, Description: o.Description,
 	})
 	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
 	return &VoteOption{
@@ -251,6 +265,24 @@ func (s *PGStore) IssueToken(sessionID, citizenID string) (*EligibilityToken, er
 	return t, nil
 }
 
+func (s *PGStore) ListOptions(sessionID string) ([]*VoteOption, error) {
+	ctx, cancel := opCtx()
+	defer cancel()
+	id, err := pgconv.UUIDFromString(sessionID)
+	if err != nil {
+		return nil, ErrInvalid
+	}
+	rows, err := s.q.ListVoteOptions(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*VoteOption, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, &VoteOption{ID: pgconv.UUIDToString(row.ID), SessionID: sessionID, ProposalID: pgconv.UUIDToString(row.ProposalID), Label: row.Label, Description: row.Description})
+	}
+	return result, nil
+}
+
 func (s *PGStore) CountTokens(sessionID string) (int, error) {
 	ctx, cancel := opCtx()
 	defer cancel()
@@ -265,7 +297,7 @@ func (s *PGStore) CountTokens(sessionID string) (int, error) {
 	return int(n), nil
 }
 
-func (s *PGStore) CastBallot(sessionID, tokenID, tokenBlind, encryptedChoice string) (*Ballot, *EligibilityToken, error) {
+func (s *PGStore) CastBallot(sessionID, tokenID, tokenBlind, encryptedChoice string, citizenIDs ...string) (*Ballot, *EligibilityToken, error) {
 	ctx, cancel := opCtx()
 	defer cancel()
 	tid, err := pgconv.UUIDFromString(tokenID)
@@ -278,13 +310,25 @@ func (s *PGStore) CastBallot(sessionID, tokenID, tokenBlind, encryptedChoice str
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	qtx := s.q.WithTx(tx)
-
+	var status string
+	var opens, closes time.Time
+	// Ballots share the session lock; closing still waits for their commits.
+	// The token's exclusive lock below prevents double spending across replicas.
+	if err := tx.QueryRow(ctx, "SELECT status,opens_at,closes_at FROM vote_session WHERE id=$1 FOR SHARE", sessionID).Scan(&status, &opens, &closes); err != nil {
+		return nil, nil, mapNotFound(err)
+	}
+	if status != SessionOpen || time.Now().Before(opens) || !time.Now().Before(closes) {
+		return nil, nil, ErrInvalidState
+	}
 	tok, err := qtx.LockEligibilityToken(ctx, tid)
 	if err != nil {
 		return nil, nil, mapNotFound(err)
 	}
 	if pgconv.UUIDToString(tok.VoteSessionID) != sessionID {
 		return nil, nil, ErrNotFound
+	}
+	if len(citizenIDs) > 0 && pgconv.UUIDToString(tok.CitizenID) != citizenIDs[0] {
+		return nil, nil, ErrInvalid
 	}
 	if tok.Used {
 		return nil, nil, ErrConflict
@@ -297,7 +341,7 @@ func (s *PGStore) CastBallot(sessionID, tokenID, tokenBlind, encryptedChoice str
 	b, err := qtx.InsertBallot(ctx, votingdb.InsertBallotParams{
 		ID:               pgconv.MustUUID(ballotID),
 		VoteSessionID:    tok.VoteSessionID,
-		TokenBlind:       tokenBlind,
+		TokenBlind:       newToken(),
 		EncryptedChoice:  encryptedChoice,
 		VerificationCode: newToken(),
 	})

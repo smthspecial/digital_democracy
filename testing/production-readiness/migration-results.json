@@ -1,0 +1,66 @@
+{
+  "checks": [
+    {
+      "runtime": "api-go",
+      "case": "verified migration",
+      "passed": true,
+      "imageConfigDigest": "5370332fc658a6e63391a49ceb88705575263efa52c7cffdd25cdfda712f17c3"
+    },
+    {
+      "runtime": "api-go",
+      "case": "wrong host",
+      "passed": true,
+      "imageConfigDigest": "5370332fc658a6e63391a49ceb88705575263efa52c7cffdd25cdfda712f17c3"
+    },
+    {
+      "runtime": "api-go",
+      "case": "wrong CA",
+      "passed": true,
+      "imageConfigDigest": "5370332fc658a6e63391a49ceb88705575263efa52c7cffdd25cdfda712f17c3"
+    },
+    {
+      "runtime": "api-go",
+      "case": "plaintext configuration",
+      "passed": true,
+      "imageConfigDigest": "5370332fc658a6e63391a49ceb88705575263efa52c7cffdd25cdfda712f17c3"
+    },
+    {
+      "runtime": "api-go",
+      "case": "ambiguous TLS configuration",
+      "passed": true,
+      "imageConfigDigest": "5370332fc658a6e63391a49ceb88705575263efa52c7cffdd25cdfda712f17c3"
+    },
+    {
+      "runtime": "api-ts",
+      "case": "verified migration",
+      "passed": true,
+      "imageConfigDigest": "a0b3dfa670254fb1ea96d23f550ed551b74ad537e90152d526f54d4a5a322999"
+    },
+    {
+      "runtime": "api-ts",
+      "case": "wrong host",
+      "passed": true,
+      "imageConfigDigest": "a0b3dfa670254fb1ea96d23f550ed551b74ad537e90152d526f54d4a5a322999"
+    },
+    {
+      "runtime": "api-ts",
+      "case": "wrong CA",
+      "passed": true,
+      "imageConfigDigest": "a0b3dfa670254fb1ea96d23f550ed551b74ad537e90152d526f54d4a5a322999"
+    },
+    {
+      "runtime": "api-ts",
+      "case": "plaintext configuration",
+      "passed": true,
+      "imageConfigDigest": "a0b3dfa670254fb1ea96d23f550ed551b74ad537e90152d526f54d4a5a322999"
+    },
+    {
+      "runtime": "api-ts",
+      "case": "ambiguous TLS configuration",
+      "passed": true,
+      "imageConfigDigest": "a0b3dfa670254fb1ea96d23f550ed551b74ad537e90152d526f54d4a5a322999"
+    }
+  ],
+  "passed": 10,
+  "scope": "separate real migration images on disposable TLS databases; not a live Kubernetes Job rehearsal"
+}

@@ -57,6 +57,9 @@ func (st *MemoryStore) List(delegatorID, delegateID, domainID string) ([]*Delega
 		}
 		c := *d
 		out = append(out, &c)
+		if len(out) >= 1000 {
+			break
+		}
 	}
 	return out, nil
 }

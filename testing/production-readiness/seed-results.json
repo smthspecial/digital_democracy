@@ -1,0 +1,69 @@
+{
+  "recordedAtUTC": "2026-10-16T12:32:16.130489+00:00",
+  "scope": "Synthetic fixtures in isolated dd_seed_*_20261016 databases; no dd-local reset executed",
+  "checks": [
+    {
+      "case": "api_ts seeds against real migrated schema",
+      "passed": true,
+      "tables": {
+        "jurisdiction": 4,
+        "citizen": 22,
+        "identity_verification": 21,
+        "jurisdiction_membership": 20,
+        "residency": 20,
+        "governance_role": 6,
+        "expert_domain": 2,
+        "competency": 2,
+        "budget_category": 2,
+        "problem": 3,
+        "problem_evidence": 3,
+        "problem_support": 3,
+        "proposal": 8,
+        "proposal_budget": 7,
+        "expert_assessment": 4,
+        "project": 1,
+        "project_milestone": 3,
+        "ledger_entry": 1,
+        "civic_assignment": 3,
+        "participation_record": 3,
+        "budget_allocation_vote": 3
+      }
+    },
+    {
+      "case": "api_ts repeated seed creates no duplicates",
+      "passed": true
+    },
+    {
+      "case": "Non-destructive seed preserves edits",
+      "passed": true
+    },
+    {
+      "case": "Eligible and ineligible seed scenarios match authoritative residency/membership predicates",
+      "passed": true,
+      "eligibleNorthCount": 14
+    },
+    {
+      "case": "api_go seeds against real migrated schema",
+      "passed": true,
+      "tables": {
+        "vote_session": 1,
+        "vote_option": 2,
+        "constitutional_right": 3
+      }
+    },
+    {
+      "case": "api_go repeated seed creates no duplicates",
+      "passed": true
+    }
+  ],
+  "unitTestsPassed": 5,
+  "sourceSha256": {
+    "infra/compose/seed.py": "8914f9c17543bea71605892779a2021dfec26455bc1eca31136ae8a3785e9160",
+    "infra/compose/seed_data.py": "31df58469260b852844040dd33ed994c31534b893b2a58160a62749df713a8a6"
+  },
+  "limitations": [
+    "Full Compose volume reset sequencing tested with mocks; live dd-local volumes preserved",
+    "No identity-provider, physical passkey, encrypted ballot or production qualification"
+  ],
+  "productionReadinessUnitSuitePassed": 18
+}

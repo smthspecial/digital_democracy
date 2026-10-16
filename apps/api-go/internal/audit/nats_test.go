@@ -64,6 +64,7 @@ func spawnNatsServer(t *testing.T) string {
 // End-to-end over a real broker: published audit events land hash-chained in
 // the store, and redeliveries dedupe on the event id.
 func TestAuditConsumerRoundTrip(t *testing.T) {
+	t.Setenv("INTERNAL_SERVICE_SHARED_SECRET", "audit-test-secret")
 	url := spawnNatsServer(t)
 	bus, err := eventbus.Connect(url)
 	if err != nil {
@@ -83,6 +84,9 @@ func TestAuditConsumerRoundTrip(t *testing.T) {
 	publish := func(id, action string) {
 		evt := eventbus.AuditEvent{
 			ID: id, ActionType: action, ActorRef: "test", Payload: "p-" + id, OccurredAt: time.Now().UTC(),
+		}
+		if err := evt.Sign("api-go", "audit-test-secret"); err != nil {
+			t.Fatal(err)
 		}
 		body, _ := json.Marshal(evt)
 		if err := bus.Publish(context.Background(), eventbus.QueueAuditAppend, body, eventbus.WithMessageID(id)); err != nil {

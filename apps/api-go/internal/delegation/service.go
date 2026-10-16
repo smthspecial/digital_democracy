@@ -15,10 +15,10 @@ type CompetencyChecker interface {
 	HasActiveCompetency(citizenID, domainID string) (bool, error)
 }
 
-type allowAllCompetencyChecker struct{}
+type denyCompetencyChecker struct{}
 
-func (allowAllCompetencyChecker) HasActiveCompetency(string, string) (bool, error) {
-	return true, nil
+func (denyCompetencyChecker) HasActiveCompetency(string, string) (bool, error) {
+	return false, nil
 }
 
 // AuditEmitter emits create/revoke/expiry events (DP-036). No-op by default;
@@ -58,7 +58,7 @@ func NewService(store Store, competency CompetencyChecker, audit AuditEmitter) *
 		store = NewStore()
 	}
 	if competency == nil {
-		competency = allowAllCompetencyChecker{}
+		competency = denyCompetencyChecker{}
 	}
 	if audit == nil {
 		audit = noopAuditEmitter{}
@@ -76,7 +76,7 @@ type CreateInput struct {
 // Create runs DP-014: competency check, self-delegation and cycle rejection,
 // mandatory future expiry. Emits an audit event.
 func (s *Service) Create(in CreateInput, now time.Time) (*Delegation, error) {
-	if in.DelegatorID == "" || in.DelegateID == "" || in.DomainID == "" {
+	if in.DelegatorID == "" || in.DelegateID == "" || in.DomainID == "" || len(in.DelegatorID) > 256 || len(in.DelegateID) > 256 || len(in.DomainID) > 256 {
 		return nil, ErrInvalid
 	}
 	if in.DelegatorID == in.DelegateID {
@@ -123,7 +123,7 @@ func (s *Service) Revoke(id, callerCitizenID string, now time.Time) (*Delegation
 	if err != nil {
 		return nil, err
 	}
-	if callerCitizenID != "" && d.DelegatorID != callerCitizenID {
+	if callerCitizenID == "" || d.DelegatorID != callerCitizenID {
 		return nil, ErrInvalid
 	}
 	revoked, err := s.store.Revoke(id, now)

@@ -320,7 +320,7 @@ func (q *Queries) ListVoteOptions(ctx context.Context, voteSessionID pgtype.UUID
 }
 
 const listVoteSessions = `-- name: ListVoteSessions :many
-SELECT id, proposal_id, jurisdiction_id, method, threshold_rule, min_participation, cooling_off_until, opens_at, closes_at, status, tally_result, created_at FROM vote_session ORDER BY created_at, id
+SELECT id, proposal_id, jurisdiction_id, method, threshold_rule, min_participation, cooling_off_until, opens_at, closes_at, status, tally_result, created_at FROM vote_session ORDER BY created_at, id LIMIT 1000
 `
 
 func (q *Queries) ListVoteSessions(ctx context.Context) ([]VoteSession, error) {
@@ -384,7 +384,7 @@ func (q *Queries) MarkTokenUsed(ctx context.Context, id pgtype.UUID) error {
 }
 
 const setVoteSessionTally = `-- name: SetVoteSessionTally :one
-UPDATE vote_session SET tally_result = $2 WHERE id = $1
+UPDATE vote_session SET tally_result = COALESCE(tally_result, $2) WHERE id = $1 AND status IN ('closed','certified')
 RETURNING id, proposal_id, jurisdiction_id, method, threshold_rule, min_participation, cooling_off_until, opens_at, closes_at, status, tally_result, created_at
 `
 
@@ -414,7 +414,9 @@ func (q *Queries) SetVoteSessionTally(ctx context.Context, arg SetVoteSessionTal
 }
 
 const updateVoteSessionStatus = `-- name: UpdateVoteSessionStatus :one
-UPDATE vote_session SET status = $2 WHERE id = $1
+UPDATE vote_session SET status = $2 WHERE id = $1 AND (
+ (status='scheduled' AND $2='open' AND opens_at<=now() AND cooling_off_until<=now() AND closes_at>now()) OR
+ (status='open' AND $2='closed') OR (status='closed' AND $2='certified'))
 RETURNING id, proposal_id, jurisdiction_id, method, threshold_rule, min_participation, cooling_off_until, opens_at, closes_at, status, tally_result, created_at
 `
 

@@ -6,7 +6,7 @@
 # governance-role, civic-duty, reputation, project, and iam). Run the whole
 # backend from this one file:
 #
-#   podman compose up --build    (or: docker compose up --build)
+#   python3 infra/compose/local.py up
 #
 # Every app builds from its own Dockerfile with the repo root as build
 # context and publishes its dev port (see each app's .env.example), not the
@@ -15,23 +15,16 @@
 # NATS (JetStream) is real and shared -- api-go's NATS_URL points at it,
 # matching its AuditEmitter/eventbus wiring (ADR-023). Postgres is real too:
 # one database per app (ADR-028) -- api_go and api_ts, created by
-# infra/compose/postgres-init.sql. api-go migrates itself at boot
-# (db/migrations via ADR-029). api-ts does NOT migrate itself at boot
-# (ADR-030) -- it owns its schema via Prisma migrations, which also create
-# the api_app/api_worker roles api-ts's DATABASE_URL/WORKER_DATABASE_URL
-# below authenticate as. Before the api-ts container can connect
-# successfully, run once against the api_ts database:
-#   pnpm --filter @dd/api-ts exec prisma migrate deploy
-# (using a superuser URL, e.g. MIGRATE_DATABASE_URL in apps/api-ts/.env --
-# see apps/api-ts/prisma.config.ts). Until that has run, api-ts will fail to
-# connect: the api_app/api_worker roles and every table don't exist yet.
+# infra/compose/postgres-init.sh. Neither API migrates itself at boot.
+# The local launcher waits for Postgres, runs api-go-migrate and api-ts-migrate
+# separately, and starts both APIs only after both jobs succeed.
 #
 # Observability (ADR-026/ARCH-025 §2's local-dev equivalent of the
 # kube-prometheus-stack ArgoCD Application, infra/argocd/observability.yaml):
 # both apps now serve GET /metrics (ARCH-027 US-056), and prometheus/grafana
 # below scrape and visualize them -- same two-service shape, no ClickHouse/
 # Kafka-scale stack for a local dev loop. Grafana at localhost:3000
-# (admin/admin, change on first login), Prometheus at localhost:9090.
+# (use the configured admin password), Prometheus at localhost:9090.
 
 services:
   # ---------------------------------------------------------------------
@@ -40,42 +33,90 @@ services:
 
   nats:
     image: docker.io/library/nats:2-alpine
-    command: ["-js", "-m", "8222"] # enable JetStream (ADR-023) + HTTP monitoring
+    command: ["-c", "/etc/nats/nats.conf"]
+    environment:
+      NATS_API_GO_PASSWORD: ${NATS_API_GO_PASSWORD:?Set NATS_API_GO_PASSWORD}
+    volumes:
+      - ./infra/compose/nats.conf:/etc/nats/nats.conf:ro # enable JetStream (ADR-023) + HTTP monitoring
+      - natsdata:/data
     ports:
-      - "4222:4222" # client connections
-      - "8222:8222" # HTTP monitoring endpoint
+      - "127.0.0.1:${NATS_PORT:-4222}:4222" # client connections
+      - "127.0.0.1:${NATS_MONITOR_PORT:-8222}:8222" # HTTP monitoring endpoint
 
   postgres:
     image: docker.io/library/postgres:16-alpine
     environment:
       POSTGRES_USER: dd
-      POSTGRES_PASSWORD: dd
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      API_GO_PASSWORD: ${API_GO_PASSWORD:?Set API_GO_PASSWORD}
+      API_TS_APP_PASSWORD: ${API_TS_APP_PASSWORD:?Set API_TS_APP_PASSWORD}
+      API_TS_WORKER_PASSWORD: ${API_TS_WORKER_PASSWORD:?Set API_TS_WORKER_PASSWORD}
       POSTGRES_DB: postgres
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./infra/compose/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./infra/compose/postgres-init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U dd -d postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
 
   # ---------------------------------------------------------------------
   # Applications (one per runtime, ADR-027)
   # ---------------------------------------------------------------------
 
+  api-go-migrate:
+    profiles: ["migrate"]
+    image: localhost/digital-democracy/api-go:local
+    build:
+      context: .
+      dockerfile: apps/api-go/Dockerfile
+    environment:
+      APP_ENV: development
+      MIGRATE_ONLY: "1"
+      MIGRATE_DATABASE_URL: postgres://dd:${POSTGRES_PASSWORD}@postgres:5432/api_go?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api-ts-migrate:
+    profiles: ["migrate"]
+    image: localhost/digital-democracy/api-ts-migration:local
+    build:
+      context: .
+      dockerfile: apps/api-ts/Dockerfile
+      target: migration
+    environment:
+      APP_ENV: development
+      MIGRATE_DATABASE_URL: postgres://dd:${POSTGRES_PASSWORD}@postgres:5432/api_ts?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api-go:
+    image: localhost/digital-democracy/api-go:local
+    restart: "on-failure:3"
     build:
       context: .
       dockerfile: apps/api-go/Dockerfile
     ports:
-      - "5000:5000"
+      - "127.0.0.1:${API_GO_PORT:-5000}:5000"
     environment:
       PORT: "5000"
-      DATABASE_URL: postgres://dd:dd@postgres:5432/api_go?sslmode=disable
-      NATS_URL: nats://nats:4222
+      APP_ENV: development
+      DATABASE_URL: postgres://api_go_worker:${API_GO_PASSWORD}@postgres:5432/api_go?sslmode=disable
+      AUDIT_SIGNING_KEY: ${AUDIT_SIGNING_KEY:?Set a stable random audit signing key}
+      JURISDICTION_SERVICE_URL: http://api-ts:4000
+      GOVERNANCE_SERVICE_URL: http://api-ts:4000
+      BALLOT_VERIFIER_URL: ${BALLOT_VERIFIER_URL:-}
+      NATS_URL: nats://api-go:${NATS_API_GO_PASSWORD}@nats:4222
       COMPETENCY_SERVICE_URL: http://api-ts:4000
       IDENTITY_SERVICE_URL: http://api-ts:4000
       # Shared internal-call key. Set it in the shell/.env used by Compose;
       # api-go rejects internal operations when it is absent.
-      INTERNAL_SERVICE_SHARED_SECRET: ${INTERNAL_SERVICE_SHARED_SECRET:-}
+      INTERNAL_SERVICE_SHARED_SECRET: ${INTERNAL_SERVICE_SHARED_SECRET:?Set INTERNAL_SERVICE_SHARED_SECRET}
       WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-}
       WEBAUTHN_RP_ORIGIN: ${WEBAUTHN_RP_ORIGIN:-}
       # NOTIFICATION_SERVICE_URL deliberately unset (BUG-003): nothing in
@@ -87,29 +128,42 @@ services:
       - postgres
 
   api-ts:
+    image: localhost/digital-democracy/api-ts:local
+    restart: "on-failure:3"
     build:
       context: .
       dockerfile: apps/api-ts/Dockerfile
     ports:
-      - "4000:4000"
+      - "127.0.0.1:${API_TS_PORT:-4000}:4000"
     environment:
       PORT: "4000"
-      # api_app/api_worker (not the `dd` superuser): matches the RLS design
-      # prisma.service.ts is built around (ARCH-023 §4.3). Both roles are
-      # created by api-ts's own init migration -- see this file's header for
-      # the one-time `prisma migrate deploy` this depends on.
-      DATABASE_URL: postgres://api_app:api_app_dev@postgres:5432/api_ts
-      WORKER_DATABASE_URL: postgres://api_worker:api_worker_dev@postgres:5432/api_ts
-      NATS_URL: nats://nats:4222
+      # Separate per-app login roles inherit the non-login RLS policy roles.
+      # postgres-init.sh provisions them; migration jobs create schemas.
+      APP_ENV: development
+      DATABASE_URL: postgres://api_ts_app:${API_TS_APP_PASSWORD}@postgres:5432/api_ts
+      WORKER_DATABASE_URL: postgres://api_ts_worker:${API_TS_WORKER_PASSWORD}@postgres:5432/api_ts
       AUDIT_SERVICE_URL: http://api-go:5000
       AUTH_SERVICE_URL: http://api-go:5000
-      IDENTITY_VERIFIER_SHARED_SECRET: ${IDENTITY_VERIFIER_SHARED_SECRET:-}
-      INTERNAL_SERVICE_SHARED_SECRET: ${INTERNAL_SERVICE_SHARED_SECRET:-}
+      VOTING_SERVICE_URL: http://api-go:5000
+      IDENTITY_VERIFIER_SHARED_SECRET: ${IDENTITY_VERIFIER_SHARED_SECRET:?Set IDENTITY_VERIFIER_SHARED_SECRET}
+      IDENTITY_HASH_SECRET: ${IDENTITY_HASH_SECRET:?Set IDENTITY_HASH_SECRET}
+      INTERNAL_SERVICE_SHARED_SECRET: ${INTERNAL_SERVICE_SHARED_SECRET:?Set INTERNAL_SERVICE_SHARED_SECRET}
       # NOTIFICATION_SERVICE_URL deliberately unset -- see api-go's comment
       # above; the same carve-out applies in this direction too.
     depends_on:
       - nats
       - postgres
+
+  web:
+    image: localhost/digital-democracy/web:local
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - "127.0.0.1:${WEB_PORT:-3001}:3000"
+    environment:
+      API_GO_URL: http://api-go:5000
+      API_TS_URL: http://api-ts:4000
 
   # ---------------------------------------------------------------------
   # Observability (ADR-026 local-dev equivalent)
@@ -121,7 +175,7 @@ services:
       - ./infra/compose/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - promdata:/prometheus
     ports:
-      - "9090:9090"
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
     depends_on:
       - api-go
       - api-ts
@@ -130,16 +184,17 @@ services:
     image: docker.io/grafana/grafana:11.4.0
     environment:
       # Dev-only default; change on first login (Grafana prompts for it).
-      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD}
     volumes:
       - ./infra/compose/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
       - grafanadata:/var/lib/grafana
     ports:
-      - "3000:3000"
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
     depends_on:
       - prometheus
 
 volumes:
   pgdata:
+  natsdata:
   promdata:
   grafanadata:

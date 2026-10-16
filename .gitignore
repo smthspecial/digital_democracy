@@ -30,3 +30,8 @@ go.work.sum
 
 # Project Spec extension (generated search index)
 .spec/.vector-index/
+
+# Local validation and private release bundles
+__pycache__/
+*.pyc
+.release/

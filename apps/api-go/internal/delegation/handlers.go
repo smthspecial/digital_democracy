@@ -2,6 +2,9 @@ package delegation
 
 import (
 	"encoding/json"
+	"errors"
+	"github.com/digital-democracy/api-go/internal/security"
+	"io"
 	"net/http"
 	"time"
 )
@@ -31,8 +34,19 @@ func writeErr(w http.ResponseWriter, err error) {
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 	defer r.Body.Close()
-	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(v); err != nil {
+		var sizeError *http.MaxBytesError
+		if errors.As(err, &sizeError) {
+			security.Error(w, 413, "payload_too_large")
+			return false
+		}
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": map[string]string{"code": "invalid_request", "message": "malformed JSON body"}})
+		return false
+	}
+	if decoder.Decode(new(any)) != io.EOF {
+		security.Error(w, 400, "invalid_request")
 		return false
 	}
 	return true
@@ -50,6 +64,10 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &in) {
 		return
 	}
+	if in.DelegatorID != security.CitizenID(r) {
+		security.Error(w, 403, "forbidden")
+		return
+	}
 	d, err := h.svc.Create(CreateInput(in), time.Now().UTC())
 	if err != nil {
 		writeErr(w, err)
@@ -65,6 +83,9 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	if len(delegations) > 1000 {
+		delegations = delegations[:1000]
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"delegations": delegations})
 }
 
@@ -78,9 +99,8 @@ func (h *Handler) get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) revoke(w http.ResponseWriter, r *http.Request) {
-	// The caller's citizen id arrives from the gateway after token
-	// validation (X-Citizen-ID); empty means "already authorized upstream".
-	d, err := h.svc.Revoke(r.PathValue("id"), r.Header.Get("X-Citizen-ID"), time.Now().UTC())
+	// Ownership uses only the validated citizen context.
+	d, err := h.svc.Revoke(r.PathValue("id"), security.CitizenID(r), time.Now().UTC())
 	if err != nil {
 		writeErr(w, err)
 		return

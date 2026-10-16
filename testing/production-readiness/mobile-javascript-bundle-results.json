@@ -1,0 +1,30 @@
+{
+  "generatedAt": "2026-10-14T08:16:07.596Z",
+  "scope": "Metro Android/iOS exports; not signed APK/IPA or native dependency qualification",
+  "lockfileSha256": "9a3bfc193872c3535dd07d56361768fa7d6342d96cb03f39dfff6272273c77d1",
+  "checkedPackages": [
+    "node-forge",
+    "braces",
+    "sprintf-js"
+  ],
+  "platforms": {
+    "android": {
+      "bundle": "_expo/static/js/android/AppEntry-d0a07432f44e8ed8647189ba8cac8f7e.js",
+      "format": "javascript",
+      "bytes": 916839,
+      "sha256": "9fdc6c14cd0d9150b479d4d68152e735e67927d9f87754119fb753b4f028023d",
+      "sourceMapSha256": "5629a8b5247bbdc882a5929bac25e6f63c3e17ad8d742add2893bb1b8473d63d",
+      "sourceModules": 585,
+      "patchedPackagesPresent": []
+    },
+    "ios": {
+      "bundle": "_expo/static/js/ios/AppEntry-85d49f61d458ef300dec338616a9368a.js",
+      "format": "javascript",
+      "bytes": 911824,
+      "sha256": "37905ae5905f21613c34be93456c62bc520aee509d232eb4c746a93617004f57",
+      "sourceMapSha256": "e2669d5cc92a7eaa56dc9b614a306ff7d8343394b63a7d0604248d23c0051991",
+      "sourceModules": 587,
+      "patchedPackagesPresent": []
+    }
+  }
+}

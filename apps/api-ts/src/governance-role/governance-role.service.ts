@@ -172,6 +172,30 @@ export class GovernanceRoleService implements GovernanceRoleChecker, ApprovalGat
     return true;
   }
 
+  async protocolApprovals(actionRef: string) {
+    const now = new Date();
+    const rows = await this.prisma.forWorker((tx) => tx.approval.findMany({
+      where: { actionRef, decision: "approved" },
+      include: { approverRole: { include: { citizen: { select: { status: true } } } } },
+      take: 100,
+    }));
+    const actors = new Set<string>();
+    const roleTypes = new Set<string>();
+    const approvals: Array<{ref: string; approver_ref: string; at: Date}> = [];
+    for (const type of ["citizen_supermajority", "audit_confirmation", "body_endorsement"] as const) {
+      const row = rows.find((a) => a.approvalType === type &&
+        a.approverRole.layer === REQUIRED_LAYER_BY_APPROVAL_TYPE[type] &&
+        a.approverRole.citizen.status === "active" &&
+        a.approverRole.termStart <= now && a.approverRole.termEnd >= now &&
+        !actors.has(a.approverRole.citizenId) && !roleTypes.has(a.approverRole.roleType));
+      if (!row) throw new ForbiddenDomainError("Three current independent protocol approvals are required");
+      actors.add(row.approverRole.citizenId);
+      roleTypes.add(row.approverRole.roleType);
+      approvals.push({ ref: type, approver_ref: row.approverRole.citizenId, at: row.createdAt });
+    }
+    return approvals;
+  }
+
   // governance_role_public_read is USING(true) for both roles -- no citizen
   // context needed, same as JurisdictionService.getTree's plain app read.
   // Shared by listRoles and submitApproval's per-citizen duplicate-approval

@@ -4,16 +4,20 @@ info:
   version: 0.1.0
   description: SRV-008 — voting lifecycle. See .spec/technical/services/srv-008.md.
 servers:
-  - url: http://localhost:5000
+- url: http://localhost:5000
 paths:
   /healthz:
     get:
       summary: Liveness probe
-      responses: { '200': { description: OK } }
+      responses:
+        '200':
+          description: OK
   /readyz:
     get:
       summary: Readiness probe
-      responses: { '200': { description: OK } }
+      responses:
+        '200':
+          description: OK
   /voting/sessions:
     post:
       summary: Create a vote session (scheduled)
@@ -23,61 +27,219 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateSession'
-      responses: { '201': { description: Created } }
+      responses:
+        '201':
+          description: Created
+        '401':
+          description: Authentication required
+      security:
+      - SignedService: []
     get:
       summary: List vote sessions
-      responses: { '200': { description: OK } }
+      responses:
+        '200':
+          description: OK
   /voting/sessions/{id}:
     get:
       summary: Get a vote session
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string } }
-      responses: { '200': { description: OK }, '404': { description: Not found } }
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+        '404':
+          description: Not found
   /voting/sessions/{id}/options:
     post:
       summary: Add a vote option (one per competing proposal, FR-018)
-      responses: { '201': { description: Created } }
+      responses:
+        '201':
+          description: Created
+        '401':
+          description: Authentication required
+      security:
+      - SignedService: []
   /voting/sessions/{id}/open:
     post:
       summary: DP-046 open trigger (scheduled → open)
-      responses: { '200': { description: OK }, '422': { description: Not ready } }
+      responses:
+        '200':
+          description: OK
+        '422':
+          description: Not ready
+        '401':
+          description: Authentication required
+      security:
+      - SignedService: []
   /voting/sessions/{id}/close:
     post:
       summary: DP-047 close trigger (open → closed)
-      responses: { '200': { description: OK }, '422': { description: Not ready } }
+      responses:
+        '200':
+          description: OK
+        '422':
+          description: Not ready
+        '401':
+          description: Authentication required
+      security:
+      - SignedService: []
   /voting/sessions/{id}/tokens:
     post:
       summary: DP-025 eligibility token batch issuance (idempotent)
-      responses: { '201': { description: Created } }
+      responses:
+        '201':
+          description: Created
+        '401':
+          description: Authentication required
+      security:
+      - SignedService: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                after:
+                  type: string
+                  maxLength: 36
+      description: Fetches the next verified jurisdiction roster page, at most 500
+        citizens. Caller-supplied citizen lists are rejected; response includes next_cursor.
   /voting/sessions/{id}/tally:
     post:
       summary: DP-026 tally computation (exactly-once per session)
-      responses: { '200': { description: OK } }
+      responses:
+        '200':
+          description: OK
+        '401':
+          description: Authentication required
+      security:
+      - SignedService: []
   /voting/sessions/{id}/certify:
     post:
       summary: DP-027 certification (quorum → certified, else closed)
-      responses: { '200': { description: OK } }
+      responses:
+        '200':
+          description: OK
+        '401':
+          description: Authentication required
+      security:
+      - SignedService: []
   /voting/ballots:
     post:
       summary: DP-016 cast ballot (single-use blind token, atomic)
-      responses: { '201': { description: Created }, '409': { description: Token already used } }
+      responses:
+        '201':
+          description: Created
+        '409':
+          description: Token already used
+        '401':
+          description: Authentication required
+        '403':
+          description: Fresh authentication or ownership required
+      security:
+      - CitizenBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Ballot'
   /voting/ballots/verify:
     get:
       summary: DP-017 verify inclusion (presence only, no choice disclosure)
       parameters:
-        - { name: code, in: query, required: true, schema: { type: string } }
-      responses: { '200': { description: OK }, '404': { description: Not found } }
+      - name: code
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+        '404':
+          description: Not found
 components:
   schemas:
     CreateSession:
       type: object
-      required: [proposal_id, jurisdiction_id, method, threshold_rule, opens_at, closes_at]
+      required:
+      - proposal_id
+      - jurisdiction_id
+      - method
+      - threshold_rule
+      - opens_at
+      - closes_at
       properties:
-        proposal_id: { type: string }
-        jurisdiction_id: { type: string }
-        method: { type: string, enum: [ranked_choice, approval, preference_score, comparative] }
-        threshold_rule: { type: string, enum: [simple_majority, majority_plus_quorum, supermajority] }
-        min_participation: { type: number, minimum: 0, maximum: 1 }
-        cooling_off_until: { type: string, format: date-time }
-        opens_at: { type: string, format: date-time }
-        closes_at: { type: string, format: date-time }
+        proposal_id:
+          type: string
+        jurisdiction_id:
+          type: string
+        method:
+          type: string
+          enum:
+          - ranked_choice
+          - approval
+          - preference_score
+          - comparative
+        threshold_rule:
+          type: string
+          enum:
+          - simple_majority
+          - majority_plus_quorum
+          - supermajority
+        min_participation:
+          type: number
+          minimum: 0
+          maximum: 1
+        cooling_off_until:
+          type: string
+          format: date-time
+        opens_at:
+          type: string
+          format: date-time
+        closes_at:
+          type: string
+          format: date-time
+    Ballot:
+      type: object
+      additionalProperties: false
+      required:
+      - vote_session_id
+      - token_id
+      - token_blind
+      - encrypted_choice
+      - proof
+      properties:
+        vote_session_id:
+          type: string
+          maxLength: 256
+        token_id:
+          type: string
+          maxLength: 256
+        token_blind:
+          type: string
+          maxLength: 256
+        encrypted_choice:
+          type: string
+          maxLength: 8192
+        proof:
+          type: string
+          maxLength: 8192
+  securitySchemes:
+    SignedService:
+      type: apiKey
+      in: header
+      name: X-DD-Signature
+      description: 'ADR-041: nonce-bearing producer-bound HMAC of service, method,
+        path+query, timestamp, nonce and SHA256(body). X-DD-Service, X-DD-Timestamp
+        and X-DD-Nonce are also required.'
+    CitizenBearer:
+      type: http
+      scheme: bearer
+      description: Validated citizen session; assurance and ownership are enforced.

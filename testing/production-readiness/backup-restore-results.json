@@ -1,0 +1,40 @@
+{
+  "checks": [
+    {
+      "case": "api_go encrypted archive decrypts exactly",
+      "passed": true
+    },
+    {
+      "case": "api_go corrupted encrypted archive rejected before restore",
+      "passed": true
+    },
+    {
+      "case": "api_go all public tables restore with matching row counts and data digests",
+      "passed": true,
+      "tables": 15,
+      "rows": 21
+    },
+    {
+      "case": "api_ts encrypted archive decrypts exactly",
+      "passed": true
+    },
+    {
+      "case": "api_ts corrupted encrypted archive rejected before restore",
+      "passed": true
+    },
+    {
+      "case": "api_ts all public tables restore with matching row counts and data digests",
+      "passed": true,
+      "tables": 39,
+      "rows": 40
+    }
+  ],
+  "passed": 6,
+  "scope": "fresh disposable databases only, TLS-verified dump/restore and GPG AES256 integrity-protected archives",
+  "productionQualified": false,
+  "limitations": [
+    "Synthetic backup passphrase and archives co-located temporarily; no production/offsite custody qualification",
+    "Table preservation is not independent provenance verification of historical audit signatures",
+    "No regional outage, restore-time or national-scale recovery claim"
+  ]
+}

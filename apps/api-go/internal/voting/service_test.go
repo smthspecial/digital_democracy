@@ -130,10 +130,14 @@ func TestCertifyQuorum(t *testing.T) {
 		MinParticipation: 0.5,
 		CoolingOffUntil:  now.Add(-time.Hour), OpensAt: now.Add(-time.Hour), ClosesAt: now.Add(time.Hour),
 	})
+	option, err := svc.store.AddOption(&VoteOption{SessionID: vs.ID, ProposalID: "p", Label: "A"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	openTestSession(t, svc, vs)
 	tokens, _ := svc.IssueTokens(vs.ID, []string{"c1", "c2"})
 	// 1 of 2 votes = 0.5 participation → meets quorum.
-	if _, err := svc.CastBallot(vs.ID, tokens[0].ID, tokens[0].TokenBlind, "a", "c1"); err != nil {
+	if _, err := svc.CastBallot(vs.ID, tokens[0].ID, tokens[0].TokenBlind, option.ID, "c1"); err != nil {
 		t.Fatal(err)
 	}
 	closed, err := svc.TryClose(vs.ID, now.Add(2*time.Hour))
@@ -162,9 +166,13 @@ func TestCertifyQuorumFailureStaysClosed(t *testing.T) {
 		MinParticipation: 0.9,
 		CoolingOffUntil:  now.Add(-time.Hour), OpensAt: now.Add(-time.Hour), ClosesAt: now.Add(time.Hour),
 	})
+	option, err := svc.store.AddOption(&VoteOption{SessionID: vs.ID, ProposalID: "p", Label: "A"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	openTestSession(t, svc, vs)
 	tokens, _ := svc.IssueTokens(vs.ID, []string{"c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8", "c9", "c10"})
-	if _, err := svc.CastBallot(vs.ID, tokens[0].ID, tokens[0].TokenBlind, "a", "c1"); err != nil {
+	if _, err := svc.CastBallot(vs.ID, tokens[0].ID, tokens[0].TokenBlind, option.ID, "c1"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := svc.TryClose(vs.ID, now.Add(2*time.Hour)); err != nil {
@@ -188,9 +196,13 @@ func TestTallyIdempotent(t *testing.T) {
 		Method: MethodApproval, ThresholdRule: ThresholdSimpleMajority,
 		CoolingOffUntil: now.Add(-time.Hour), OpensAt: now.Add(-time.Hour), ClosesAt: now.Add(time.Hour),
 	})
+	option, err := svc.store.AddOption(&VoteOption{SessionID: vs.ID, ProposalID: "p", Label: "A"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	openTestSession(t, svc, vs)
 	tokens, _ := svc.IssueTokens(vs.ID, []string{"c1"})
-	if _, err := svc.CastBallot(vs.ID, tokens[0].ID, tokens[0].TokenBlind, "a", "c1"); err != nil {
+	if _, err := svc.CastBallot(vs.ID, tokens[0].ID, tokens[0].TokenBlind, option.ID, "c1"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := svc.TryClose(vs.ID, now.Add(2*time.Hour)); err != nil {

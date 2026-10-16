@@ -1,0 +1,40 @@
+{
+  "candidate": "ElectionGuard Python 1.4.0",
+  "source": "https://github.com/Election-Tech-Initiative/electionguard-python",
+  "revision": "a9753841f5082d1c35bdc1b053aade74778662b7",
+  "license": "MIT",
+  "primeBits": 4096,
+  "subgroupBits": 256,
+  "checks": [
+    {
+      "case": "standard-group encrypted ballot proofs verify",
+      "passed": true
+    },
+    {
+      "case": "tampered proof response rejected",
+      "passed": true
+    },
+    {
+      "case": "wrong election proof domain rejected",
+      "passed": true
+    },
+    {
+      "case": "encrypted accumulation, trustee decryption and published-record reload agree with synthetic tally",
+      "passed": true
+    },
+    {
+      "case": "2-of-3 compensated trustee decryption agrees with synthetic tally",
+      "passed": true
+    }
+  ],
+  "passed": 5,
+  "productionApproved": false,
+  "limitations": [
+    "Synthetic official SDK examples; no application integration",
+    "All trustee shares on one disposable machine",
+    "Anonymous credentials and submission separation absent",
+    "Receipt-freeness and coercion resistance not established",
+    "Required ranked/scored methods not qualified",
+    "No independent composition review"
+  ]
+}
